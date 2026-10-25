@@ -1,0 +1,363 @@
+:root {
+  color-scheme: dark;
+  --bg: #1e1f22;
+  --panel: #2b2d31;
+  --border: #3f4147;
+  --text: #dbdee1;
+  --muted: #949ba4;
+  --accent: #5865f2;
+  --danger: #f38b8b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, 'Hiragino Sans', 'Yu Gothic UI', sans-serif;
+  font-size: 14px;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 8px;
+}
+
+.main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.player {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.player iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.player iframe:not([src]) {
+  display: none;
+}
+
+.empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  padding: 16px;
+  text-align: center;
+}
+
+.empty[hidden] {
+  display: none;
+}
+
+.now {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.now-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* 既定の大きさ。ドラッグすると ui.ts が flex-basis を上書きする */
+  flex: 0 0 35%;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* 動画とキュー欄の境目。つまみの見た目は中央の短い線 */
+.splitter {
+  flex: 0 0 12px;
+  cursor: row-resize;
+  touch-action: none;
+  position: relative;
+}
+
+.splitter::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 40px;
+  height: 4px;
+  transform: translate(-50%, -50%);
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.splitter:hover::after,
+.resizing .splitter::after {
+  background: var(--accent);
+}
+
+/* ドラッグ中は iframe にポインタを取られないようにし、文字列も選択させない */
+.resizing .player iframe,
+.reordering .player iframe {
+  pointer-events: none;
+}
+
+.resizing,
+.reordering {
+  user-select: none;
+}
+
+.reordering {
+  cursor: grabbing;
+}
+
+.side-hidden .side,
+.side-hidden .splitter {
+  display: none;
+}
+
+.bar {
+  display: flex;
+  gap: 6px;
+}
+
+input[type='text'] {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+button {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button.secondary {
+  background: #4e5058;
+}
+
+button.icon {
+  padding: 2px 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+button.icon:hover {
+  color: var(--danger);
+}
+
+.error {
+  color: var(--danger);
+}
+
+.queue-head {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--muted);
+  font-weight: normal;
+}
+
+.queue {
+  list-style: none;
+  margin: 0;
+  padding: 0 4px;
+  overflow: auto;
+  min-height: 0;
+  background: var(--panel);
+  border-radius: 8px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.queue li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.queue li + li {
+  margin-top: 2px;
+}
+
+.queue li.done {
+  opacity: 0.5;
+}
+
+.queue li.current {
+  background: rgba(88, 101, 242, 0.25);
+}
+
+.queue li.dragging {
+  position: relative;
+  z-index: 1;
+  background: #3a3c43;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.handle {
+  flex: 0 0 1.2em;
+  text-align: center;
+  color: var(--muted);
+  user-select: none;
+  cursor: grab;
+  touch-action: none;
+}
+
+.dragging .handle {
+  cursor: grabbing;
+}
+
+.thumb {
+  flex: 0 0 auto;
+  position: relative;
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #111;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.thumb .badge {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+}
+
+.thumb .len {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 11px;
+}
+
+.q-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.q-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.current .q-title {
+  font-weight: 600;
+}
+
+.q-meta {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 横に広いときはキューを右側に並べる */
+@media (min-width: 900px) {
+  #app {
+    flex-direction: row;
+  }
+  .side {
+    flex-basis: 400px;
+  }
+  .splitter {
+    cursor: col-resize;
+  }
+  .splitter::after {
+    width: 4px;
+    height: 40px;
+  }
+  .queue {
+    flex: 1;
+  }
+}
+
+/* PiP など小さく表示されているときは動画だけを出す（Discord から通知される表示モードと、画面の高さの両方で判定） */
+#app.compact {
+  padding: 0;
+}
+
+#app.compact .now,
+#app.compact .splitter,
+#app.compact .side {
+  display: none;
+}
+
+#app.compact .player {
+  border-radius: 0;
+}
+
+@media (max-height: 300px) {
+  #app {
+    padding: 0;
+  }
+  .now,
+  .splitter,
+  .side {
+    display: none !important;
+  }
+  .player {
+    border-radius: 0;
+  }
+}

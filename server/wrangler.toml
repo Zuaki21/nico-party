@@ -1,0 +1,22 @@
+name = "nico-party"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+
+# client を vite build した成果物を配信する。API 系だけ Worker で処理する
+[assets]
+directory = "../client/dist"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*", "/ws/*", "/nico/*"]
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+# 無料プランで使える SQLite バックエンドの Durable Object
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+
+[vars]
+# 秘密ではない値。DISCORD_CLIENT_SECRET は `wrangler secret put` で登録する
+DISCORD_CLIENT_ID = "1563868455646531737"

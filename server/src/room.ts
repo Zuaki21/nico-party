@@ -1,0 +1,293 @@
+import { DurableObject } from 'cloudflare:workers';
+import {
+  initialState,
+  parseVideoId,
+  reorder,
+  type ClientMsg,
+  type Member,
+  type PlaybackState,
+  type QueueItem,
+  type ServerMsg,
+} from '../../shared/protocol';
+import { fetchVideoInfo, type NicoEnv } from './nico';
+
+interface Attachment extends Member {
+  joined: boolean;
+}
+
+export interface Env extends NicoEnv {
+  ROOM: DurableObjectNamespace<Room>;
+  DISCORD_CLIENT_SECRET: string;
+}
+
+const STATE_KEY = 'state';
+const QUEUE_KEY = 'queue';
+const HISTORY_KEY = 'history';
+const QUEUE_LIMIT = 100;
+/** 視聴済みとして残す本数 */
+const HISTORY_LIMIT = 50;
+
+/**
+ * 1部屋 (= Activity の instanceId) = 1 Durable Object。
+ * WebSocket Hibernation API を使うので、誰も操作していない間はメモリから退避される。
+ * 退避されても復元できるよう、再生状態・キュー・視聴履歴は storage、メンバー情報は
+ * 各 WebSocket の attachment に保持する。
+ */
+export class Room extends DurableObject<Env> {
+  async fetch(request: Request): Promise<Response> {
+    if (request.headers.get('Upgrade') !== 'websocket') {
+      return new Response('Expected WebSocket', { status: 426 });
+    }
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+    this.ctx.acceptWebSocket(server);
+    const attachment: Attachment = {
+      id: crypto.randomUUID().slice(0, 8),
+      name: 'guest',
+      joined: false,
+    };
+    server.serializeAttachment(attachment);
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
+    if (typeof raw !== 'string') return;
+    let msg: ClientMsg;
+    try {
+      msg = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    const a = ws.deserializeAttachment() as Attachment;
+
+    switch (msg.t) {
+      case 'ping':
+        send(ws, { t: 'pong', clientTime: msg.clientTime, serverTime: Date.now() });
+        return;
+
+      case 'join': {
+        a.name = String(msg.name ?? '').trim().slice(0, 32) || 'guest';
+        a.joined = true;
+        ws.serializeAttachment(a);
+        send(ws, {
+          t: 'welcome',
+          id: a.id,
+          state: await this.getState(),
+          queue: await this.getQueue(),
+          history: await this.getHistory(),
+          members: this.members(),
+          serverTime: Date.now(),
+        });
+        this.broadcastMembers();
+        return;
+      }
+
+      case 'control': {
+        if (!a.joined) return;
+        const s = await this.getState();
+        // 動画が切り替わった直後に届いた、前の動画への操作は捨てる
+        if (!s.current || s.current.id !== msg.itemId) return;
+        s.playing = !!msg.playing;
+        s.position = Math.max(0, Number(msg.position) || 0);
+        await this.commit(s, a);
+        return;
+      }
+
+      case 'enqueue': {
+        if (!a.joined) return;
+        const videoId = parseVideoId(String(msg.url ?? ''));
+        if (!videoId) {
+          send(ws, { t: 'error', message: '動画のURLまたはIDを入力してください（例: sm9）' });
+          return;
+        }
+        const queue = await this.getQueue();
+        if (queue.length >= QUEUE_LIMIT) {
+          send(ws, { t: 'error', message: 'キューがいっぱいです' });
+          return;
+        }
+        const info = await fetchVideoInfo(videoId);
+        if (!info) {
+          send(ws, { t: 'error', message: `${videoId} が見つかりません（削除された動画かもしれません）` });
+          return;
+        }
+        if (!info.embeddable) {
+          send(ws, { t: 'error', message: `${info.title} は埋め込みが禁止されているため再生できません` });
+          return;
+        }
+        const { embeddable: _embeddable, ...meta } = info;
+        const item: QueueItem = {
+          id: crypto.randomUUID().slice(0, 8),
+          videoId,
+          addedBy: a.name,
+          ...meta,
+        };
+        const s = await this.getState();
+        if (!s.current) {
+          // 何も再生していなければすぐ再生
+          await this.start(s, item, a);
+        } else {
+          // タイトル取得の await 中に他の操作が入っている可能性があるので取り直す
+          const latest = await this.getQueue();
+          latest.push(item);
+          await this.putLists({ queue: latest });
+        }
+        return;
+      }
+
+      case 'remove': {
+        if (!a.joined) return;
+        // これから再生する動画・視聴済みのどちらからでも消せる
+        const queue = await this.getQueue();
+        const history = await this.getHistory();
+        const nextQueue = queue.filter((q) => q.id !== msg.id);
+        const nextHistory = history.filter((q) => q.id !== msg.id);
+        if (nextQueue.length !== queue.length || nextHistory.length !== history.length) {
+          await this.putLists({ queue: nextQueue, history: nextHistory });
+        }
+        return;
+      }
+
+      case 'move': {
+        if (!a.joined) return;
+        const s = await this.getState();
+        const result = reorder(
+          await this.getHistory(),
+          s.current,
+          await this.getQueue(),
+          String(msg.id),
+          Number(msg.index) || 0,
+        );
+        if (!result) return;
+        await this.putLists({ queue: result.queue, history: result.history.slice(-HISTORY_LIMIT) });
+        return;
+      }
+
+      case 'prev': {
+        if (!a.joined) return;
+        const s = await this.getState();
+        if (!s.current || s.current.id !== msg.itemId) return;
+        const history = await this.getHistory();
+        const prev = history.pop();
+        if (!prev) {
+          // 戻る先がなければ今の動画を最初から
+          await this.start(s, s.current, a);
+          return;
+        }
+        // 今の動画はキューの先頭に戻す
+        const queue = await this.getQueue();
+        queue.unshift(s.current);
+        await this.putLists({ queue, history });
+        await this.start(s, prev, a);
+        return;
+      }
+
+      case 'next': {
+        if (!a.joined) return;
+        const s = await this.getState();
+        // 複数人から同時に届いても1回だけ進める
+        if ((s.current?.id ?? null) !== msg.itemId) return;
+        const queue = await this.getQueue();
+        const history = await this.getHistory();
+        if (s.current) history.push(s.current);
+        const item = queue.shift() ?? null;
+        await this.putLists({ queue, history: history.slice(-HISTORY_LIMIT) });
+        await this.start(s, item, a);
+        return;
+      }
+    }
+  }
+
+  async webSocketClose(ws: WebSocket): Promise<void> {
+    await this.onLeave(ws);
+  }
+
+  async webSocketError(ws: WebSocket): Promise<void> {
+    await this.onLeave(ws);
+  }
+
+  private async onLeave(ws: WebSocket) {
+    try {
+      ws.close(1000, 'bye');
+    } catch {
+      // 既に閉じている
+    }
+    if (this.sockets(ws).length === 0) {
+      // 全員退出したら部屋を破棄
+      await this.ctx.storage.deleteAll();
+      return;
+    }
+    this.broadcastMembers(ws);
+  }
+
+  /** item の再生を先頭から始める（null なら停止） */
+  private async start(s: PlaybackState, item: QueueItem | null, by: Attachment) {
+    s.current = item;
+    s.playing = item !== null;
+    s.position = 0;
+    await this.commit(s, by);
+  }
+
+  private async commit(s: PlaybackState, by: Attachment) {
+    s.updatedAt = Date.now();
+    s.version++;
+    s.by = by.id;
+    s.byName = by.name;
+    await this.ctx.storage.put(STATE_KEY, s);
+    this.broadcast({ t: 'state', state: s });
+  }
+
+  private async getState(): Promise<PlaybackState> {
+    return (await this.ctx.storage.get<PlaybackState>(STATE_KEY)) ?? initialState();
+  }
+
+  private async getQueue(): Promise<QueueItem[]> {
+    return (await this.ctx.storage.get<QueueItem[]>(QUEUE_KEY)) ?? [];
+  }
+
+  private async getHistory(): Promise<QueueItem[]> {
+    return (await this.ctx.storage.get<QueueItem[]>(HISTORY_KEY)) ?? [];
+  }
+
+  /** 渡されたリストを保存し、キューと履歴の両方を全員に送る */
+  private async putLists(lists: { queue?: QueueItem[]; history?: QueueItem[] }) {
+    if (lists.queue) await this.ctx.storage.put(QUEUE_KEY, lists.queue);
+    if (lists.history) await this.ctx.storage.put(HISTORY_KEY, lists.history);
+    this.broadcast({
+      t: 'queue',
+      queue: lists.queue ?? (await this.getQueue()),
+      history: lists.history ?? (await this.getHistory()),
+    });
+  }
+
+  private sockets(exclude?: WebSocket): WebSocket[] {
+    return this.ctx
+      .getWebSockets()
+      .filter((ws) => ws !== exclude && ws.readyState === WebSocket.OPEN);
+  }
+
+  private members(exclude?: WebSocket): Member[] {
+    return this.sockets(exclude)
+      .map((ws) => ws.deserializeAttachment() as Attachment)
+      .filter((a) => a.joined)
+      .map(({ joined: _joined, ...m }) => m);
+  }
+
+  private broadcast(msg: ServerMsg, exclude?: WebSocket) {
+    const data = JSON.stringify(msg);
+    for (const ws of this.sockets(exclude)) {
+      try {
+        ws.send(data);
+      } catch {
+        // 切断済みのソケットは close ハンドラで処理される
+      }
+    }
+  }
+
+  private broadcastMembers(exclude?: WebSocket) {
+    this.broadcast({ t: 'members', members: this.members(exclude) }, exclude);
+  }
+}
+
+function send(ws: WebSocket, msg: ServerMsg) {
+  ws.send(JSON.stringify(msg));
+}
