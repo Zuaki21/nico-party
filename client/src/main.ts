@@ -1,5 +1,5 @@
 import { Common, DiscordSDK } from '@discord/embedded-app-sdk';
-import type { ClientMsg, ServerMsg } from '../../shared/protocol';
+import { HEARTBEAT, type ClientMsg, type ServerMsg } from '../../shared/protocol';
 import { ClockSync } from './clock';
 import { devlog, watchErrors } from './devlog';
 import { inDiscord, proxied } from './env';
@@ -16,7 +16,11 @@ import {
 } from './ui';
 
 
-const PING_INTERVAL_MS = 10_000;
+/**
+ * 接続の生存確認の間隔。何も流れない WebSocket は途中で切られることがあるので送っておく。
+ * サーバー側は自動応答で返すので、部屋 (Durable Object) を起こさない
+ */
+const HEARTBEAT_INTERVAL_MS = 30_000;
 const RECONNECT_MAX_MS = 10_000;
 
 const playerEl = mountUi(document.querySelector<HTMLElement>('#app')!, {
@@ -79,7 +83,7 @@ function ping() {
 
 function connect(roomId: string, name: string) {
   let retry = 0;
-  let pingTimer: number | undefined;
+  let heartbeatTimer: number | undefined;
 
   const open = () => {
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -90,12 +94,16 @@ function connect(roomId: string, name: string) {
       retry = 0;
       clock.reset();
       sendRaw({ t: 'join', name });
-      // 最初に数回測って時刻のずれを素早く推定し、以降は定期的に測り直す
+      // 時計のずれは接続直後に数回測るだけにする（短時間ではほとんど変わらないため）。
+      // 定期的に測り直すと部屋がずっと起きたままになり、Durable Objects の稼働時間がかさむ
       for (let i = 0; i < 4; i++) setTimeout(ping, i * 300);
-      pingTimer = window.setInterval(ping, PING_INTERVAL_MS);
+      heartbeatTimer = window.setInterval(() => {
+        if (sock.readyState === WebSocket.OPEN) sock.send(HEARTBEAT);
+      }, HEARTBEAT_INTERVAL_MS);
     };
 
     sock.onmessage = (e) => {
+      if (e.data === HEARTBEAT) return;
       const msg = JSON.parse(e.data) as ServerMsg;
       switch (msg.t) {
         case 'welcome':
@@ -130,7 +138,7 @@ function connect(roomId: string, name: string) {
     };
 
     sock.onclose = () => {
-      clearInterval(pingTimer);
+      clearInterval(heartbeatTimer);
       if (ws !== sock) return;
       ws = null;
       joined = false;

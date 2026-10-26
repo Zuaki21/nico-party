@@ -64,6 +64,12 @@ export type ServerMsg =
   | { t: 'error'; message: string }
   | { t: 'pong'; clientTime: number; serverTime: number };
 
+/**
+ * 接続の生存確認用のメッセージ。サーバーは Durable Object の自動応答で同じ文字列を返す
+ * （部屋を起こさないので稼働時間がかからない）
+ */
+export const HEARTBEAT = 'hb';
+
 export function initialState(): PlaybackState {
   return {
     current: null,

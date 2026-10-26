@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import {
+  HEARTBEAT,
   initialState,
   parseVideoId,
   reorder,
@@ -34,6 +35,12 @@ const HISTORY_LIMIT = 50;
  * 各 WebSocket の attachment に保持する。
  */
 export class Room extends DurableObject<Env> {
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    // 生存確認には部屋を起こさずに自動で返事をする
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(HEARTBEAT, HEARTBEAT));
+  }
+
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('Expected WebSocket', { status: 426 });
