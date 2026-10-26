@@ -24,6 +24,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
         <button id="prev" class="secondary" title="前の動画に戻る" hidden>⏮ 前へ</button>
         <button id="skip" class="secondary" title="次の動画へ" hidden>次へ ⏭</button>
         <button id="toggle-side" class="secondary"></button>
+        <button id="toggle-theme" class="secondary"></button>
       </div>
     </main>
     <div class="splitter" id="splitter" title="ドラッグで大きさを変更"></div>
@@ -63,6 +64,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
   });
   setupSidePanel(root);
   setupReorder(h.move);
+  setupTheme();
 
   return $('player');
 }
@@ -127,6 +129,41 @@ function setupSidePanel(root: HTMLElement) {
   splitter.addEventListener('dblclick', () => {
     side.style.flexBasis = '';
     save(sizeKey(), '');
+  });
+}
+
+type Theme = 'light' | 'dark';
+const THEME_KEY = 'nico-party:theme';
+
+/**
+ * ライト / ダークの切り替え。手動で選んだものを優先し、無ければ Discord のテーマ
+ * （Activity の URL に theme=light などが付く）、それも無ければ OS の設定に合わせる
+ */
+function setupTheme() {
+  const button = $('toggle-theme');
+  const discord = new URLSearchParams(location.search).get('theme');
+  const saved = load(THEME_KEY);
+  const initial: Theme =
+    saved === 'light' || saved === 'dark'
+      ? saved
+      : discord === 'light' || discord === 'dark'
+        ? discord
+        : window.matchMedia('(prefers-color-scheme: light)').matches
+          ? 'light'
+          : 'dark';
+
+  const apply = (theme: Theme) => {
+    document.documentElement.dataset.theme = theme;
+    // 押すと切り替わる先を表示する
+    button.textContent = theme === 'dark' ? '☀' : '🌙';
+    button.title = theme === 'dark' ? 'ライトモードにする' : 'ダークモードにする';
+  };
+
+  apply(initial);
+  button.addEventListener('click', () => {
+    const next: Theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    apply(next);
+    save(THEME_KEY, next);
   });
 }
 

@@ -1,3 +1,4 @@
+/* 配色は Discord に合わせている。テーマは ui.ts が <html data-theme> で切り替える */
 :root {
   color-scheme: dark;
   --bg: #1e1f22;
@@ -7,6 +8,26 @@
   --muted: #949ba4;
   --accent: #5865f2;
   --danger: #f38b8b;
+  --button-secondary: #4e5058;
+  --button-secondary-text: #fff;
+  --current-bg: rgba(88, 101, 242, 0.25);
+  --dragging-bg: #3a3c43;
+  --thumb-bg: #111;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --panel: #f2f3f5;
+  --border: #d4d7dc;
+  --text: #313338;
+  --muted: #5c5e66;
+  --danger: #da373c;
+  --button-secondary: #e3e5e8;
+  --button-secondary-text: #313338;
+  --current-bg: rgba(88, 101, 242, 0.15);
+  --dragging-bg: #e3e5e8;
+  --thumb-bg: #dfe1e5;
 }
 
 * {
@@ -171,7 +192,8 @@ button {
 }
 
 button.secondary {
-  background: #4e5058;
+  background: var(--button-secondary);
+  color: var(--button-secondary-text);
 }
 
 button.icon {
@@ -229,14 +251,14 @@ button.icon:hover {
 }
 
 .queue li.current {
-  background: rgba(88, 101, 242, 0.25);
+  background: var(--current-bg);
 }
 
 .queue li.dragging {
   position: relative;
   z-index: 1;
-  background: #3a3c43;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  background: var(--dragging-bg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .handle {
@@ -259,7 +281,7 @@ button.icon:hover {
   aspect-ratio: 16 / 9;
   border-radius: 4px;
   overflow: hidden;
-  background: #111;
+  background: var(--thumb-bg);
 }
 
 .thumb img {
