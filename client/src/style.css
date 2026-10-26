@@ -16,18 +16,19 @@
 }
 
 :root[data-theme='light'] {
+  /* 真っ白だとまぶしいので、全体を少しグレー寄りにしている */
   color-scheme: light;
-  --bg: #ffffff;
-  --panel: #f2f3f5;
-  --border: #d4d7dc;
-  --text: #313338;
+  --bg: #e9eaed;
+  --panel: #dfe1e5;
+  --border: #c4c8ce;
+  --text: #2e3035;
   --muted: #5c5e66;
-  --danger: #da373c;
-  --button-secondary: #e3e5e8;
-  --button-secondary-text: #313338;
-  --current-bg: rgba(88, 101, 242, 0.15);
-  --dragging-bg: #e3e5e8;
-  --thumb-bg: #dfe1e5;
+  --danger: #c4302b;
+  --button-secondary: #cfd2d8;
+  --button-secondary-text: #2e3035;
+  --current-bg: rgba(88, 101, 242, 0.18);
+  --dragging-bg: #d3d6db;
+  --thumb-bg: #c9ccd2;
 }
 
 * {
@@ -194,6 +195,17 @@ button {
 button.secondary {
   background: var(--button-secondary);
   color: var(--button-secondary-text);
+}
+
+/* ボタン内のアイコン。文字と同じ高さ・色で描く */
+.icon-svg {
+  display: block;
+  width: 1.15em;
+  height: 1.15em;
+}
+
+#toggle-theme {
+  padding: 8px 10px;
 }
 
 button.icon {
