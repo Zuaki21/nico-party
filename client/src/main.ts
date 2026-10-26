@@ -22,18 +22,19 @@ function showLanding() {
         <a href="/"><img src="/img/icon-256.png" alt="" />NicoParty</a>
       </header>
       <main>
-        <div class="hero">
-          <img src="/img/cover.webp" width="1376" height="768" alt="NicoParty" />
-        </div>
+        <section class="slider" id="slider" aria-roledescription="carousel" aria-label="NicoParty の紹介画像">
+          <div class="slides" id="slides">
+            <img src="/img/cover.webp" width="1376" height="768" alt="NicoParty のロゴ" />
+            <img src="/img/demo.webp" width="1376" height="768" alt="Discord のボイスチャンネルで NicoParty を使っている画面" />
+          </div>
+          <button class="slide-nav prev" id="slide-prev" aria-label="前の画像">‹</button>
+          <button class="slide-nav next" id="slide-next" aria-label="次の画像">›</button>
+          <div class="slide-dots" id="slide-dots"></div>
+        </section>
         <h1 class="tagline">ニコニコ動画を、みんなで同時に。</h1>
         <p class="lead">
           NicoParty は、Discord のボイスチャンネルでニコニコ動画を一緒に視聴できるアクティビティです。
         </p>
-
-        <figure class="demo">
-          <img src="/img/demo.webp" width="1376" height="918" alt="Discord のボイスチャンネルで NicoParty を使っている画面" loading="lazy" />
-          <figcaption>実際の画面。左で動画を再生し、右のキューに動画を追加していきます。</figcaption>
-        </figure>
 
         <section class="features">
           <div class="card">
@@ -73,4 +74,56 @@ function showLanding() {
       </footer>
     </div>
   `;
+  setupSlider();
+}
+
+/** 自動で切り替わる、またボタンやスワイプでも切り替えられる画像スライド */
+function setupSlider() {
+  const AUTO_MS = 5000;
+  /** これ以上指を動かしたらスワイプとみなす (px) */
+  const SWIPE_PX = 40;
+  const root = document.getElementById('slider')!;
+  const track = document.getElementById('slides')!;
+  const dotsEl = document.getElementById('slide-dots')!;
+  const count = track.children.length;
+  let index = 0;
+  let timer: number | undefined;
+
+  const dots = Array.from({ length: count }, (_, i) => {
+    const b = document.createElement('button');
+    b.setAttribute('aria-label', `${i + 1}枚目の画像`);
+    b.addEventListener('click', () => go(i));
+    dotsEl.append(b);
+    return b;
+  });
+
+  const go = (i: number) => {
+    index = (i + count) % count;
+    track.style.transform = `translateX(-${index * 100}%)`;
+    dots.forEach((d, j) => d.classList.toggle('active', j === index));
+    restart();
+  };
+  const restart = () => {
+    clearInterval(timer);
+    timer = window.setInterval(() => go(index + 1), AUTO_MS);
+  };
+
+  document.getElementById('slide-prev')!.addEventListener('click', () => go(index - 1));
+  document.getElementById('slide-next')!.addEventListener('click', () => go(index + 1));
+  // マウスを乗せている間は自動切り替えを止める
+  root.addEventListener('mouseenter', () => clearInterval(timer));
+  root.addEventListener('mouseleave', restart);
+
+  let startX: number | null = null;
+  root.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse') startX = e.clientX;
+  });
+  root.addEventListener('pointerup', (e) => {
+    if (startX === null) return;
+    const dx = e.clientX - startX;
+    startX = null;
+    if (Math.abs(dx) > SWIPE_PX) go(index + (dx < 0 ? 1 : -1));
+  });
+
+  go(0);
 }
