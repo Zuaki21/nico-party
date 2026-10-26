@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>プライバシーポリシー - NicoParty</title>
+    <link rel="icon" href="/img/favicon.png" />
+    <link rel="stylesheet" href="/site.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="site-header">
+        <a href="/"><img src="/img/icon-256.png" alt="" />NicoParty</a>
+      </header>
+      <main class="doc">
+      <h1>プライバシーポリシー</h1>
+      <p class="meta">NicoParty ／ 運営者: Zuaki ／ 制定日: 2026年10月26日</p>
+
+      <p>
+        NicoParty（以下「本アプリ」）は、Discord のボイスチャンネルでニコニコ動画を同時視聴するための Discord
+        アクティビティです。本アプリにおける利用者の情報の取り扱いについて、以下のとおり定めます。
+      </p>
+
+      <h2>1. 取得する情報</h2>
+      <ul>
+        <li>
+          <strong>Discord の表示名</strong>：本アプリの起動時に、Discord の認可（identify スコープ）を通じて取得します。
+          メールアドレスやパスワードなど、それ以外のアカウント情報は取得しません。
+        </li>
+        <li>
+          <strong>本アプリ内での操作内容</strong>：キューに追加した動画、再生・一時停止・シークなどの操作です。
+        </li>
+        <li>
+          <strong>アクセスログ</strong>：本アプリはホスティングに Cloudflare を利用しており、IP
+          アドレスなどを含む通信の記録が Cloudflare のシステムに一時的に残ることがあります。
+        </li>
+      </ul>
+
+      <h2>2. 利用目的</h2>
+      <ul>
+        <li>同じアクティビティに参加している人への表示（視聴中のメンバー、キューに動画を追加した人の表示）</li>
+        <li>参加者の間で再生状態とキューを同期するため</li>
+        <li>障害対応や不正利用の防止のため</li>
+      </ul>
+
+      <h2>3. 保存と削除</h2>
+      <ul>
+        <li>
+          部屋（アクティビティのインスタンス）ごとのキュー、視聴履歴、再生状態は Cloudflare
+          のサーバーに保存し、<strong>参加者が全員退出した時点で削除</strong>します。
+        </li>
+        <li>表示名は接続中のメンバー表示に使うためだけに保持し、退出後は残りません（キューの「追加した人」の表示は、上記の部屋の削除時に一緒に消えます）。</li>
+        <li>テーマ（ライト／ダーク）やキュー欄の大きさの設定は、利用者の端末のブラウザ内（localStorage）にのみ保存します。</li>
+      </ul>
+
+      <h2>4. 外部サービスへの送信</h2>
+      <ul>
+        <li>
+          動画の再生、動画情報（タイトル・サムネイル・再生数など）の取得のため、ニコニコ動画のサーバーと通信します。
+          この通信は Discord のプロキシや本アプリのサーバーを経由します。
+        </li>
+        <li>上記の運営に必要な場合を除き、取得した情報を第三者に提供・販売することはありません。</li>
+      </ul>
+
+      <h2>5. お問い合わせ・削除の依頼</h2>
+      <p>
+        本ポリシーや情報の取り扱い、削除の依頼については、次の連絡先までご連絡ください。<br />
+        <a href="mailto:contact@zuaki.dev">contact@zuaki.dev</a>
+      </p>
+
+      <h2>6. 改定</h2>
+      <p>本ポリシーは必要に応じて改定することがあります。改定後の内容は、このページに掲載した時点から効力を生じます。</p>
+
+      </main>
+      <footer class="site-footer">
+        <a href="/">トップ</a>
+        <a href="/terms">利用規約</a>
+        <a href="/privacy">プライバシーポリシー</a>
+        <a href="mailto:contact@zuaki.dev">お問い合わせ</a>
+        <span class="copy">© 2026 Zuaki</span>
+      </footer>
+    </div>
+  </body>
+</html>

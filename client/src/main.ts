@@ -1,207 +1,72 @@
-import { Common, DiscordSDK } from '@discord/embedded-app-sdk';
-import { HEARTBEAT, type ClientMsg, type ServerMsg } from '../../shared/protocol';
-import { ClockSync } from './clock';
-import { devlog, watchErrors } from './devlog';
-import { inDiscord, proxied } from './env';
-import { NicoPlayer } from './nicoPlayer';
-import { SyncEngine } from './sync';
-import {
-  mountUi,
-  renderConnecting,
-  renderMembers,
-  renderQueue,
-  renderState,
-  setCompact,
-  showError,
-} from './ui';
-
+import { inDiscord } from './env';
 
 /**
- * 接続の生存確認の間隔。何も流れない WebSocket は途中で切られることがあるので送っておく。
- * サーバー側は自動応答で返すので、部屋 (Durable Object) を起こさない
+ * Discord のアクティビティとして開かれたときだけアプリ本体を読み込む。
+ * 通常のブラウザで開かれたら案内ページを出す（開発中はローカルで同期を確認できるよう本体を動かす）
  */
-const HEARTBEAT_INTERVAL_MS = 30_000;
-const RECONNECT_MAX_MS = 10_000;
-
-const playerEl = mountUi(document.querySelector<HTMLElement>('#app')!, {
-  enqueue: (url) => request({ t: 'enqueue', url }),
-  remove: (id) => request({ t: 'remove', id }),
-  skip: (itemId) => request({ t: 'next', itemId }),
-  prev: (itemId) => request({ t: 'prev', itemId }),
-  move: (id, index) => request({ t: 'move', id, index }),
-});
-
-const player = new NicoPlayer(playerEl, (videoId, playerId) => {
-  const params = new URLSearchParams({
-    jsapi: '1',
-    playerId,
-    noRelatedVideo: '1',
-    noShare: '1',
-    persistence: '1',
-    // プレイヤーはこれを元に postMessage の宛先オリジンを決める（無いと 'null//null' になる）
-    referer: location.href,
-  });
-  // Discord 内では埋め込み HTML を自前サーバーで書き換えて配信する (server/src/nico.ts)
-  return inDiscord
-    ? `/.proxy/nico/nico-embed/${videoId}?${params}`
-    : `https://embed.nicovideo.jp/watch/${videoId}?${params}`;
-});
-
-watchErrors(player.iframe);
-for (const ev of ['load', 'play', 'pause', 'ended'] as const) player.on(ev, () => devlog(`player ${ev}`));
-
-let ws: WebSocket | null = null;
-/** welcome を受け取り、部屋に入れている */
-let joined = false;
-/** 部屋に入る前（起動直後・再接続中）に行われたユーザー操作。入れたらまとめて送る */
-const pending: ClientMsg[] = [];
-const clock = new ClockSync();
-const engine = new SyncEngine(player, send);
-
-function sendRaw(msg: ClientMsg) {
-  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+if (inDiscord || import.meta.env.DEV) {
+  await import('./app');
+} else {
+  showLanding();
 }
 
-/** 同期エンジンからの送信。部屋に入っていないときの再生操作は意味がないので捨てる */
-function send(msg: ClientMsg) {
-  if (joined) sendRaw(msg);
+function showLanding() {
+  const css = document.createElement('link');
+  css.rel = 'stylesheet';
+  css.href = '/site.css';
+  document.head.append(css);
+  document.body.classList.add('site');
+  document.querySelector<HTMLElement>('#app')!.innerHTML = `
+    <div class="page">
+      <header class="site-header">
+        <a href="/"><img src="/img/icon-256.png" alt="" />NicoParty</a>
+      </header>
+      <main>
+        <div class="hero">
+          <img src="/img/cover.webp" width="1376" height="768" alt="NicoParty" />
+        </div>
+        <h1 class="tagline">ニコニコ動画を、みんなで同時に。</h1>
+        <p class="lead">
+          NicoParty は、Discord のボイスチャンネルでニコニコ動画を一緒に視聴できるアクティビティです。
+          誰かが再生・一時停止・シークすると、全員の画面がそろって動きます。
+        </p>
+
+        <section class="features">
+          <div class="card">
+            <h3><span class="dot"></span>ぴったり同時再生</h3>
+            <p>再生・一時停止・シークを参加者全員で共有。途中から参加しても今の場面から始まります。</p>
+          </div>
+          <div class="card">
+            <h3><span class="dot"></span>みんなで作るキュー</h3>
+            <p>URL を貼るだけで追加。サムネイルや再生数も表示され、ドラッグで順番を入れ替えられます。</p>
+          </div>
+          <div class="card">
+            <h3><span class="dot"></span>コメントもそのまま</h3>
+            <p>ニコニコ動画の公式プレイヤーで再生するので、おなじみのコメントも一緒に楽しめます。</p>
+          </div>
+        </section>
+
+        <h2 class="section-title">はじめかた</h2>
+        <ol class="steps">
+          <li>Discord でボイスチャンネルに参加します。</li>
+          <li>画面下のロケットのアイコン（アクティビティ）から「NicoParty」を選んで起動します。</li>
+          <li>ニコニコ動画の URL（または sm から始まる動画 ID）を入力して「追加」を押せば、再生が始まります。</li>
+        </ol>
+
+        <div class="note">
+          <strong>ご注意</strong>
+          <ul>
+            <li>NicoParty は非公式のアプリで、ニコニコ動画・Discord とは関係ありません。</li>
+            <li>権利者が外部での再生を制限している動画など、再生できない動画があります。</li>
+          </ul>
+        </div>
+      </main>
+      <footer class="site-footer">
+        <a href="/terms">利用規約</a>
+        <a href="/privacy">プライバシーポリシー</a>
+        <a href="mailto:contact@zuaki.dev">お問い合わせ</a>
+        <span class="copy">© 2026 Zuaki</span>
+      </footer>
+    </div>
+  `;
 }
-
-/** ユーザー操作（追加・削除・スキップ）。接続前なら取っておく */
-function request(msg: ClientMsg) {
-  if (joined) {
-    sendRaw(msg);
-  } else {
-    pending.push(msg);
-    renderConnecting(pending.length);
-  }
-}
-
-function ping() {
-  sendRaw({ t: 'ping', clientTime: Date.now() });
-}
-
-function connect(roomId: string, name: string) {
-  let retry = 0;
-  let heartbeatTimer: number | undefined;
-
-  const open = () => {
-    const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
-    const sock = new WebSocket(`${scheme}://${location.host}${proxied(`/ws/${roomId}`)}`);
-    ws = sock;
-
-    sock.onopen = () => {
-      retry = 0;
-      clock.reset();
-      sendRaw({ t: 'join', name });
-      // 時計のずれは接続直後に数回測るだけにする（短時間ではほとんど変わらないため）。
-      // 定期的に測り直すと部屋がずっと起きたままになり、Durable Objects の稼働時間がかさむ
-      for (let i = 0; i < 4; i++) setTimeout(ping, i * 300);
-      heartbeatTimer = window.setInterval(() => {
-        if (sock.readyState === WebSocket.OPEN) sock.send(HEARTBEAT);
-      }, HEARTBEAT_INTERVAL_MS);
-    };
-
-    sock.onmessage = (e) => {
-      if (e.data === HEARTBEAT) return;
-      const msg = JSON.parse(e.data) as ServerMsg;
-      switch (msg.t) {
-        case 'welcome':
-          clock.sample(Date.now(), msg.serverTime);
-          engine.setClockOffset(clock.offset);
-          renderQueue(msg.queue, msg.history);
-          renderMembers(msg.members);
-          renderState(msg.state);
-          engine.update(msg.state);
-          joined = true;
-          for (const m of pending.splice(0)) sendRaw(m);
-          return;
-        case 'state':
-          renderState(msg.state);
-          engine.update(msg.state);
-          return;
-        case 'queue':
-          renderQueue(msg.queue, msg.history);
-          return;
-        case 'members':
-          renderMembers(msg.members);
-          return;
-        case 'error':
-          devlog(`server error: ${msg.message}`);
-          showError(msg.message);
-          return;
-        case 'pong':
-          clock.sample(msg.clientTime, msg.serverTime);
-          engine.setClockOffset(clock.offset);
-          return;
-      }
-    };
-
-    sock.onclose = () => {
-      clearInterval(heartbeatTimer);
-      if (ws !== sock) return;
-      ws = null;
-      joined = false;
-      renderConnecting(pending.length);
-      const delay = Math.min(RECONNECT_MAX_MS, 500 * 2 ** retry++);
-      setTimeout(open, delay);
-    };
-  };
-
-  open();
-}
-
-/** Discord にログインしてもらい、表示名を取得する */
-async function authenticate(sdk: DiscordSDK): Promise<string> {
-  const { code } = await sdk.commands.authorize({
-    client_id: import.meta.env.VITE_DISCORD_CLIENT_ID,
-    response_type: 'code',
-    state: '',
-    prompt: 'none',
-    scope: ['identify'],
-  });
-  const res = await fetch(proxied('/api/token'), {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ code }),
-  });
-  const { access_token } = (await res.json()) as { access_token?: string };
-  if (!access_token) throw new Error('token exchange failed');
-  const { user } = await sdk.commands.authenticate({ access_token });
-  return user.global_name ?? user.username;
-}
-
-/** PiP（チャットを開いて小さく表示されている状態）では動画だけを表示する */
-function watchLayout(sdk: DiscordSDK) {
-  sdk
-    .subscribe('ACTIVITY_LAYOUT_MODE_UPDATE', ({ layout_mode }) => {
-      devlog(`layout mode ${layout_mode}`);
-      setCompact(layout_mode === Common.LayoutModeTypeObject.PIP);
-    })
-    .catch((e) => devlog(`layout subscribe failed: ${e instanceof Error ? e.message : JSON.stringify(e)}`));
-}
-
-async function main() {
-  if (!inDiscord) {
-    // 通常のブラウザ: 全タブ共通の部屋で動作確認できるようにする
-    connect('local-dev', `ブラウザ${Math.floor(Math.random() * 100)}`);
-    return;
-  }
-  const sdk = new DiscordSDK(import.meta.env.VITE_DISCORD_CLIENT_ID);
-  await sdk.ready();
-  let name = 'ゲスト';
-  try {
-    name = await authenticate(sdk);
-  } catch (e) {
-    // 名前が取れなくても視聴はできるようにする
-    devlog(`authenticate failed: ${e instanceof Error ? e.message : JSON.stringify(e)}`);
-  }
-  watchLayout(sdk);
-  devlog(`ready as ${name} (instance ${sdk.instanceId})`);
-  connect(sdk.instanceId, name);
-}
-
-main().catch((e) => {
-  devlog(`main failed: ${e instanceof Error ? e.message : JSON.stringify(e)}`);
-  showError(`起動に失敗しました: ${e instanceof Error ? e.message : e}`);
-});
