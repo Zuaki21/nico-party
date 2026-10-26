@@ -105,6 +105,25 @@ body.site #app {
   color: var(--muted);
 }
 
+.demo {
+  margin: 0 0 40px;
+}
+
+.demo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.demo figcaption {
+  margin-top: 10px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.88em;
+}
+
 .features {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

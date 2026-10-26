@@ -28,8 +28,12 @@ function showLanding() {
         <h1 class="tagline">ニコニコ動画を、みんなで同時に。</h1>
         <p class="lead">
           NicoParty は、Discord のボイスチャンネルでニコニコ動画を一緒に視聴できるアクティビティです。
-          誰かが再生・一時停止・シークすると、全員の画面がそろって動きます。
         </p>
+
+        <figure class="demo">
+          <img src="/img/demo.webp" width="1376" height="918" alt="Discord のボイスチャンネルで NicoParty を使っている画面" loading="lazy" />
+          <figcaption>実際の画面。左で動画を再生し、右のキューに動画を追加していきます。</figcaption>
+        </figure>
 
         <section class="features">
           <div class="card">
