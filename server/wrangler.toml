@@ -10,8 +10,10 @@ workers_dev = true
 # client を vite build した成果物を配信する。API 系だけ Worker で処理する
 [assets]
 directory = "../client/dist"
+binding = "ASSETS"
 not_found_handling = "single-page-application"
-run_worker_first = ["/api/*", "/ws/*", "/nico/*"]
+# "/" は Discord から開かれたか（frame_id の有無）で Activity 本体と案内ページを振り分ける
+run_worker_first = ["/", "/api/*", "/ws/*", "/nico/*"]
 
 [[durable_objects.bindings]]
 name = "ROOM"

@@ -10,6 +10,12 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // Discord は Activity を ?frame_id=... 付きで開く。それ以外（普通のブラウザ）には案内ページを返す
+    if (path === '/') {
+      if (url.searchParams.has('frame_id')) return env.ASSETS.fetch(request);
+      return env.ASSETS.fetch(new Request(new URL('/landing', url), request));
+    }
+
     if (path.startsWith('/nico/')) {
       return handleNico(request, env, path.slice('/nico'.length));
     }

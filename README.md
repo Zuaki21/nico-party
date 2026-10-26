@@ -11,6 +11,7 @@
 ```
 client/   Vite + TypeScript。Activity の画面と同期処理
 server/   Cloudflare Worker + Durable Objects
+            /               Discord から（?frame_id 付きで）開かれたら Activity 本体、それ以外は案内ページ
             /api/token      Discord OAuth のコードをトークンに交換
             /ws/:instanceId 部屋（= Activity のインスタンス）ごとの WebSocket
             /nico/*         ニコニコ埋め込みプレイヤーの中継（URL を Discord プロキシ経由に書き換える）

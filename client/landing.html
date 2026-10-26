@@ -1,22 +1,14 @@
-import { inDiscord } from './env';
-
-/**
- * Discord のアクティビティとして開かれたときだけアプリ本体を読み込む。
- * 通常のブラウザで開かれたら案内ページを出す（開発中はローカルで同期を確認できるよう本体を動かす）
- */
-if (inDiscord || import.meta.env.DEV) {
-  await import('./app');
-} else {
-  showLanding();
-}
-
-function showLanding() {
-  const css = document.createElement('link');
-  css.rel = 'stylesheet';
-  css.href = '/site.css';
-  document.head.append(css);
-  document.body.classList.add('site');
-  document.querySelector<HTMLElement>('#app')!.innerHTML = `
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NicoParty - Discord でニコニコ動画を同時視聴</title>
+    <meta name="description" content="Discord のボイスチャンネルでニコニコ動画を一緒に視聴できるアクティビティ" />
+    <link rel="icon" href="/img/favicon.png" />
+    <link rel="stylesheet" href="/site.css" />
+  </head>
+  <body>
     <div class="page">
       <header class="site-header">
         <a href="/"><img src="/img/icon-256.png" alt="" />NicoParty</a>
@@ -73,57 +65,7 @@ function showLanding() {
         <span class="copy">© 2026 Zuaki</span>
       </footer>
     </div>
-  `;
-  setupSlider();
-}
-
-/** 自動で切り替わる、またボタンやスワイプでも切り替えられる画像スライド */
-function setupSlider() {
-  const AUTO_MS = 5000;
-  /** これ以上指を動かしたらスワイプとみなす (px) */
-  const SWIPE_PX = 40;
-  const root = document.getElementById('slider')!;
-  const track = document.getElementById('slides')!;
-  const dotsEl = document.getElementById('slide-dots')!;
-  const count = track.children.length;
-  let index = 0;
-  let timer: number | undefined;
-
-  const dots = Array.from({ length: count }, (_, i) => {
-    const b = document.createElement('button');
-    b.setAttribute('aria-label', `${i + 1}枚目の画像`);
-    b.addEventListener('click', () => go(i));
-    dotsEl.append(b);
-    return b;
-  });
-
-  const go = (i: number) => {
-    index = (i + count) % count;
-    track.style.transform = `translateX(-${index * 100}%)`;
-    dots.forEach((d, j) => d.classList.toggle('active', j === index));
-    restart();
-  };
-  const restart = () => {
-    clearInterval(timer);
-    timer = window.setInterval(() => go(index + 1), AUTO_MS);
-  };
-
-  document.getElementById('slide-prev')!.addEventListener('click', () => go(index - 1));
-  document.getElementById('slide-next')!.addEventListener('click', () => go(index + 1));
-  // マウスを乗せている間は自動切り替えを止める
-  root.addEventListener('mouseenter', () => clearInterval(timer));
-  root.addEventListener('mouseleave', restart);
-
-  let startX: number | null = null;
-  root.addEventListener('pointerdown', (e) => {
-    if (e.pointerType !== 'mouse') startX = e.clientX;
-  });
-  root.addEventListener('pointerup', (e) => {
-    if (startX === null) return;
-    const dx = e.clientX - startX;
-    startX = null;
-    if (Math.abs(dx) > SWIPE_PX) go(index + (dx < 0 ? 1 : -1));
-  });
-
-  go(0);
-}
+  
+    <script type="module" src="/src/landing.ts"></script>
+  </body>
+</html>

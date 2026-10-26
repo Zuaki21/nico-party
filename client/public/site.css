@@ -45,13 +45,6 @@ a {
   color: var(--brand);
 }
 
-/* トップの案内ページはアプリと同じ index.html を使うので、アプリ用のレイアウトを打ち消す */
-body.site #app {
-  display: block;
-  height: auto;
-  padding: 0;
-}
-
 .page {
   max-width: 880px;
   margin: 0 auto;

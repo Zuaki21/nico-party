@@ -21,6 +21,12 @@ function remoteLog(): Plugin {
 export default defineConfig({
   envDir: '..',
   plugins: [remoteLog()],
+  build: {
+    rollupOptions: {
+      // index.html: Activity 本体 / landing.html: Discord の外から開いたときの案内（server が / を振り分ける）
+      input: { index: 'index.html', landing: 'landing.html' },
+    },
+  },
   server: {
     host: '127.0.0.1',
     port: 5173,

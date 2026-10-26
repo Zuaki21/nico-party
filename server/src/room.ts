@@ -18,6 +18,7 @@ interface Attachment extends Member {
 
 export interface Env extends NicoEnv {
   ROOM: DurableObjectNamespace<Room>;
+  ASSETS: Fetcher;
   DISCORD_CLIENT_SECRET: string;
 }
 
