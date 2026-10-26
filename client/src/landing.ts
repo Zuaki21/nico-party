@@ -6,7 +6,7 @@
  * 複製まで進んだらアニメーションなしで本物の位置へ戻す。
  */
 function setupSlider() {
-  const AUTO_MS = 5000;
+  const AUTO_MS = 8000;
   /** これ以上指を動かしたらスワイプとみなす (px) */
   const SWIPE_PX = 40;
   const root = document.getElementById('slider')!;
