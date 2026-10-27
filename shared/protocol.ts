@@ -26,7 +26,7 @@ export interface PlaybackState {
   current: QueueItem | null;
   playing: boolean;
   position: number;
-  /** position を記録したサーバー時刻 (ms) */
+  /** position を記録したサーバー時刻 (ms)。動画の切り替え直後は少し先の時刻（その時刻に再生開始） */
   updatedAt: number;
   version: number;
   /** 最後に操作したメンバー */

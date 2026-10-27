@@ -26,6 +26,8 @@ export class SyncEngine {
   private loadedItemId: string | null = null;
   private suppressUntil = 0;
   private localTimer: number | undefined;
+  /** 再生開始時刻ちょうどに再生を始めるためのタイマー */
+  private startTimer: number | undefined;
   private ticks = 0;
 
   constructor(
@@ -81,6 +83,20 @@ export class SyncEngine {
     if (!s?.current || s.current.id !== this.loadedItemId || !p.ready()) return;
 
     const target = this.expected(s);
+    // 動画の切り替え直後で、まだ開始時刻になっていない。0 秒で止めて待ち、開始時刻ちょうどに再生する
+    clearTimeout(this.startTimer);
+    if (s.playing && target < 0) {
+      if (p.getTime() > 0.5) {
+        this.suppress();
+        p.seek(0);
+      }
+      if (!p.isPaused()) {
+        this.suppress();
+        p.pause();
+      }
+      this.startTimer = window.setTimeout(() => this.apply(APPLY_THRESHOLD), -target * 1000);
+      return;
+    }
     const duration = p.getDuration();
     // 部屋の位置が動画の終端を過ぎている。終了済みの動画に play() すると先頭から再生し直すので触らない
     if (duration > 0 && target >= duration - END_MARGIN) {
@@ -115,8 +131,11 @@ export class SyncEngine {
 
     const playing = !p.isPaused();
     const position = p.getTime();
+    const expected = this.expected(s);
+    // 開始待ちの間（expected < 0）に止まっているのは部屋の状態どおり
+    if (expected < 0 && !playing) return;
     // 部屋の状態と一致しているなら送らない（同期による変化のエコー等）
-    if (playing === s.playing && Math.abs(position - this.expected(s)) < APPLY_THRESHOLD) return;
+    if (playing === s.playing && Math.abs(position - Math.max(0, expected)) < APPLY_THRESHOLD) return;
     this.send({ t: 'control', itemId: s.current.id, playing, position });
   }
 

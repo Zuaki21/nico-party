@@ -28,6 +28,11 @@ const HISTORY_KEY = 'history';
 const QUEUE_LIMIT = 100;
 /** 視聴済みとして残す本数 */
 const HISTORY_LIMIT = 50;
+/**
+ * 動画を切り替えたとき、再生開始をこれだけ先の時刻にする。
+ * 各自のプレイヤーの読み込みに数秒かかるので、すぐ開始にすると冒頭が飛ばされてしまう
+ */
+const START_DELAY_MS = 3000;
 
 /**
  * 1部屋 (= Activity の instanceId) = 1 Durable Object。
@@ -227,16 +232,17 @@ export class Room extends DurableObject<Env> {
     this.broadcastMembers(ws);
   }
 
-  /** item の再生を先頭から始める（null なら停止） */
+  /** item の再生を先頭から始める（null なら停止）。開始時刻は START_DELAY_MS 先にする */
   private async start(s: PlaybackState, item: QueueItem | null, by: Attachment) {
     s.current = item;
     s.playing = item !== null;
     s.position = 0;
-    await this.commit(s, by);
+    await this.commit(s, by, item ? START_DELAY_MS : 0);
   }
 
-  private async commit(s: PlaybackState, by: Attachment) {
-    s.updatedAt = Date.now();
+  /** @param delayMs position の基準時刻を今からずらす量（再生開始を遅らせるとき） */
+  private async commit(s: PlaybackState, by: Attachment, delayMs = 0) {
+    s.updatedAt = Date.now() + delayMs;
     s.version++;
     s.by = by.id;
     s.byName = by.name;
