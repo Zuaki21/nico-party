@@ -4,6 +4,7 @@
 
 - 再生・一時停止・シークを全員に同期
 - URL を入れてキューに追加。視聴済み・再生中も残り、ドラッグで並べ替えできる
+- キーワード検索（ニコニコのスナップショット検索 API。1 日 1 回更新なので投稿直後の動画は出ない）
 - PiP 表示中は動画だけを表示
 
 ## 構成
@@ -13,6 +14,7 @@ client/   Vite + TypeScript。Activity の画面と同期処理
 server/   Cloudflare Worker + Durable Objects
             /               Discord から（?frame_id 付きで）開かれたら Activity 本体、それ以外は案内ページ
             /api/token      Discord OAuth のコードをトークンに交換
+            /api/search     キーワード検索（スナップショット検索 API を 10 分キャッシュ）
             /ws/:instanceId 部屋（= Activity のインスタンス）ごとの WebSocket
             /nico/*         ニコニコ埋め込みプレイヤーの中継（URL を Discord プロキシ経由に書き換える）
 shared/   クライアントとサーバーで共有するメッセージ定義
