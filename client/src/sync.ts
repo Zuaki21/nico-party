@@ -24,6 +24,8 @@ export class SyncEngine {
   private clockOffset = 0;
   /** プレイヤーに読み込んでいるキュー項目 */
   private loadedItemId: string | null = null;
+  /** プレイヤーに読み込んでいる動画 ID（1曲リピートなどで同じ動画なら読み込み直さない） */
+  private loadedVideoId: string | null = null;
   private suppressUntil = 0;
   private localTimer: number | undefined;
   /** 再生開始時刻ちょうどに再生を始めるためのタイマー */
@@ -52,7 +54,7 @@ export class SyncEngine {
     player.on('pause', onLocal);
     player.on('seeked', onLocal);
     player.on('load', () => this.apply(APPLY_THRESHOLD));
-    player.on('ended', () => this.requestNext());
+    player.on('ended', () => this.requestNext(true));
     window.setInterval(() => this.onTick(), 1000);
   }
 
@@ -68,7 +70,14 @@ export class SyncEngine {
       if (this.preloading) this.player.mute(this.mutedBefore);
       this.preloading = false;
       this.preloadedFor = null;
+      const sameVideo = !!item && item.videoId === this.loadedVideoId && this.player.ready();
       this.loadedItemId = item?.id ?? null;
+      this.loadedVideoId = item?.videoId ?? null;
+      if (sameVideo) {
+        // 同じ動画をもう一度（1曲リピートなど）。読み込み直さずに先頭から合わせる
+        this.apply(APPLY_THRESHOLD);
+        return;
+      }
       if (item) this.player.load(item.videoId);
       else this.player.unload();
       return; // 読み込み完了 (load) 後に apply する
@@ -198,9 +207,10 @@ export class SyncEngine {
     this.send({ t: 'control', itemId: s.current.id, playing, position });
   }
 
-  private requestNext() {
+  /** 動画が最後まで再生されたので次へ進める（1曲リピートならサーバーが同じ動画を繰り返す） */
+  private requestNext(auto: boolean) {
     if (this.state?.current && this.state.current.id === this.loadedItemId) {
-      this.send({ t: 'next', itemId: this.loadedItemId });
+      this.send({ t: 'next', itemId: this.loadedItemId, auto });
     }
   }
 
@@ -213,7 +223,7 @@ export class SyncEngine {
     // 途中参加などで誰のプレイヤーも終了イベントを出さないまま終端を過ぎた
     const duration = p.getDuration();
     if (s.playing && duration > 0 && this.expected(s) > duration + STUCK_MARGIN) {
-      this.requestNext();
+      this.requestNext(true);
       return;
     }
 

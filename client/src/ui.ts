@@ -5,6 +5,7 @@ import {
   type Member,
   type PlaybackState,
   type QueueItem,
+  type RepeatMode,
   type SearchItem,
   type SearchResult,
   type SearchSort,
@@ -21,7 +22,18 @@ export interface UiHandlers {
   search: (q: string, sort: SearchSort, offset: number) => Promise<SearchResult>;
   /** 視聴済み・キューの中から id の動画を選んで、そこから再生する */
   jump: (id: string) => void;
+  /** リピート・シャッフルの切り替え（部屋全員に反映される） */
+  mode: (m: { repeat?: RepeatMode; shuffle?: boolean }) => void;
 }
+
+const SHUFFLE_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h3.5c2 0 3.2 1 4.3 2.7l2.4 4.6c1.1 1.7 2.3 2.7 4.3 2.7H21M3 18h3.5c1.4 0 2.4-.5 3.2-1.3M14.3 7.3c.8-.8 1.8-1.3 3.2-1.3H21M18 3l3 3-3 3M18 15l3 3-3 3"/></g></svg>`;
+const REPEAT_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4"/></g></svg>`;
+const REPEAT_LABEL: Record<RepeatMode, string> = {
+  off: 'リピート: オフ',
+  all: 'リピート: 再生リスト全体',
+  one: 'リピート: 1曲',
+};
+const NEXT_REPEAT: Record<RepeatMode, RepeatMode> = { off: 'all', all: 'one', one: 'off' };
 
 /** キューの「削除」ボタン（ゴミ箱）。文字色で描く */
 const TRASH_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12a2 2 0 0 0 2 1.8h7a2 2 0 0 0 2-1.8l1-12M9 7V4.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V7"/></g></svg>`;
@@ -40,8 +52,10 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
       </div>
       <div class="now">
         <div class="now-title" id="now-title"></div>
-        <button id="prev" class="secondary" title="前の動画に戻る" hidden>⏮ 前へ</button>
-        <button id="skip" class="secondary" title="次の動画へ" hidden>次へ ⏭</button>
+        <button id="shuffle" class="secondary mode" aria-pressed="false"></button>
+        <button id="repeat" class="secondary mode" aria-pressed="false"></button>
+        <button id="prev" class="secondary" title="前の動画に戻る" disabled>⏮ 前へ</button>
+        <button id="skip" class="secondary" title="次の動画へ" disabled>次へ ⏭</button>
         <button id="toggle-side" class="secondary"></button>
         <button id="toggle-theme" class="secondary"></button>
       </div>
@@ -110,6 +124,9 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
     const id = lists.current?.id;
     if (id) h.skip(id);
   });
+  $('shuffle').addEventListener('click', () => h.mode({ shuffle: !lists.shuffle }));
+  $('repeat').addEventListener('click', () => h.mode({ repeat: NEXT_REPEAT[lists.repeat] }));
+  renderMode();
   $('prev').addEventListener('click', () => {
     const id = lists.current?.id;
     if (id) h.prev(id);
@@ -246,6 +263,8 @@ const lists = {
   history: [] as QueueItem[],
   current: null as QueueItem | null,
   queue: [] as QueueItem[],
+  repeat: 'off' as RepeatMode,
+  shuffle: false,
 };
 let scrolledTo: string | null = null;
 
@@ -253,10 +272,25 @@ export function renderState(s: PlaybackState) {
   const cur = s.current;
   $('empty').hidden = !!cur;
   $('now-title').textContent = cur ? `▶ ${cur.title}（${cur.addedBy}）` : '';
-  $('skip').hidden = !cur;
-  $('prev').hidden = !cur;
   lists.current = cur;
+  lists.repeat = s.repeat ?? 'off';
+  lists.shuffle = s.shuffle ?? false;
+  renderMode();
   renderList();
+}
+
+/** リピート・シャッフルのボタンの見た目 */
+function renderMode() {
+  const shuffle = $('shuffle');
+  shuffle.innerHTML = SHUFFLE_ICON;
+  shuffle.title = lists.shuffle ? 'シャッフル: オン' : 'シャッフル: オフ';
+  shuffle.setAttribute('aria-pressed', String(lists.shuffle));
+  const repeat = $('repeat');
+  repeat.innerHTML = REPEAT_ICON;
+  // 1曲リピートはボタンの右上に「1」のバッジを付ける（style.css）
+  repeat.dataset.repeat = lists.repeat;
+  repeat.title = REPEAT_LABEL[lists.repeat];
+  repeat.setAttribute('aria-pressed', String(lists.repeat !== 'off'));
 }
 
 export function renderQueue(queue: QueueItem[], history: QueueItem[]) {
@@ -267,9 +301,13 @@ export function renderQueue(queue: QueueItem[], history: QueueItem[]) {
 
 /** 視聴済み → 再生中 → これから再生、の順に並べる */
 function renderList() {
+  const { history, current, queue } = lists;
+  // 前へ・次へは常に表示し、戻る先・進む先が無いときは押せなくする
+  $<HTMLButtonElement>('prev').disabled = !current || history.length === 0;
+  // 全曲リピート中は、次が無くても最初に戻れる
+  $<HTMLButtonElement>('skip').disabled = !current || (queue.length === 0 && lists.repeat !== 'all');
   // 並べ替えのドラッグ中に描き直すと掴んでいる要素が消えるので、終わってから描く
   if (dragging) return;
-  const { history, current, queue } = lists;
   const ol = $('queue');
   ol.replaceChildren(
     ...history.map((q) => itemEl(q, 'done')),

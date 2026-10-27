@@ -21,6 +21,9 @@ export interface Member {
   name: string;
 }
 
+/** off: リピートしない / all: 再生リストの最後まで行ったら最初に戻る / one: 同じ動画を繰り返す */
+export type RepeatMode = 'off' | 'all' | 'one';
+
 export interface PlaybackState {
   /** 再生中の動画。null なら何も再生していない */
   current: QueueItem | null;
@@ -32,6 +35,9 @@ export interface PlaybackState {
   /** 最後に操作したメンバー */
   by: string | null;
   byName: string | null;
+  /** 部屋全員で共通の再生モード（古いデータには無いので未定義は off / false 扱い） */
+  repeat?: RepeatMode;
+  shuffle?: boolean;
 }
 
 export type ClientMsg =
@@ -41,8 +47,13 @@ export type ClientMsg =
   | { t: 'remove'; id: string }
   /** id の動画を、視聴済み + 再生中 + キューを並べたリストの index 番目に移動する */
   | { t: 'move'; id: string; index: number }
-  /** itemId の動画を終えて次へ進む。既に進んでいたら無視される */
-  | { t: 'next'; itemId: string | null }
+  /**
+   * itemId の動画を終えて次へ進む。既に進んでいたら無視される。
+   * auto は動画が最後まで再生されて自動で進むとき（1曲リピートではこのときだけ同じ動画を繰り返す）
+   */
+  | { t: 'next'; itemId: string | null; auto?: boolean }
+  /** リピート・シャッフルの切り替え */
+  | { t: 'mode'; repeat?: RepeatMode; shuffle?: boolean }
   /** itemId の動画をやめて、直前に視聴した動画に戻る */
   | { t: 'prev'; itemId: string }
   /** 視聴済み・キューの中から id の動画を選んで、そこから再生する（並び順は変えない） */

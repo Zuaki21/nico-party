@@ -130,7 +130,7 @@ export class Room extends DurableObject<Env> {
         }
         const { embeddable: _embeddable, ...meta } = info;
         const item: QueueItem = {
-          id: crypto.randomUUID().slice(0, 8),
+          id: newItemId(),
           videoId,
           addedBy: a.name,
           ...meta,
@@ -211,12 +211,36 @@ export class Room extends DurableObject<Env> {
         const s = await this.getState();
         // 複数人から同時に届いても1回だけ進める
         if ((s.current?.id ?? null) !== msg.itemId) return;
-        const queue = await this.getQueue();
-        const history = await this.getHistory();
+        // 1曲リピート: 最後まで再生されたときは同じ動画をもう一度（ID を変えて、重複した next を無視できるようにする）
+        if (msg.auto && s.repeat === 'one' && s.current) {
+          await this.start(s, { ...s.current, id: newItemId() }, a);
+          return;
+        }
+        let queue = await this.getQueue();
+        let history = await this.getHistory();
         if (s.current) history.push(s.current);
-        const item = queue.shift() ?? null;
+        // 全曲リピート: 最後まで来たら視聴済みを全部これから再生する側に戻す
+        if (queue.length === 0 && s.repeat === 'all') {
+          queue = history.map((q) => ({ ...q, id: newItemId() }));
+          history = [];
+        }
+        // シャッフル: これから再生する動画の中からランダムに選ぶ
+        const index = s.shuffle && queue.length > 1 ? Math.floor(Math.random() * queue.length) : 0;
+        const item = queue.splice(index, 1)[0] ?? null;
         await this.putLists({ queue, history: history.slice(-HISTORY_LIMIT) });
         await this.start(s, item, a);
+        return;
+      }
+
+      case 'mode': {
+        if (!a.joined) return;
+        const s = await this.getState();
+        if (msg.repeat === 'off' || msg.repeat === 'all' || msg.repeat === 'one') s.repeat = msg.repeat;
+        if (typeof msg.shuffle === 'boolean') s.shuffle = msg.shuffle;
+        // 再生位置の基準 (updatedAt) は変えずに設定だけ配信する
+        s.version++;
+        await this.ctx.storage.put(STATE_KEY, s);
+        this.broadcast({ t: 'state', state: s });
         return;
       }
     }
@@ -312,6 +336,10 @@ export class Room extends DurableObject<Env> {
   private broadcastMembers(exclude?: WebSocket) {
     this.broadcast({ t: 'members', members: this.members(exclude) }, exclude);
   }
+}
+
+function newItemId() {
+  return crypto.randomUUID().slice(0, 8);
 }
 
 function send(ws: WebSocket, msg: ServerMsg) {
