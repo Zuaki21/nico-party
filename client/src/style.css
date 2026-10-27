@@ -238,7 +238,9 @@ button.icon:hover {
   list-style: none;
   margin: 0;
   padding: 0 4px;
-  overflow: auto;
+  /* キュー欄を細くしても横スクロールバーは出さない（行の中身が縮んで収まる） */
+  overflow-x: hidden;
+  overflow-y: auto;
   min-height: 0;
   background: var(--panel);
   border-radius: 8px;
@@ -287,9 +289,10 @@ button.icon:hover {
 }
 
 .thumb {
-  flex: 0 0 auto;
+  /* 欄が細いときは 48px まで縮む */
+  flex: 0 1 96px;
+  min-width: 48px;
   position: relative;
-  width: 96px;
   aspect-ratio: 16 / 9;
   border-radius: 4px;
   overflow: hidden;
@@ -419,13 +422,15 @@ button.icon:hover {
 
 .search-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
   font-weight: 600;
 }
 
 .search-title {
-  flex: 1;
+  /* 欄が細くて入りきらないときは、潰れずに 1 行目に回る */
+  flex: 1 1 100px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
