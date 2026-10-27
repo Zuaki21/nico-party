@@ -1,4 +1,4 @@
-import { handleNico } from './nico';
+import { handleNico, searchVideos } from './nico';
 import type { Env } from './room';
 
 export { Room } from './room';
@@ -6,7 +6,7 @@ export { Room } from './room';
 const ROOM_PATH = /^\/ws\/([A-Za-z0-9_-]{1,128})$/;
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -18,6 +18,10 @@ export default {
 
     if (path.startsWith('/nico/')) {
       return handleNico(request, env, path.slice('/nico'.length));
+    }
+
+    if (path === '/api/search' && request.method === 'GET') {
+      return searchVideos(request, ctx);
     }
 
     if (path === '/api/token' && request.method === 'POST') {

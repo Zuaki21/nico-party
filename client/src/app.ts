@@ -1,5 +1,5 @@
 import { Common, DiscordSDK } from '@discord/embedded-app-sdk';
-import { HEARTBEAT, type ClientMsg, type ServerMsg } from '../../shared/protocol';
+import { HEARTBEAT, type ClientMsg, type SearchResult, type ServerMsg } from '../../shared/protocol';
 import { ClockSync } from './clock';
 import { devlog, watchErrors } from './devlog';
 import { inDiscord, proxied } from './env';
@@ -29,6 +29,12 @@ const playerEl = mountUi(document.querySelector<HTMLElement>('#app')!, {
   skip: (itemId) => request({ t: 'next', itemId }),
   prev: (itemId) => request({ t: 'prev', itemId }),
   move: (id, index) => request({ t: 'move', id, index }),
+  search: async (q, sort, offset) => {
+    const params = new URLSearchParams({ q, sort, offset: String(offset) });
+    const res = await fetch(proxied(`/api/search?${params}`));
+    if (!res.ok) throw new Error(`search failed: ${res.status}`);
+    return (await res.json()) as SearchResult;
+  },
 });
 
 const player = new NicoPlayer(playerEl, (videoId, playerId) => {

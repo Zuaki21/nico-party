@@ -118,3 +118,24 @@ export function reorder(
   const historyLen = boundary + (toHistory ? 1 : 0);
   return { history: all.slice(0, historyLen), queue: all.slice(historyLen) };
 }
+
+/** /api/search の結果（ニコニコのスナップショット検索 API を整形したもの） */
+export interface SearchResult {
+  total: number;
+  items: SearchItem[];
+}
+
+export interface SearchItem {
+  videoId: string;
+  title: string;
+  thumbnail?: string;
+  views?: number;
+  comments?: number;
+  /** 秒 */
+  length?: number;
+  /** 投稿日時 (ISO 8601) */
+  startTime?: string;
+}
+
+export type SearchSort = 'popular' | 'new';
+export const SEARCH_PAGE_SIZE = 20;

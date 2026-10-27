@@ -398,3 +398,88 @@ button.icon:hover {
   }
 }
 
+
+/* キーワード検索の結果（キュー欄の場所に切り替えて表示する） */
+.side.searching .queue-head,
+.side.searching #queue {
+  display: none;
+}
+
+.search {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.search[hidden] {
+  display: none;
+}
+
+.search-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.search-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 並び順の切り替え（つながったボタン） */
+.seg {
+  display: flex;
+  flex: none;
+}
+
+.seg button {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 0;
+  background: var(--button-secondary);
+  color: var(--button-secondary-text);
+}
+
+.seg button:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.seg button:last-child {
+  border-radius: 0 6px 6px 0;
+}
+
+.seg button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+#results {
+  flex: 1;
+}
+
+/* 検索結果の「＋」（キューに追加） */
+button.add {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+}
+
+button.add:disabled {
+  background: var(--button-secondary);
+  color: var(--muted);
+  cursor: default;
+}
+
+button.more {
+  width: 100%;
+}

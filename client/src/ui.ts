@@ -1,4 +1,14 @@
-import { reorder, type Member, type PlaybackState, type QueueItem } from '../../shared/protocol';
+import {
+  parseVideoId,
+  reorder,
+  SEARCH_PAGE_SIZE,
+  type Member,
+  type PlaybackState,
+  type QueueItem,
+  type SearchItem,
+  type SearchResult,
+  type SearchSort,
+} from '../../shared/protocol';
 import { externalUrl } from './env';
 
 export interface UiHandlers {
@@ -8,6 +18,7 @@ export interface UiHandlers {
   prev: (itemId: string) => void;
   /** id の動画を、視聴済み + 再生中 + キューを並べたリストの index 番目に移動する */
   move: (id: string, index: number) => void;
+  search: (q: string, sort: SearchSort, offset: number) => Promise<SearchResult>;
 }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -17,7 +28,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
   root.innerHTML = `
     <main class="main">
       <div class="player" id="player">
-        <div class="empty" id="empty">キュー欄に動画のURLを入れてください</div>
+        <div class="empty" id="empty">キュー欄に動画のURLを入れるか、キーワードで検索してください</div>
       </div>
       <div class="now">
         <div class="now-title" id="now-title"></div>
@@ -30,8 +41,8 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
     <div class="splitter" id="splitter" title="ドラッグで大きさを変更"></div>
     <aside class="side" id="side">
       <form class="bar" id="form">
-        <input type="text" id="url" placeholder="ニコニコ動画のURL または sm番号" autocomplete="off" />
-        <button type="submit">追加</button>
+        <input type="text" id="url" placeholder="URL・sm番号 または キーワードで検索" autocomplete="off" />
+        <button type="submit" id="submit">追加</button>
       </form>
       <div class="error" id="error" hidden></div>
       <div class="queue-head">
@@ -39,16 +50,39 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
         <span class="muted" id="members"></span>
       </div>
       <ol class="queue" id="queue"><li class="muted">接続中…</li></ol>
+      <div class="search" id="search" hidden>
+        <div class="search-head">
+          <span class="search-title" id="search-title"></span>
+          <div class="seg" id="search-sort">
+            <button type="button" data-sort="popular">人気順</button>
+            <button type="button" data-sort="new">新着順</button>
+          </div>
+          <button type="button" class="icon" id="search-close" title="検索を閉じてキューに戻る">×</button>
+        </div>
+        <ol class="queue" id="results"></ol>
+      </div>
     </aside>
   `;
 
+  const search = setupSearch(h);
+  const input = $<HTMLInputElement>('url');
+  // URL や sm 番号ならそのまま追加、それ以外は検索。ボタンの表示も入力に合わせて変える
+  const updateSubmit = () => {
+    const text = input.value.trim();
+    $('submit').textContent = !text || parseVideoId(text) ? '追加' : '検索';
+  };
+  input.addEventListener('input', updateSubmit);
   $('form').addEventListener('submit', (e) => {
     e.preventDefault();
-    const input = $<HTMLInputElement>('url');
-    const url = input.value.trim();
-    if (!url) return;
-    h.enqueue(url);
-    input.value = '';
+    const text = input.value.trim();
+    if (!text) return;
+    if (parseVideoId(text)) {
+      h.enqueue(text);
+      input.value = '';
+      updateSubmit();
+    } else {
+      search.open(text);
+    }
   });
   $('queue').addEventListener('click', (e) => {
     const id = (e.target as HTMLElement).closest<HTMLElement>('[data-remove]')?.dataset.remove;
@@ -251,26 +285,12 @@ function itemEl(q: QueueItem, kind: ItemKind) {
   handle.textContent = '⋮⋮';
   handle.title = 'ドラッグで並べ替え';
 
-  const thumb = document.createElement('div');
-  thumb.className = 'thumb';
-  if (q.thumbnail) {
-    const img = document.createElement('img');
-    img.src = externalUrl(q.thumbnail);
-    img.alt = '';
-    img.loading = 'lazy';
-    thumb.append(img);
-  }
+  const thumb = thumbEl(q.thumbnail, q.length);
   if (kind === 'current') {
     const badge = document.createElement('span');
     badge.className = 'badge';
     badge.textContent = '▶ 再生中';
     thumb.append(badge);
-  }
-  if (q.length) {
-    const len = document.createElement('span');
-    len.className = 'len';
-    len.textContent = formatTime(q.length);
-    thumb.append(len);
   }
 
   const body = document.createElement('div');
@@ -418,6 +438,162 @@ function setupReorder(move: (id: string, index: number) => void) {
 /** PiP など小さく表示されているときは動画だけを出す */
 export function setCompact(compact: boolean) {
   document.getElementById('app')!.classList.toggle('compact', compact);
+}
+
+/**
+ * キーワード検索。結果はキュー欄の場所に切り替えて表示し、「＋」でキューに追加する。
+ * 検索はニコニコのスナップショット検索 API（1 日 1 回更新）なので、投稿直後の動画は出てこない
+ */
+function setupSearch(h: UiHandlers) {
+  const side = $('side');
+  const list = $('results');
+  let query = '';
+  let sort: SearchSort = 'popular';
+  let items: SearchItem[] = [];
+  let total = 0;
+  /** 古い検索の結果が後から届いても無視するための番号 */
+  let seq = 0;
+  /** この検索中に追加した動画（ボタンを ✓ にする） */
+  const added = new Set<string>();
+
+  const note = (text: string) => {
+    const li = document.createElement('li');
+    li.className = 'muted';
+    li.textContent = text;
+    return li;
+  };
+
+  const render = (state: 'loading' | 'done' | 'error') => {
+    $('search-title').textContent =
+      state === 'done' ? `「${query}」 ${total.toLocaleString('ja-JP')}件` : `「${query}」`;
+    for (const b of $('search-sort').querySelectorAll<HTMLButtonElement>('button')) {
+      b.classList.toggle('active', b.dataset.sort === sort);
+    }
+    const rows: HTMLElement[] = items.map(resultEl);
+    if (state === 'loading') rows.push(note('検索中…'));
+    else if (state === 'error') rows.push(note('検索に失敗しました。時間をおいて試してください'));
+    else if (items.length === 0) {
+      rows.push(note('見つかりませんでした（投稿されたばかりの動画は、URL を貼ると追加できます）'));
+    } else if (items.length < total) {
+      const li = document.createElement('li');
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'secondary more';
+      more.textContent = 'もっと見る';
+      more.addEventListener('click', () => load(items.length));
+      li.append(more);
+      rows.push(li);
+    }
+    list.replaceChildren(...rows);
+  };
+
+  const resultEl = (r: SearchItem) => {
+    const li = document.createElement('li');
+    li.append(
+      thumbEl(r.thumbnail, r.length),
+      bodyEl(r.title, r.videoId, [
+        r.views !== undefined ? `▶ ${formatCount(r.views)}` : null,
+        r.comments !== undefined ? `💬 ${formatCount(r.comments)}` : null,
+        r.startTime ? formatDate(r.startTime) : null,
+      ]),
+    );
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'add';
+    const mark = (done: boolean) => {
+      add.textContent = done ? '✓' : '＋';
+      add.title = done ? '追加しました' : 'キューに追加';
+      add.disabled = done;
+    };
+    mark(added.has(r.videoId));
+    add.addEventListener('click', () => {
+      h.enqueue(r.videoId);
+      added.add(r.videoId);
+      mark(true);
+    });
+    li.append(add);
+    return li;
+  };
+
+  const load = async (offset: number) => {
+    const my = ++seq;
+    if (offset === 0) {
+      items = [];
+      list.scrollTop = 0;
+    }
+    render('loading');
+    try {
+      const res = await h.search(query, sort, offset);
+      if (my !== seq) return;
+      total = res.total;
+      items = offset === 0 ? res.items : [...items, ...res.items.slice(0, SEARCH_PAGE_SIZE)];
+      render('done');
+    } catch {
+      if (my === seq) render('error');
+    }
+  };
+
+  $('search-close').addEventListener('click', () => {
+    seq++;
+    side.classList.remove('searching');
+    $('search').hidden = true;
+  });
+  $('search-sort').addEventListener('click', (e) => {
+    const next = (e.target as HTMLElement).closest<HTMLElement>('[data-sort]')?.dataset.sort;
+    if ((next === 'popular' || next === 'new') && next !== sort) {
+      sort = next;
+      load(0);
+    }
+  });
+
+  return {
+    open(q: string) {
+      query = q;
+      added.clear();
+      side.classList.add('searching');
+      $('search').hidden = false;
+      load(0);
+    },
+  };
+}
+
+function thumbEl(thumbnail: string | undefined, length: number | undefined) {
+  const thumb = document.createElement('div');
+  thumb.className = 'thumb';
+  if (thumbnail) {
+    const img = document.createElement('img');
+    img.src = externalUrl(thumbnail);
+    img.alt = '';
+    img.loading = 'lazy';
+    thumb.append(img);
+  }
+  if (length) {
+    const len = document.createElement('span');
+    len.className = 'len';
+    len.textContent = formatTime(length);
+    thumb.append(len);
+  }
+  return thumb;
+}
+
+function bodyEl(titleText: string, videoId: string, meta: (string | null | undefined)[]) {
+  const body = document.createElement('div');
+  body.className = 'q-body';
+  const title = document.createElement('div');
+  title.className = 'q-title';
+  title.textContent = titleText;
+  title.title = `${titleText}\n${videoId}`;
+  const m = document.createElement('div');
+  m.className = 'q-meta';
+  m.textContent = meta.filter(Boolean).join('  ·  ');
+  body.append(title, m);
+  return body;
+}
+
+/** 2024-05-01T12:00:00+09:00 → 2024/5/1 */
+function formatDate(iso: string) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 }
 
 /** 部屋に入れていない間の表示。waiting は接続後に送る操作の数 */

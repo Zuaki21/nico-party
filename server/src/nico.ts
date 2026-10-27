@@ -11,6 +11,8 @@
  * Copyright (c) 2024 sevenc7c — MIT License（THIRD_PARTY_NOTICES.md）
  */
 
+import { SEARCH_PAGE_SIZE, type SearchResult, type SearchSort } from '../../shared/protocol';
+
 export interface NicoEnv {
   DISCORD_CLIENT_ID: string;
 }
@@ -214,4 +216,74 @@ function decodeXml(s: string) {
     .replace(/&quot;/g, '"')
     .replace(/&#39;|&apos;/g, "'")
     .replace(/&amp;/g, '&');
+}
+
+/** 検索結果をキャッシュする時間。スナップショット検索のデータは 1 日 1 回の更新なので短すぎなくてよい */
+const SEARCH_CACHE_SECONDS = 600;
+
+/**
+ * ニコニコのスナップショット検索 API（公式）でキーワード検索する。
+ * データは 1 日 1 回の更新なので、投稿されたばかりの動画は出てこない。
+ * https://site.nicovideo.jp/search-api-docs/snapshot
+ */
+export async function searchVideos(
+  req: Request,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  const url = new URL(req.url);
+  const q = (url.searchParams.get('q') ?? '').trim().slice(0, 100);
+  const sort: SearchSort = url.searchParams.get('sort') === 'new' ? 'new' : 'popular';
+  const offset = Math.max(0, Math.min(1000, Number(url.searchParams.get('offset')) || 0));
+  if (!q) return Response.json({ total: 0, items: [] } satisfies SearchResult);
+
+  // 同じ検索は Cloudflare のキャッシュから返す（ニコニコへの問い合わせとリクエスト数を抑える）
+  const cacheKey = new Request(
+    `https://nico-party.cache/search?${new URLSearchParams({ q, sort, offset: String(offset) })}`,
+  );
+  const cache = caches.default;
+  const hit = await cache.match(cacheKey);
+  if (hit) return hit;
+
+  const api = new URL('https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search');
+  api.search = new URLSearchParams({
+    q,
+    targets: 'title,description,tags',
+    fields: 'contentId,title,viewCounter,commentCounter,lengthSeconds,thumbnailUrl,startTime',
+    _sort: sort === 'new' ? '-startTime' : '-viewCounter',
+    _offset: String(offset),
+    _limit: String(SEARCH_PAGE_SIZE),
+    _context: 'nico-party',
+  }).toString();
+  const res = await fetch(api, { headers: { 'user-agent': 'nico-party (https://nico-party.zuaki.dev)' } });
+  if (!res.ok) return Response.json({ error: 'search failed' }, { status: 502 });
+
+  const json = await res.json<{
+    meta: { totalCount?: number };
+    data?: {
+      contentId: string;
+      title: string;
+      thumbnailUrl?: string;
+      viewCounter?: number;
+      commentCounter?: number;
+      lengthSeconds?: number;
+      startTime?: string;
+    }[];
+  }>();
+  const result: SearchResult = {
+    total: json.meta.totalCount ?? 0,
+    items: (json.data ?? []).map((d) => ({
+      videoId: d.contentId,
+      title: d.title,
+      thumbnail: d.thumbnailUrl,
+      views: d.viewCounter,
+      comments: d.commentCounter,
+      length: d.lengthSeconds,
+      startTime: d.startTime,
+    })),
+  };
+  const out = Response.json(result, {
+    headers: { 'cache-control': `public, max-age=${SEARCH_CACHE_SECONDS}` },
+  });
+  ctx.waitUntil(cache.put(cacheKey, out.clone()));
+  return out;
 }
