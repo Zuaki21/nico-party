@@ -13,8 +13,6 @@ const END_MARGIN = 0.5;
 const STUCK_MARGIN = 3;
 /** ローカル操作をまとめる時間（シークバーのドラッグ等） */
 const LOCAL_DEBOUNCE_MS = 150;
-/** 開始待ちの間に先読みしておく長さ（秒） */
-const PRELOAD_SEC = 3;
 
 /**
  * 部屋の再生状態と自分のプレイヤーを一致させる。
@@ -47,6 +45,10 @@ export class SyncEngine {
       this.localTimer = window.setTimeout(() => this.onLocalChange(), LOCAL_DEBOUNCE_MS);
     };
     player.on('play', onLocal);
+    // 先読みのための再生が始まったら、すぐ 0 秒に戻して止める（音が出続けないように）
+    player.on('play', () => {
+      if (this.preloading) this.apply(APPLY_THRESHOLD);
+    });
     player.on('pause', onLocal);
     player.on('seeked', onLocal);
     player.on('load', () => this.apply(APPLY_THRESHOLD));
@@ -130,8 +132,9 @@ export class SyncEngine {
 
   /**
    * 開始待ちの間に動画データを読み込んでおく。
-   * ニコニコのプレイヤーは再生するまで動画データを読み込まないので、ミュートで裏再生して先読みし、
-   * 読み込めたら 0 秒に戻して止める（開始時刻に再生した瞬間に読み込みが始まって遅れるのを防ぐ）
+   * ニコニコのプレイヤーは再生するまで動画データを読み込まないので、一度だけ再生して読み込みを始めさせ、
+   * 再生が始まったらすぐ 0 秒に戻して止める（開始時刻に再生した瞬間に読み込みが始まって遅れるのを防ぐ）。
+   * 念のためミュートもするが、環境によっては効かないので、再生している時間を最小にしている
    */
   private preload(itemId: string) {
     const p = this.player;
@@ -155,8 +158,8 @@ export class SyncEngine {
       p.play();
       return;
     }
-    const enough = Math.min(PRELOAD_SEC, Math.max(0, p.getDuration() - END_MARGIN));
-    if (p.getBuffered() >= enough) {
+    // 再生が始まった時点で読み込みは始まっている（止めても裏で続く）ので、すぐ 0 秒に戻して止める
+    if (!p.isPaused() || p.getTime() > 0) {
       this.endPreload(true);
       this.preloadedFor = itemId;
     }
