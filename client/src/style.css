@@ -484,24 +484,53 @@ button.more {
   width: 100%;
 }
 
-/* キューの「ここから再生」。マウスを乗せた項目でだけ出す（タッチ端末では常に表示） */
-button.icon.play {
-  padding: 4px 6px;
-  visibility: hidden;
+/*
+ * キューの「ここから再生」「削除」。普段は隠して動画情報を行の右端まで表示し、
+ * マウスを乗せた行でだけ右端に重ねて出す（背景をなじませて下の文字を隠す）。タッチ端末では常に表示
+ */
+.queue li[data-id] {
+  position: relative;
 }
 
-.queue li:hover button.icon.play,
-button.icon.play:focus-visible {
-  visibility: visible;
+.actions {
+  position: absolute;
+  top: 0;
+  right: 4px;
+  bottom: 0;
+  display: none;
+  align-items: center;
+  gap: 2px;
+  padding-left: 28px;
+  background: linear-gradient(to right, transparent, var(--panel) 24px);
 }
 
-button.icon.play:hover {
+.queue li.dragging .actions {
+  background: linear-gradient(to right, transparent, var(--dragging-bg) 24px);
+}
+
+.queue li[data-id]:hover .actions,
+.actions:focus-within {
+  display: flex;
+}
+
+.actions button.icon {
+  padding: 6px;
+}
+
+.actions button.play:hover {
   color: var(--accent);
 }
 
+.actions button.remove:hover {
+  color: var(--danger);
+}
+
 @media (hover: none) {
-  button.icon.play {
-    visibility: visible;
+  .actions {
+    position: static;
+    display: flex;
+    padding-left: 0;
+    background: none;
   }
 }
 

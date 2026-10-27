@@ -23,6 +23,9 @@ export interface UiHandlers {
   jump: (id: string) => void;
 }
 
+/** キューの「削除」ボタン（ゴミ箱）。文字色で描く */
+const TRASH_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12a2 2 0 0 0 2 1.8h7a2 2 0 0 0 2-1.8l1-12M9 7V4.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V7"/></g></svg>`;
+
 /** キューの「ここから再生」ボタン。文字色で描く */
 const PLAY_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></svg>`;
 
@@ -328,19 +331,22 @@ function itemEl(q: QueueItem, kind: ItemKind) {
 
   li.append(handle, thumb, body);
   // 再生中の動画は「前へ」「次へ」で操作する
+  // 「ここから再生」と「削除」。マウスを乗せたときだけ、動画情報の右端に重ねて出す
   if (kind !== 'current') {
+    const actions = document.createElement('div');
+    actions.className = 'actions';
     const play = document.createElement('button');
     play.className = 'icon play';
     play.dataset.play = q.id;
     play.title = 'ここから再生';
     play.innerHTML = PLAY_ICON;
-    li.append(play);
     const del = document.createElement('button');
-    del.className = 'icon';
+    del.className = 'icon remove';
     del.dataset.remove = q.id;
     del.title = kind === 'done' ? '履歴から削除' : 'キューから削除';
-    del.textContent = '×';
-    li.append(del);
+    del.innerHTML = TRASH_ICON;
+    actions.append(play, del);
+    li.append(actions);
   }
   return li;
 }
