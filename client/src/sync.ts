@@ -13,6 +13,8 @@ const END_MARGIN = 0.5;
 const STUCK_MARGIN = 3;
 /** ローカル操作をまとめる時間（シークバーのドラッグ等） */
 const LOCAL_DEBOUNCE_MS = 150;
+/** 開始待ちの間に先読みしておく長さ（秒） */
+const PRELOAD_SEC = 3;
 
 /**
  * 部屋の再生状態と自分のプレイヤーを一致させる。
@@ -28,6 +30,12 @@ export class SyncEngine {
   private localTimer: number | undefined;
   /** 再生開始時刻ちょうどに再生を始めるためのタイマー */
   private startTimer: number | undefined;
+  /** 開始待ちの間、ミュートで裏再生して動画データを先読みしている */
+  private preloading = false;
+  /** 先読みが済んだキュー項目 */
+  private preloadedFor: string | null = null;
+  /** 先読みのためにミュートする前の状態（終わったら戻す） */
+  private mutedBefore = false;
   private ticks = 0;
 
   constructor(
@@ -54,6 +62,10 @@ export class SyncEngine {
     this.state = state;
     const item = state.current;
     if ((item?.id ?? null) !== this.loadedItemId) {
+      // 先読みの途中で動画が変わったら、ミュートを元に戻してから切り替える
+      if (this.preloading) this.player.mute(this.mutedBefore);
+      this.preloading = false;
+      this.preloadedFor = null;
       this.loadedItemId = item?.id ?? null;
       if (item) this.player.load(item.videoId);
       else this.player.unload();
@@ -83,20 +95,16 @@ export class SyncEngine {
     if (!s?.current || s.current.id !== this.loadedItemId || !p.ready()) return;
 
     const target = this.expected(s);
-    // 動画の切り替え直後で、まだ開始時刻になっていない。0 秒で止めて待ち、開始時刻ちょうどに再生する
+    // 動画の切り替え直後で、まだ開始時刻になっていない。
+    // 先読みしてから 0 秒で止めて待ち、開始時刻ちょうどに再生する
     clearTimeout(this.startTimer);
     if (s.playing && target < 0) {
-      if (p.getTime() > 0.5) {
-        this.suppress();
-        p.seek(0);
-      }
-      if (!p.isPaused()) {
-        this.suppress();
-        p.pause();
-      }
+      this.preload(s.current.id);
       this.startTimer = window.setTimeout(() => this.apply(APPLY_THRESHOLD), -target * 1000);
       return;
     }
+    // 先読みが終わる前に開始時刻になった。そのまま再生を続け、位置だけ下で合わせる
+    if (this.preloading) this.endPreload(false);
     const duration = p.getDuration();
     // 部屋の位置が動画の終端を過ぎている。終了済みの動画に play() すると先頭から再生し直すので触らない
     if (duration > 0 && target >= duration - END_MARGIN) {
@@ -120,11 +128,59 @@ export class SyncEngine {
     }
   }
 
+  /**
+   * 開始待ちの間に動画データを読み込んでおく。
+   * ニコニコのプレイヤーは再生するまで動画データを読み込まないので、ミュートで裏再生して先読みし、
+   * 読み込めたら 0 秒に戻して止める（開始時刻に再生した瞬間に読み込みが始まって遅れるのを防ぐ）
+   */
+  private preload(itemId: string) {
+    const p = this.player;
+    if (this.preloadedFor === itemId) {
+      // 先読み済み。0 秒で止めて開始時刻を待つ
+      if (p.getTime() > 0.5) {
+        this.suppress();
+        p.seek(0);
+      }
+      if (!p.isPaused()) {
+        this.suppress();
+        p.pause();
+      }
+      return;
+    }
+    if (!this.preloading) {
+      this.preloading = true;
+      this.mutedBefore = p.isMuted();
+      this.suppress();
+      p.mute(true);
+      p.play();
+      return;
+    }
+    const enough = Math.min(PRELOAD_SEC, Math.max(0, p.getDuration() - END_MARGIN));
+    if (p.getBuffered() >= enough) {
+      this.endPreload(true);
+      this.preloadedFor = itemId;
+    }
+  }
+
+  /** @param hold true なら 0 秒に戻して止める（開始時刻を待つ） */
+  private endPreload(hold: boolean) {
+    const p = this.player;
+    this.preloading = false;
+    this.suppress();
+    if (hold) {
+      p.pause();
+      p.seek(0);
+    }
+    p.mute(this.mutedBefore);
+  }
+
   /** ユーザーがプレイヤーを操作した */
   private onLocalChange() {
     const s = this.state;
     const p = this.player;
     if (!s?.current || s.current.id !== this.loadedItemId) return;
+    // 先読みのための再生・停止はユーザーの操作ではない
+    if (this.preloading) return;
     if (Date.now() < this.suppressUntil || !p.ready()) return;
     // 再生終了による停止は ended で処理する
     if (p.isEnded()) return;
@@ -155,6 +211,12 @@ export class SyncEngine {
     const duration = p.getDuration();
     if (s.playing && duration > 0 && this.expected(s) > duration + STUCK_MARGIN) {
       this.requestNext();
+      return;
+    }
+
+    // 先読み中は読み込みの進み具合を毎秒確認する
+    if (this.preloading) {
+      this.apply(APPLY_THRESHOLD);
       return;
     }
 

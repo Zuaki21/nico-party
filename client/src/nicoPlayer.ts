@@ -2,7 +2,7 @@
  * ニコニコ埋め込みプレイヤー (embed.nicovideo.jp) の postMessage ラッパー。
  * 公式ドキュメントのない API なので、仕様は実際のメッセージを観察して合わせている。
  *   受信: loadComplete / playerStatusChange / seekStatusChange / playerMetadataChange
- *   送信: play / pause / seek (data.time はミリ秒)
+ *   送信: play / pause / seek (data.time はミリ秒) / mute (data.mute)
  */
 
 export const enum PlayerStatus {
@@ -27,6 +27,9 @@ export class NicoPlayer {
   /** 最後に通知された再生位置 (秒) と、その受信時刻 */
   private time = 0;
   private timeAt = 0;
+  /** どこまで読み込み済みか (秒) */
+  private buffered = 0;
+  private muted = false;
   private handlers: Partial<Record<PlayerEvent, Handler[]>> = {};
 
   /** @param src 動画 ID から iframe の URL を作る関数 */
@@ -47,6 +50,7 @@ export class NicoPlayer {
     this.time = 0;
     this.timeAt = 0;
     this.duration = 0;
+    this.buffered = 0;
     this.iframe.src = this.src(videoId, PLAYER_ID);
   }
 
@@ -65,6 +69,20 @@ export class NicoPlayer {
 
   pause() {
     this.post('pause');
+  }
+
+  mute(mute: boolean) {
+    this.post('mute', { mute });
+    this.muted = mute;
+  }
+
+  isMuted() {
+    return this.muted;
+  }
+
+  /** どこまで読み込み済みか (秒) */
+  getBuffered() {
+    return this.buffered;
   }
 
   /** @param sec 秒 */
@@ -148,6 +166,8 @@ export class NicoPlayer {
         if (typeof data.duration === 'number' && data.duration > 0) {
           this.duration = data.duration / 1000;
         }
+        if (typeof data.maximumBuffered === 'number') this.buffered = data.maximumBuffered / 1000;
+        if (typeof data.muted === 'boolean') this.muted = data.muted;
         return;
     }
   };

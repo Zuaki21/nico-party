@@ -45,9 +45,10 @@ const player = new NicoPlayer(playerEl, (videoId, playerId) => {
     noRelatedVideo: '1',
     noShare: '1',
     persistence: '1',
-    // プレイヤーはこれを元に postMessage の宛先オリジンを決める（無いと 'null//null' になる）
-    referer: location.href,
   });
+  // Discord 内（中継経由）では、プレイヤーはこれを元に postMessage の宛先オリジンを決める（無いと 'null//null' になる）。
+  // ローカル確認用の直接埋め込みでは逆に付けるとニコニコに 403 で拒否される
+  if (inDiscord) params.set('referer', location.href);
   // Discord 内では埋め込み HTML を自前サーバーで書き換えて配信する (server/src/nico.ts)
   return inDiscord
     ? `/.proxy/nico/nico-embed/${videoId}?${params}`
