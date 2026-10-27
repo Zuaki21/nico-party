@@ -36,7 +36,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
   root.innerHTML = `
     <main class="main">
       <div class="player" id="player">
-        <div class="empty" id="empty">キュー欄に動画のURLを入れるか、キーワードで検索してください</div>
+        <div class="empty" id="empty">動画のURLを入れるか、キーワードで検索して再生リストに追加してください</div>
       </div>
       <div class="now">
         <div class="now-title" id="now-title"></div>
@@ -54,7 +54,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
       </form>
       <div class="error" id="error" hidden></div>
       <div class="queue-head">
-        <span>キュー</span>
+        <span>再生リスト</span>
         <span class="muted" id="members"></span>
       </div>
       <ol class="queue" id="queue"><li class="muted">接続中…</li></ol>
@@ -65,7 +65,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
             <button type="button" data-sort="popular">人気順</button>
             <button type="button" data-sort="new">新着順</button>
           </div>
-          <button type="button" class="icon" id="search-close" title="検索を閉じてキューに戻る">×</button>
+          <button type="button" class="icon" id="search-close" title="検索を閉じて再生リストに戻る">×</button>
         </div>
         <ol class="queue" id="results"></ol>
       </div>
@@ -142,7 +142,7 @@ function setupSidePanel(root: HTMLElement) {
 
   const setHidden = (hidden: boolean) => {
     root.classList.toggle('side-hidden', hidden);
-    toggle.textContent = hidden ? 'キューを表示' : 'キューを隠す';
+    toggle.textContent = hidden ? 'リストを表示' : 'リストを隠す';
     save('nico-party:side-hidden', hidden ? '1' : '');
   };
 
@@ -343,7 +343,7 @@ function itemEl(q: QueueItem, kind: ItemKind) {
     const del = document.createElement('button');
     del.className = 'icon remove';
     del.dataset.remove = q.id;
-    del.title = kind === 'done' ? '履歴から削除' : 'キューから削除';
+    del.title = '再生リストから削除';
     del.innerHTML = TRASH_ICON;
     actions.append(play, del);
     li.append(actions);
@@ -529,7 +529,7 @@ function setupSearch(h: UiHandlers) {
     add.className = 'add';
     const mark = (done: boolean) => {
       add.textContent = done ? '✓' : '＋';
-      add.title = done ? '追加しました' : 'キューに追加';
+      add.title = done ? '追加しました' : '再生リストに追加';
       add.disabled = done;
     };
     mark(added.has(r.videoId));

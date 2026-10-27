@@ -116,7 +116,7 @@ export class Room extends DurableObject<Env> {
         }
         const queue = await this.getQueue();
         if (queue.length >= QUEUE_LIMIT) {
-          send(ws, { t: 'error', message: 'キューがいっぱいです' });
+          send(ws, { t: 'error', message: '再生リストがいっぱいです' });
           return;
         }
         const info = await fetchVideoInfo(videoId);
