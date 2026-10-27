@@ -428,6 +428,8 @@ button.icon:hover {
   }
   .side {
     flex-basis: 400px;
+    /* ui.ts の MIN_SIDE_WIDTH と揃える */
+    min-width: 260px;
   }
   .splitter {
     cursor: col-resize;

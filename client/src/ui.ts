@@ -149,7 +149,13 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
 
 /** 横に広いときはキュー欄を右、狭いときは下に置く（style.css の media query と揃える） */
 const wideQuery = window.matchMedia('(min-width: 900px)');
-const MIN_SIDE = 120;
+/**
+ * キュー欄の最小の大きさ。横並びのときは見出し（再生リスト・シャッフル・リピート・人数）が
+ * 折り返さない幅、縦並びのときは数行見える高さ
+ */
+const MIN_SIDE_WIDTH = 260;
+const MIN_SIDE_HEIGHT = 120;
+const minSide = () => (wideQuery.matches ? MIN_SIDE_WIDTH : MIN_SIDE_HEIGHT);
 /** キュー欄を広げても動画側にこれだけは残す */
 const MIN_MAIN = 200;
 
@@ -163,7 +169,8 @@ function setupSidePanel(root: HTMLElement) {
 
   const applySize = () => {
     const saved = Number(load(sizeKey()));
-    side.style.flexBasis = saved > 0 ? `${saved}px` : '';
+    // 以前に今より小さい最小値で保存された大きさは、今の最小値まで広げる
+    side.style.flexBasis = saved > 0 ? `${Math.max(minSide(), saved)}px` : '';
   };
 
   const setHidden = (hidden: boolean) => {
@@ -189,7 +196,7 @@ function setupSidePanel(root: HTMLElement) {
     const onMove = (ev: PointerEvent) => {
       const total = wide ? rect.width : rect.height;
       const raw = wide ? rect.right - ev.clientX : rect.bottom - ev.clientY;
-      const size = Math.round(Math.max(MIN_SIDE, Math.min(total - MIN_MAIN, raw)));
+      const size = Math.round(Math.max(minSide(), Math.min(total - MIN_MAIN, raw)));
       side.style.flexBasis = `${size}px`;
     };
     const onUp = () => {
