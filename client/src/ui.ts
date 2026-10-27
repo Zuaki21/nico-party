@@ -62,7 +62,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
         <div class="search-head">
           <span class="search-title" id="search-title"></span>
           <div class="seg" id="search-sort">
-            <button type="button" data-sort="popular">人気順</button>
+            <button type="button" data-sort="popular">再生数順</button>
             <button type="button" data-sort="new">新着順</button>
           </div>
           <button type="button" class="icon" id="search-close" title="検索を閉じて再生リストに戻る">×</button>
