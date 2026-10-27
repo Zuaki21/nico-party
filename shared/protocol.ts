@@ -45,6 +45,8 @@ export type ClientMsg =
   | { t: 'next'; itemId: string | null }
   /** itemId の動画をやめて、直前に視聴した動画に戻る */
   | { t: 'prev'; itemId: string }
+  /** 視聴済み・キューの中から id の動画を選んで、そこから再生する（並び順は変えない） */
+  | { t: 'jump'; id: string }
   | { t: 'ping'; clientTime: number };
 
 export type ServerMsg =
@@ -117,6 +119,22 @@ export function reorder(
   const toHistory = to < boundary || (to === boundary && fromHistory);
   const historyLen = boundary + (toHistory ? 1 : 0);
   return { history: all.slice(0, historyLen), queue: all.slice(historyLen) };
+}
+
+/**
+ * 視聴済み・再生中・キューを1本のリストとみなして、id の動画を再生中にする。
+ * リスト上でそれより前はすべて視聴済み、後ろはすべてキューになる（並び順は変えない）。見つからなければ null。
+ */
+export function jumpTo(
+  history: QueueItem[],
+  current: QueueItem | null,
+  queue: QueueItem[],
+  id: string,
+): { history: QueueItem[]; current: QueueItem; queue: QueueItem[] } | null {
+  const all = [...history, ...(current ? [current] : []), ...queue];
+  const i = all.findIndex((q) => q.id === id);
+  if (i < 0) return null;
+  return { history: all.slice(0, i), current: all[i], queue: all.slice(i + 1) };
 }
 
 /** /api/search の結果（ニコニコのスナップショット検索 API を整形したもの） */

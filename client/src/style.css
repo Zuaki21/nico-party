@@ -483,3 +483,29 @@ button.add:disabled {
 button.more {
   width: 100%;
 }
+
+/* キューの「ここから再生」。マウスを乗せた項目でだけ出す（タッチ端末では常に表示） */
+button.icon.play {
+  padding: 4px 6px;
+  visibility: hidden;
+}
+
+.queue li:hover button.icon.play,
+button.icon.play:focus-visible {
+  visibility: visible;
+}
+
+button.icon.play:hover {
+  color: var(--accent);
+}
+
+@media (hover: none) {
+  button.icon.play {
+    visibility: visible;
+  }
+}
+
+/* ダブルクリックで再生できるので、文字が選択されないようにする */
+.queue li[data-id] {
+  user-select: none;
+}

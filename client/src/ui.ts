@@ -19,7 +19,12 @@ export interface UiHandlers {
   /** id の動画を、視聴済み + 再生中 + キューを並べたリストの index 番目に移動する */
   move: (id: string, index: number) => void;
   search: (q: string, sort: SearchSort, offset: number) => Promise<SearchResult>;
+  /** 視聴済み・キューの中から id の動画を選んで、そこから再生する */
+  jump: (id: string) => void;
 }
+
+/** キューの「ここから再生」ボタン。文字色で描く */
+const PLAY_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></svg>`;
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -85,8 +90,18 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
     }
   });
   $('queue').addEventListener('click', (e) => {
-    const id = (e.target as HTMLElement).closest<HTMLElement>('[data-remove]')?.dataset.remove;
-    if (id) h.remove(id);
+    const target = e.target as HTMLElement;
+    const remove = target.closest<HTMLElement>('[data-remove]')?.dataset.remove;
+    if (remove) h.remove(remove);
+    const play = target.closest<HTMLElement>('[data-play]')?.dataset.play;
+    if (play) h.jump(play);
+  });
+  // 項目のダブルクリックでも、そこから再生する（ボタンやつまみの上は除く）
+  $('queue').addEventListener('dblclick', (e) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button, .handle')) return;
+    const li = target.closest<HTMLElement>('li[data-id]');
+    if (li && !li.classList.contains('current')) h.jump(li.dataset.id!);
   });
   $('skip').addEventListener('click', () => {
     const id = lists.current?.id;
@@ -314,6 +329,12 @@ function itemEl(q: QueueItem, kind: ItemKind) {
   li.append(handle, thumb, body);
   // 再生中の動画は「前へ」「次へ」で操作する
   if (kind !== 'current') {
+    const play = document.createElement('button');
+    play.className = 'icon play';
+    play.dataset.play = q.id;
+    play.title = 'ここから再生';
+    play.innerHTML = PLAY_ICON;
+    li.append(play);
     const del = document.createElement('button');
     del.className = 'icon';
     del.dataset.remove = q.id;

@@ -29,6 +29,7 @@ const playerEl = mountUi(document.querySelector<HTMLElement>('#app')!, {
   skip: (itemId) => request({ t: 'next', itemId }),
   prev: (itemId) => request({ t: 'prev', itemId }),
   move: (id, index) => request({ t: 'move', id, index }),
+  jump: (id) => request({ t: 'jump', id }),
   search: async (q, sort, offset) => {
     const params = new URLSearchParams({ q, sort, offset: String(offset) });
     const res = await fetch(proxied(`/api/search?${params}`));

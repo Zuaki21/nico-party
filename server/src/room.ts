@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import {
   HEARTBEAT,
   initialState,
+  jumpTo,
   parseVideoId,
   reorder,
   type ClientMsg,
@@ -191,6 +192,17 @@ export class Room extends DurableObject<Env> {
         queue.unshift(s.current);
         await this.putLists({ queue, history });
         await this.start(s, prev, a);
+        return;
+      }
+
+      case 'jump': {
+        if (!a.joined) return;
+        const s = await this.getState();
+        if (s.current?.id === msg.id) return;
+        const result = jumpTo(await this.getHistory(), s.current, await this.getQueue(), String(msg.id));
+        if (!result) return;
+        await this.putLists({ queue: result.queue, history: result.history.slice(-HISTORY_LIMIT) });
+        await this.start(s, result.current, a);
         return;
       }
 
