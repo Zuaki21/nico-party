@@ -72,8 +72,8 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
       <form class="bar" id="form">
         <input type="text" id="url" placeholder="URL・sm番号 または キーワードで検索" autocomplete="off" />
         <button type="submit" id="submit">追加</button>
+        <div class="error" id="error" role="alert" hidden></div>
       </form>
-      <div class="error" id="error" hidden></div>
       <div class="queue-head">
         <span>再生リスト</span>
         <button id="shuffle" class="mode" aria-pressed="false"></button>

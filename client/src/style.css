@@ -282,8 +282,27 @@ button.icon:hover {
   padding-right: 0;
 }
 
+/* 追加できなかったときなどの案内。入力欄のすぐ下に重ねて出し、再生リストの位置は動かさない */
+#form {
+  position: relative;
+}
+
 .error {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 2;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--danger);
+  background: var(--panel);
   color: var(--danger);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.error[hidden] {
+  display: none;
 }
 
 .queue-head {
