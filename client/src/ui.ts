@@ -62,8 +62,8 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
           <button id="skip" class="secondary icon-button" title="次の動画へ" disabled>${NEXT_ICON}</button>
         </div>
         <div class="controls">
-          <button id="toggle-side" class="secondary icon-button">${LIST_ICON}</button>
           <button id="toggle-theme" class="secondary icon-button"></button>
+          <button id="toggle-side" class="secondary icon-button">${LIST_ICON}</button>
         </div>
       </div>
     </main>
