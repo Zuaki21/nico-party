@@ -57,6 +57,11 @@ const player = new NicoPlayer(playerEl, (videoId, playerId) => {
     : `https://embed.nicovideo.jp/watch/${videoId}?${params}`;
 });
 
+// 右クリックのメニュー（「検証」など）は出さない。入力欄では貼り付けに使うので残す
+document.addEventListener('contextmenu', (e) => {
+  if (!(e.target as HTMLElement).closest('input, textarea')) e.preventDefault();
+});
+
 watchErrors(player.iframe);
 for (const ev of ['load', 'play', 'pause', 'ended'] as const) player.on(ev, () => devlog(`player ${ev}`));
 

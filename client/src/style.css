@@ -35,6 +35,18 @@
   box-sizing: border-box;
 }
 
+/* アプリとして使う画面なので、入力欄以外の文字は選択させない */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 html,
 body {
   margin: 0;
