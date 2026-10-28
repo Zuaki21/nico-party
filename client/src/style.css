@@ -227,6 +227,13 @@ button.icon-button {
   padding: 8px 10px;
 }
 
+/* 再生リストを表示している間は、ボタンをオンの見た目にする */
+#toggle-side[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--current-bg);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 /* 再生リストの見出しの横のシャッフル・リピート。控えめに置き、オンのときだけ色を付ける */
 button.mode {
   padding: 4px 6px;
