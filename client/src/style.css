@@ -159,11 +159,6 @@ body {
   background: var(--border);
 }
 
-/* ドラッグ中だけ、つかんでいることが分かるよう色を付ける */
-.resizing .splitter::after {
-  background: var(--accent);
-}
-
 /* ドラッグ中は iframe にポインタを取られないようにし、文字列も選択させない */
 .resizing .player iframe,
 .reordering .player iframe {
