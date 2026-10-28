@@ -305,6 +305,32 @@ button.icon:hover {
   display: none;
 }
 
+/* 残り表示時間のバー。消えるまでに右から左へ縮む */
+.error {
+  overflow: hidden;
+}
+
+.error.timing::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--danger);
+  transform-origin: left;
+  animation: error-timer var(--error-ms, 5s) linear forwards;
+}
+
+@keyframes error-timer {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
 .queue-head {
   display: flex;
   align-items: center;
@@ -409,6 +435,26 @@ button.icon:hover {
   background: var(--accent);
   color: #fff;
   font-size: 10px;
+}
+
+/* 検索結果の再生できない動画（選べない） */
+.queue li.unplayable .thumb img {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+.queue li.unplayable .q-title,
+.queue li.unplayable .q-meta {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.thumb .unplayable-badge {
+  background: var(--danger);
+}
+
+.queue li.unplayable button.add:disabled {
+  opacity: 0.35;
 }
 
 .thumb .len {

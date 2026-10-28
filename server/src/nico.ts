@@ -215,10 +215,24 @@ export async function fetchVideoInfo(videoId: string): Promise<VideoInfo | null>
  * getthumbinfo の embeddable が 1 でも再生できないことがあるので、実際の埋め込みページで確かめる
  */
 export async function fetchEmbedError(videoId: string): Promise<string | null> {
+  // 動画ごとの判定はキャッシュしない。Workers 無料プランのサブリクエスト上限（1 回の処理で 50）に
+  // キャッシュの読み書きも数えられ、検索 20 件分だと超えてしまうため（検索結果全体は 10 分キャッシュしている）
   try {
-    const html = await fetch(`https://embed.nicovideo.jp/watch/${videoId}`, {
+    const res = await fetch(`https://embed.nicovideo.jp/watch/${videoId}`, {
       headers: { 'user-agent': DEFAULT_UA, 'accept-language': 'ja-JP,ja;q=0.9' },
-    }).then((r) => r.text());
+    });
+    // エラーコードは先頭から 44KB ほどの data-props に入っているので、そこまで読んだら打ち切る
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let html = '';
+    while (html.length < EMBED_READ_LIMIT) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += decoder.decode(value, { stream: true });
+      const props = html.indexOf('data-props="');
+      if (props >= 0 && html.length > props + 500) break;
+    }
+    reader.cancel().catch(() => {});
     return html.match(/errorParams&quot;:\{&quot;code&quot;:&quot;([a-z_]+)&quot;/)?.[1] ?? null;
   } catch {
     // 確認できなかったときは再生できるものとして扱う（再生時にクライアント側の保険で飛ばす）
@@ -234,6 +248,9 @@ function decodeXml(s: string) {
     .replace(/&#39;|&apos;/g, "'")
     .replace(/&amp;/g, '&');
 }
+
+/** 埋め込みページを読む上限。エラーコードはこれより手前にある */
+const EMBED_READ_LIMIT = 80_000;
 
 /** 検索結果をキャッシュする時間。スナップショット検索のデータは 1 日 1 回の更新なので短すぎなくてよい */
 const SEARCH_CACHE_SECONDS = 600;
@@ -286,9 +303,12 @@ export async function searchVideos(
       startTime?: string;
     }[];
   }>();
+  const data = json.data ?? [];
+  // 再生できない動画（センシティブ・外部再生禁止など）は、選べないよう事前に印を付ける
+  const errors = await Promise.all(data.map((d) => fetchEmbedError(d.contentId)));
   const result: SearchResult = {
     total: json.meta.totalCount ?? 0,
-    items: (json.data ?? []).map((d) => ({
+    items: data.map((d, i) => ({
       videoId: d.contentId,
       title: d.title,
       thumbnail: d.thumbnailUrl,
@@ -296,6 +316,7 @@ export async function searchVideos(
       comments: d.commentCounter,
       length: d.lengthSeconds,
       startTime: d.startTime,
+      ...(errors[i] ? { unplayable: errors[i]! } : {}),
     })),
   };
   const out = Response.json(result, {

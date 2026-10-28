@@ -164,6 +164,8 @@ export interface SearchItem {
   length?: number;
   /** 投稿日時 (ISO 8601) */
   startTime?: string;
+  /** 埋め込みプレイヤーで再生できない理由（埋め込みページのエラーコード）。再生できるなら無い */
+  unplayable?: string;
 }
 
 export type SearchSort = 'popular' | 'new';

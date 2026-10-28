@@ -40,6 +40,12 @@ const REPEAT_LABEL: Record<RepeatMode, string> = {
 };
 const NEXT_REPEAT: Record<RepeatMode, RepeatMode> = { off: 'all', all: 'one', one: 'off' };
 
+/** 再生できない理由（埋め込みページのエラーコード）の説明 */
+const UNPLAYABLE_REASON: Record<string, string> = {
+  sensitive_video: 'センシティブな動画のため再生できません',
+  externally_unwatchable: '権利者の設定でニコニコ動画以外での再生が禁止されているため再生できません',
+};
+
 /** キューの「削除」ボタン（ゴミ箱）。文字色で描く */
 const TRASH_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12a2 2 0 0 0 2 1.8h7a2 2 0 0 0 2-1.8l1-12M9 7V4.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V7"/></g></svg>`;
 
@@ -588,6 +594,19 @@ function setupSearch(h: UiHandlers) {
       add.disabled = done;
     };
     mark(added.has(r.videoId));
+    if (r.unplayable) {
+      // 再生できない動画は選べないようにする（サーバーでも追加を断る）
+      const reason = UNPLAYABLE_REASON[r.unplayable] ?? '埋め込みプレイヤーでは再生できない動画です';
+      li.classList.add('unplayable');
+      li.title = reason;
+      add.disabled = true;
+      add.textContent = '＋';
+      add.title = reason;
+      const badge = document.createElement('span');
+      badge.className = 'badge unplayable-badge';
+      badge.textContent = '再生不可';
+      li.querySelector('.thumb')!.append(badge);
+    }
     add.addEventListener('click', () => {
       h.enqueue(r.videoId);
       added.add(r.videoId);
@@ -690,10 +709,18 @@ export function renderMembers(members: Member[]) {
 }
 
 let errorTimer: number | undefined;
+/** エラーを表示しておく時間。下端のバー（style.css の .error::after）もこの時間で縮む */
+const ERROR_MS = 5000;
+
 export function showError(message: string) {
   const el = $('error');
   el.textContent = message;
   el.hidden = false;
+  el.style.setProperty('--error-ms', `${ERROR_MS}ms`);
+  // 続けて表示したときもバーを最初から縮め直す
+  el.classList.remove('timing');
+  void el.offsetWidth;
+  el.classList.add('timing');
   clearTimeout(errorTimer);
-  errorTimer = window.setTimeout(() => (el.hidden = true), 5000);
+  errorTimer = window.setTimeout(() => (el.hidden = true), ERROR_MS);
 }
