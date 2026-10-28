@@ -159,7 +159,7 @@ body {
   background: var(--border);
 }
 
-.splitter:hover::after,
+/* ドラッグ中だけ、つかんでいることが分かるよう色を付ける */
 .resizing .splitter::after {
   background: var(--accent);
 }
