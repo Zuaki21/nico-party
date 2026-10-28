@@ -14,6 +14,10 @@ const END_MARGIN = 0.5;
  * 再生できない動画は追加時にサーバーが弾くが、見つけられなかった種類のエラーへの保険
  */
 const LOAD_TIMEOUT_MS = 20000;
+/** 開始時刻を待つ間、一時停止を送り直す間隔 */
+const HOLD_INTERVAL_MS = 300;
+/** 先読みのための再生を、再生開始の通知が無くても止めるまでの時間 */
+const PRELOAD_PLAY_MS = 400;
 /** 全員の動画が終わっているはずなのに次へ進んでいないとき、自分から進めるまでの猶予（秒） */
 const STUCK_MARGIN = 3;
 /** ローカル操作をまとめる時間（シークバーのドラッグ等） */
@@ -43,6 +47,9 @@ export class SyncEngine {
   private preloadedFor: string | null = null;
   /** 先読みのためにミュートする前の状態（終わったら戻す） */
   private mutedBefore = false;
+  private preloadStartedAt = 0;
+  /** 開始時刻まで 0 秒で止めておくためのタイマー */
+  private holdTimer: number | undefined;
   private ticks = 0;
 
   constructor(
@@ -58,6 +65,9 @@ export class SyncEngine {
     player.on('play', () => {
       if (this.preloading) this.apply(APPLY_THRESHOLD);
     });
+    // 再生開始の通知が来ないことや、止める命令が無視されることがあるので、
+    // 開始時刻より前に再生位置が進んでいたら、その都度 0 秒に戻して止める
+    player.on('progress', () => this.holdBeforeStart());
     player.on('pause', onLocal);
     player.on('seeked', onLocal);
     player.on('load', () => {
@@ -78,6 +88,7 @@ export class SyncEngine {
     if ((item?.id ?? null) !== this.loadedItemId) {
       // 先読みの途中で動画が変わったら、ミュートを元に戻してから切り替える
       if (this.preloading) this.player.mute(this.mutedBefore);
+      this.stopHold();
       this.preloading = false;
       this.preloadedFor = null;
       const sameVideo = !!item && item.videoId === this.loadedVideoId && this.player.ready();
@@ -134,6 +145,7 @@ export class SyncEngine {
       this.startTimer = window.setTimeout(() => this.apply(APPLY_THRESHOLD), -target * 1000);
       return;
     }
+    this.stopHold();
     // 先読みが終わる前に開始時刻になった。そのまま再生を続け、位置だけ下で合わせる
     if (this.preloading) this.endPreload(false);
     const duration = p.getDuration();
@@ -167,31 +179,56 @@ export class SyncEngine {
    */
   private preload(itemId: string) {
     const p = this.player;
-    if (this.preloadedFor === itemId) {
-      // 先読み済み。0 秒で止めて開始時刻を待つ
-      if (p.getTime() > 0.5) {
-        this.suppress();
-        p.seek(0);
-      }
-      if (!p.isPaused()) {
-        this.suppress();
-        p.pause();
-      }
+    if (this.preloadedFor === itemId || this.preloading) {
+      this.startHold();
+      this.holdBeforeStart();
       return;
     }
-    if (!this.preloading) {
-      this.preloading = true;
-      this.mutedBefore = p.isMuted();
-      this.suppress();
-      p.mute(true);
-      p.play();
+    // 一度だけ再生して読み込みを始めさせる。止めるのは holdBeforeStart（すぐ・または少し後）
+    this.preloading = true;
+    this.preloadStartedAt = Date.now();
+    this.mutedBefore = p.isMuted();
+    this.suppress();
+    p.mute(true);
+    p.play();
+    this.startHold();
+  }
+
+  /**
+   * 開始時刻を待つ間、プレイヤーを 0 秒で止めておく。
+   * ニコニコのプレイヤーは再生開始の通知を送らないことがあり、再生位置の通知も再生中は 2 秒おき程度なので、
+   * 通知を待たずに HOLD_INTERVAL_MS ごとに一時停止を送り続ける（止まっていれば何も起きない）
+   */
+  private startHold() {
+    if (this.holdTimer !== undefined) return;
+    this.holdTimer = window.setInterval(() => this.holdBeforeStart(), HOLD_INTERVAL_MS);
+  }
+
+  private stopHold() {
+    clearInterval(this.holdTimer);
+    this.holdTimer = undefined;
+  }
+
+  /** 開始時刻より前ならプレイヤーを止めておく（progress・定期的な確認のたびに呼ばれる） */
+  private holdBeforeStart() {
+    const s = this.state;
+    const p = this.player;
+    if (!s?.current || s.current.id !== this.loadedItemId || !s.playing || this.expected(s) >= 0) {
+      this.stopHold();
       return;
     }
-    // 再生が始まった時点で読み込みは始まっている（止めても裏で続く）ので、すぐ 0 秒に戻して止める
-    if (!p.isPaused() || p.getTime() > 0) {
+    if (this.preloading) {
+      // 再生が始まった兆候があるか、少し待ったら先読みを終えて止める（読み込みは止めた後も続く）
+      const started = !p.isPaused() || p.getTime() > 0;
+      if (!started && Date.now() - this.preloadStartedAt < PRELOAD_PLAY_MS) return;
       this.endPreload(true);
-      this.preloadedFor = itemId;
+      this.preloadedFor = s.current.id;
+      return;
     }
+    // 状態の通知が当てにならないので、止まっているつもりでも一時停止を送る
+    this.suppress();
+    p.pause();
+    if (p.getTime() > 0.05) p.seek(0);
   }
 
   /** @param hold true なら 0 秒に戻して止める（開始時刻を待つ） */

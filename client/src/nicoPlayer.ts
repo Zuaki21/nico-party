@@ -13,7 +13,8 @@ export const enum PlayerStatus {
 }
 
 /** load: 動画の読み込みが終わり操作できるようになった */
-type PlayerEvent = 'load' | 'play' | 'pause' | 'ended' | 'seeked';
+/** progress: 再生位置の通知（約 0.25 秒ごと）で位置が進んだ。再生開始の通知が来ないときでも分かる */
+type PlayerEvent = 'load' | 'play' | 'pause' | 'ended' | 'seeked' | 'progress';
 
 type Handler = () => void;
 
@@ -160,8 +161,10 @@ export class NicoPlayer {
       case 'playerMetadataChange':
         // currentTime / duration はミリ秒
         if (typeof data.currentTime === 'number') {
+          const prev = this.time;
           this.time = data.currentTime / 1000;
           this.timeAt = performance.now();
+          if (this.time > prev) this.emit('progress');
         }
         if (typeof data.duration === 'number' && data.duration > 0) {
           this.duration = data.duration / 1000;
