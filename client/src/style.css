@@ -276,6 +276,12 @@ button.icon:hover {
   color: var(--danger);
 }
 
+/* 検索結果を閉じる × は見出しの左端に詰めて置く */
+#search-close {
+  padding-left: 0;
+  padding-right: 0;
+}
+
 .error {
   color: var(--danger);
 }
