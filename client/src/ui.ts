@@ -40,12 +40,6 @@ const REPEAT_LABEL: Record<RepeatMode, string> = {
 };
 const NEXT_REPEAT: Record<RepeatMode, RepeatMode> = { off: 'all', all: 'one', one: 'off' };
 
-/** 再生できない理由（埋め込みページのエラーコード）の説明 */
-const UNPLAYABLE_REASON: Record<string, string> = {
-  sensitive_video: 'センシティブな動画のため、埋め込みでは再生できません',
-  externally_unwatchable: '権利者の設定で、ニコニコ動画以外での再生が禁止されています',
-};
-
 /** キューの「削除」ボタン（ゴミ箱）。文字色で描く */
 const TRASH_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12a2 2 0 0 0 2 1.8h7a2 2 0 0 0 2-1.8l1-12M9 7V4.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V7"/></g></svg>`;
 
@@ -369,15 +363,6 @@ function itemEl(q: QueueItem, kind: ItemKind) {
     const badge = document.createElement('span');
     badge.className = 'badge';
     badge.textContent = '▶ 再生中';
-    thumb.append(badge);
-  }
-  if (q.unplayable) {
-    // 順番が来たら自動で飛ばされる
-    li.classList.add('unplayable');
-    li.title = `再生できない動画です（${UNPLAYABLE_REASON[q.unplayable] ?? q.unplayable}）。順番が来たら飛ばします`;
-    const badge = document.createElement('span');
-    badge.className = 'badge unplayable-badge';
-    badge.textContent = '再生不可';
     thumb.append(badge);
   }
 

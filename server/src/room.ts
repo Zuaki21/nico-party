@@ -127,6 +127,10 @@ export class Room extends DurableObject<Env> {
           send(ws, { t: 'error', message: `${videoId} が見つかりません（削除された動画かもしれません）` });
           return;
         }
+        if (embedError) {
+          send(ws, { t: 'error', message: unplayableMessage(info.title, embedError) });
+          return;
+        }
         if (!info.embeddable) {
           send(ws, { t: 'error', message: `${info.title} は埋め込みが禁止されているため再生できません` });
           return;
@@ -137,8 +141,6 @@ export class Room extends DurableObject<Env> {
           videoId,
           addedBy: a.name,
           ...meta,
-          // 再生できない動画も再生リストには入れておき、順番が来たら飛ばす（start）
-          ...(embedError ? { unplayable: embedError } : {}),
         };
         const s = await this.getState();
         if (!s.current) {
@@ -263,20 +265,6 @@ export class Room extends DurableObject<Env> {
 
   /** item の再生を先頭から始める（null なら停止）。開始時刻は START_DELAY_MS 先にする */
   private async start(s: PlaybackState, item: QueueItem | null, by: Attachment) {
-    // 再生できない動画は飛ばして次へ進む（全部再生できないときに回り続けないよう回数を制限する）
-    const skipped: string[] = [];
-    for (let n = 0; item?.unplayable && n < QUEUE_LIMIT + HISTORY_LIMIT; n++) {
-      skipped.push(item.title);
-      s.current = item;
-      item = await this.pickNext(s);
-    }
-    if (item?.unplayable) item = null;
-    if (skipped.length > 0) {
-      this.broadcast({
-        t: 'error',
-        message: `「${skipped.join('」「')}」は再生できない動画のため飛ばしました`,
-      });
-    }
     s.current = item;
     s.playing = item !== null;
     s.position = 0;
@@ -362,6 +350,18 @@ export class Room extends DurableObject<Env> {
 
   private broadcastMembers(exclude?: WebSocket) {
     this.broadcast({ t: 'members', members: this.members(exclude) }, exclude);
+  }
+}
+
+/** 埋め込みプレイヤーで再生できない動画を追加しようとしたときのエラーメッセージ */
+function unplayableMessage(title: string, code: string) {
+  switch (code) {
+    case 'sensitive_video':
+      return `「${title}」はセンシティブな動画のため再生できません`;
+    case 'externally_unwatchable':
+      return `「${title}」は権利者の設定でニコニコ動画以外での再生が禁止されているため再生できません`;
+    default:
+      return `「${title}」は再生できない動画です`;
   }
 }
 
