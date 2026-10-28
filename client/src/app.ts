@@ -4,6 +4,7 @@ import { ClockSync } from './clock';
 import { devlog, watchErrors } from './devlog';
 import { inDiscord, proxied } from './env';
 import { NicoPlayer } from './nicoPlayer';
+import { createPresence } from './presence';
 import { SyncEngine } from './sync';
 import {
   mountUi,
@@ -122,18 +123,22 @@ function connect(roomId: string, name: string) {
           renderMembers(msg.members);
           renderState(msg.state);
           engine.update(msg.state);
+          presence?.setMembers(msg.members.length);
+          presence?.setState(msg.state);
           joined = true;
           for (const m of pending.splice(0)) sendRaw(m);
           return;
         case 'state':
           renderState(msg.state);
           engine.update(msg.state);
+          presence?.setState(msg.state);
           return;
         case 'queue':
           renderQueue(msg.queue, msg.history);
           return;
         case 'members':
           renderMembers(msg.members);
+          presence?.setMembers(msg.members.length);
           return;
         case 'error':
           devlog(`server error: ${msg.message}`);
@@ -160,6 +165,9 @@ function connect(roomId: string, name: string) {
   open();
 }
 
+/** 見ている動画を Discord のアクティビティに表示する（ログインできたときだけ） */
+let presence: ReturnType<typeof createPresence> | null = null;
+
 /** Discord にログインしてもらい、表示名を取得する */
 async function authenticate(sdk: DiscordSDK): Promise<string> {
   const { code } = await sdk.commands.authorize({
@@ -167,7 +175,8 @@ async function authenticate(sdk: DiscordSDK): Promise<string> {
     response_type: 'code',
     state: '',
     prompt: 'none',
-    scope: ['identify'],
+    // rpc.activities.write: 見ている動画を Discord のアクティビティ（〇〇を視聴中）に表示するため
+    scope: ['identify', 'rpc.activities.write'],
   });
   const res = await fetch(proxied('/api/token'), {
     method: 'POST',
@@ -201,6 +210,7 @@ async function main() {
   let name = 'ゲスト';
   try {
     name = await authenticate(sdk);
+    presence = createPresence(sdk, () => Date.now() + clock.offset);
   } catch (e) {
     // 名前が取れなくても視聴はできるようにする
     devlog(`authenticate failed: ${e instanceof Error ? e.message : JSON.stringify(e)}`);
