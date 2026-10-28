@@ -187,6 +187,29 @@ a {
   color: var(--muted);
 }
 
+/* Discord への追加ボタン */
+.cta {
+  margin: -16px 0 40px;
+  text-align: center;
+}
+
+.install {
+  display: inline-block;
+  padding: 12px 28px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(219, 54, 64, 0.35);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.install:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(219, 54, 64, 0.45);
+}
+
 .features {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
