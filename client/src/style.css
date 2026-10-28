@@ -276,9 +276,8 @@ button.icon:hover {
   color: var(--danger);
 }
 
-/* 検索結果を閉じる × は見出しの左端に詰めて置く */
+/* 検索結果を閉じる × は、右側（キーワードとの間）の余白だけ詰める */
 #search-close {
-  padding-left: 0;
   padding-right: 0;
 }
 
