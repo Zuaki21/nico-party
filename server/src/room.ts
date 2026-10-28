@@ -11,7 +11,7 @@ import {
   type QueueItem,
   type ServerMsg,
 } from '../../shared/protocol';
-import { fetchVideoInfo, type NicoEnv } from './nico';
+import { fetchEmbedError, fetchVideoInfo, type NicoEnv } from './nico';
 
 interface Attachment extends Member {
   joined: boolean;
@@ -119,7 +119,10 @@ export class Room extends DurableObject<Env> {
           send(ws, { t: 'error', message: '再生リストがいっぱいです' });
           return;
         }
-        const info = await fetchVideoInfo(videoId);
+        const [info, embedError] = await Promise.all([
+          fetchVideoInfo(videoId),
+          fetchEmbedError(videoId),
+        ]);
         if (!info) {
           send(ws, { t: 'error', message: `${videoId} が見つかりません（削除された動画かもしれません）` });
           return;
@@ -134,6 +137,8 @@ export class Room extends DurableObject<Env> {
           videoId,
           addedBy: a.name,
           ...meta,
+          // 再生できない動画も再生リストには入れておき、順番が来たら飛ばす（start）
+          ...(embedError ? { unplayable: embedError } : {}),
         };
         const s = await this.getState();
         if (!s.current) {
@@ -216,19 +221,7 @@ export class Room extends DurableObject<Env> {
           await this.start(s, { ...s.current, id: newItemId() }, a);
           return;
         }
-        let queue = await this.getQueue();
-        let history = await this.getHistory();
-        if (s.current) history.push(s.current);
-        // 全曲リピート: 最後まで来たら視聴済みを全部これから再生する側に戻す
-        if (queue.length === 0 && s.repeat === 'all') {
-          queue = history.map((q) => ({ ...q, id: newItemId() }));
-          history = [];
-        }
-        // シャッフル: これから再生する動画の中からランダムに選ぶ
-        const index = s.shuffle && queue.length > 1 ? Math.floor(Math.random() * queue.length) : 0;
-        const item = queue.splice(index, 1)[0] ?? null;
-        await this.putLists({ queue, history: history.slice(-HISTORY_LIMIT) });
-        await this.start(s, item, a);
+        await this.start(s, await this.pickNext(s), a);
         return;
       }
 
@@ -270,10 +263,44 @@ export class Room extends DurableObject<Env> {
 
   /** item の再生を先頭から始める（null なら停止）。開始時刻は START_DELAY_MS 先にする */
   private async start(s: PlaybackState, item: QueueItem | null, by: Attachment) {
+    // 再生できない動画は飛ばして次へ進む（全部再生できないときに回り続けないよう回数を制限する）
+    const skipped: string[] = [];
+    for (let n = 0; item?.unplayable && n < QUEUE_LIMIT + HISTORY_LIMIT; n++) {
+      skipped.push(item.title);
+      s.current = item;
+      item = await this.pickNext(s);
+    }
+    if (item?.unplayable) item = null;
+    if (skipped.length > 0) {
+      this.broadcast({
+        t: 'error',
+        message: `「${skipped.join('」「')}」は再生できない動画のため飛ばしました`,
+      });
+    }
     s.current = item;
     s.playing = item !== null;
     s.position = 0;
     await this.commit(s, by, item ? START_DELAY_MS : 0);
+  }
+
+  /**
+   * 今の動画を視聴済みに回し、次に再生する動画を取り出す（再生リストも保存する）。
+   * 全曲リピートなら最後まで来たら最初に戻り、シャッフルならランダムに選ぶ
+   */
+  private async pickNext(s: PlaybackState): Promise<QueueItem | null> {
+    let queue = await this.getQueue();
+    let history = await this.getHistory();
+    if (s.current) history.push(s.current);
+    // 全曲リピート: 最後まで来たら視聴済みを全部これから再生する側に戻す
+    if (queue.length === 0 && s.repeat === 'all') {
+      queue = history.map((q) => ({ ...q, id: newItemId() }));
+      history = [];
+    }
+    // シャッフル: これから再生する動画の中からランダムに選ぶ
+    const index = s.shuffle && queue.length > 1 ? Math.floor(Math.random() * queue.length) : 0;
+    const item = queue.splice(index, 1)[0] ?? null;
+    await this.putLists({ queue, history: history.slice(-HISTORY_LIMIT) });
+    return item;
   }
 
   /** @param delayMs position の基準時刻を今からずらす量（再生開始を遅らせるとき） */

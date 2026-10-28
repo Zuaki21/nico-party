@@ -209,6 +209,23 @@ export async function fetchVideoInfo(videoId: string): Promise<VideoInfo | null>
   };
 }
 
+/**
+ * 埋め込みプレイヤーで再生できない動画なら、その理由（埋め込みページのエラーコード）を返す。
+ * センシティブな動画（sensitive_video）や、権利者が外部での再生を禁止した動画（externally_unwatchable）など。
+ * getthumbinfo の embeddable が 1 でも再生できないことがあるので、実際の埋め込みページで確かめる
+ */
+export async function fetchEmbedError(videoId: string): Promise<string | null> {
+  try {
+    const html = await fetch(`https://embed.nicovideo.jp/watch/${videoId}`, {
+      headers: { 'user-agent': DEFAULT_UA, 'accept-language': 'ja-JP,ja;q=0.9' },
+    }).then((r) => r.text());
+    return html.match(/errorParams&quot;:\{&quot;code&quot;:&quot;([a-z_]+)&quot;/)?.[1] ?? null;
+  } catch {
+    // 確認できなかったときは再生できるものとして扱う（再生時にクライアント側の保険で飛ばす）
+    return null;
+  }
+}
+
 function decodeXml(s: string) {
   return s
     .replace(/&lt;/g, '<')

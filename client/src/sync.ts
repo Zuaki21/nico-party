@@ -9,6 +9,11 @@ const APPLY_THRESHOLD = 1.0;
 const DRIFT_THRESHOLD = 1.5;
 /** 動画の終端とみなす余裕（秒） */
 const END_MARGIN = 0.5;
+/**
+ * これだけ待ってもプレイヤーの読み込みが終わらなければ、再生できない動画とみなして次へ進める。
+ * 追加時にサーバーが見つけられなかった種類のエラーへの保険
+ */
+const LOAD_TIMEOUT_MS = 20000;
 /** 全員の動画が終わっているはずなのに次へ進んでいないとき、自分から進めるまでの猶予（秒） */
 const STUCK_MARGIN = 3;
 /** ローカル操作をまとめる時間（シークバーのドラッグ等） */
@@ -30,6 +35,8 @@ export class SyncEngine {
   private localTimer: number | undefined;
   /** 再生開始時刻ちょうどに再生を始めるためのタイマー */
   private startTimer: number | undefined;
+  /** 読み込みが終わらない動画を飛ばすためのタイマー */
+  private loadTimer: number | undefined;
   /** 開始待ちの間、ミュートで裏再生して動画データを先読みしている */
   private preloading = false;
   /** 先読みが済んだキュー項目 */
@@ -53,7 +60,10 @@ export class SyncEngine {
     });
     player.on('pause', onLocal);
     player.on('seeked', onLocal);
-    player.on('load', () => this.apply(APPLY_THRESHOLD));
+    player.on('load', () => {
+      clearTimeout(this.loadTimer);
+      this.apply(APPLY_THRESHOLD);
+    });
     player.on('ended', () => this.requestNext(true));
     window.setInterval(() => this.onTick(), 1000);
   }
@@ -78,8 +88,18 @@ export class SyncEngine {
         this.apply(APPLY_THRESHOLD);
         return;
       }
-      if (item) this.player.load(item.videoId);
-      else this.player.unload();
+      clearTimeout(this.loadTimer);
+      if (item) {
+        this.player.load(item.videoId);
+        this.loadTimer = window.setTimeout(() => {
+          if (this.loadedItemId === item.id && !this.player.ready()) {
+            // 「次へ」と同じ扱いで飛ばす（1曲リピートでも同じ動画を繰り返さない）
+            this.send({ t: 'next', itemId: item.id });
+          }
+        }, LOAD_TIMEOUT_MS);
+      } else {
+        this.player.unload();
+      }
       return; // 読み込み完了 (load) 後に apply する
     }
     this.apply(APPLY_THRESHOLD);

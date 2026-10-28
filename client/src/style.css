@@ -392,6 +392,21 @@ button.icon:hover {
   font-size: 10px;
 }
 
+/* 再生できない動画（順番が来たら飛ばす） */
+.queue li.unplayable .thumb img {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+.queue li.unplayable .q-title {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.thumb .unplayable-badge {
+  background: var(--danger);
+}
+
 .thumb .len {
   position: absolute;
   right: 2px;

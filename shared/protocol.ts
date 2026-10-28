@@ -14,6 +14,11 @@ export interface QueueItem {
   comments?: number;
   /** 秒 */
   length?: number;
+  /**
+   * 埋め込みプレイヤーで再生できない動画のとき、その理由（埋め込みページのエラーコード）。
+   * 例: sensitive_video（センシティブな動画）, externally_unwatchable（外部での再生禁止）
+   */
+  unplayable?: string;
 }
 
 export interface Member {
