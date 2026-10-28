@@ -710,7 +710,7 @@ export function renderMembers(members: Member[]) {
 
 let errorTimer: number | undefined;
 /** エラーを表示しておく時間。下端のバー（style.css の .error::after）もこの時間で縮む */
-const ERROR_MS = 5000;
+const ERROR_MS = 3000;
 
 export function showError(message: string) {
   const el = $('error');
