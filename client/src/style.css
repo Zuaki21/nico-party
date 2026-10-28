@@ -278,7 +278,7 @@ button.icon:hover {
 
 /* 検索結果を閉じる × は、左右の余白を詰める */
 #search-close {
-  padding-left: 4px;
+  padding-left: 6px;
   padding-right: 0;
 }
 
