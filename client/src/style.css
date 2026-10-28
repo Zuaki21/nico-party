@@ -140,6 +140,11 @@ body {
   cursor: row-resize;
   touch-action: none;
   position: relative;
+  /* ドラッグ・ダブルクリック・タップで選択されたように見えないようにする */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
 }
 
 .splitter::after {

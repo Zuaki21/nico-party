@@ -217,6 +217,8 @@ function setupSidePanel(root: HTMLElement) {
     splitter.addEventListener('pointercancel', onUp);
   });
 
+  // ダブルクリック時にブラウザが周りを選択状態にしないようにする
+  splitter.addEventListener('mousedown', (e) => e.preventDefault());
   // ダブルクリックで既定の大きさに戻す
   splitter.addEventListener('dblclick', () => {
     side.style.flexBasis = '';
