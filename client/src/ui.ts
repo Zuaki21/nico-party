@@ -79,8 +79,42 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
           <button id="skip" class="secondary icon-button" data-i18n-title="next" disabled>${NEXT_ICON}</button>
         </div>
         <div class="controls">
-          <button id="open-settings" class="secondary icon-button" data-i18n-title="settings">${SETTINGS_ICON}</button>
+          <button id="open-settings" class="secondary icon-button" data-i18n-title="settings" aria-pressed="false">${SETTINGS_ICON}</button>
           <button id="toggle-side" class="secondary icon-button">${LIST_ICON}</button>
+        </div>
+      </div>
+      <div class="settings" id="settings" role="dialog" aria-labelledby="settings-title" hidden>
+        <div class="settings-head">
+          <div>
+            <h2 id="settings-title" data-i18n="settingsTitle"></h2>
+            <p class="setting-note" data-i18n="settingsNote"></p>
+          </div>
+          <button type="button" class="icon" id="settings-close" data-i18n-title="close">×</button>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label" data-i18n="theme"></span>
+          <div class="seg" id="theme-seg">
+            <button type="button" data-theme="auto" data-i18n="themeAuto"></button>
+            <button type="button" data-theme="light" data-i18n="themeLight"></button>
+            <button type="button" data-theme="dark" data-i18n="themeDark"></button>
+          </div>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label" data-i18n="language"></span>
+          <div class="seg" id="lang-seg">
+            <button type="button" data-lang="ja">日本語</button>
+            <button type="button" data-lang="en">English</button>
+          </div>
+        </div>
+        <div class="setting-row">
+          <span>
+            <span class="setting-label" data-i18n="presence"></span>
+            <span class="setting-desc" data-i18n="presenceDesc"></span>
+          </span>
+          <input type="checkbox" class="switch" id="presence-toggle" data-i18n-title="presence" />
+        </div>
+        <div class="settings-links">
+          <button type="button" class="link" data-url="${SITE_URL}/" data-i18n="about"></button>
         </div>
       </div>
     </main>
@@ -110,42 +144,6 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
         <ol class="queue" id="results"></ol>
       </div>
     </aside>
-    <div class="settings-backdrop" id="settings" hidden>
-      <div class="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-        <div class="settings-head">
-          <h2 id="settings-title" data-i18n="settingsTitle"></h2>
-          <button type="button" class="icon" id="settings-close" data-i18n-title="close">×</button>
-        </div>
-        <div class="setting-row">
-          <span class="setting-label" data-i18n="theme"></span>
-          <div class="seg" id="theme-seg">
-            <button type="button" data-theme="auto" data-i18n="themeAuto"></button>
-            <button type="button" data-theme="light" data-i18n="themeLight"></button>
-            <button type="button" data-theme="dark" data-i18n="themeDark"></button>
-          </div>
-        </div>
-        <div class="setting-row">
-          <span class="setting-label" data-i18n="language"></span>
-          <div class="seg" id="lang-seg">
-            <button type="button" data-lang="ja">日本語</button>
-            <button type="button" data-lang="en">English</button>
-          </div>
-        </div>
-        <label class="setting-row">
-          <span>
-            <span class="setting-label" data-i18n="presence"></span>
-            <span class="setting-desc" data-i18n="presenceDesc"></span>
-          </span>
-          <input type="checkbox" class="switch" id="presence-toggle" />
-        </label>
-        <p class="setting-note" data-i18n="settingsNote"></p>
-        <div class="settings-links">
-          <button type="button" class="link" data-url="${SITE_URL}/" data-i18n="about"></button>
-          <button type="button" class="link" data-url="${SITE_URL}/terms" data-i18n="terms"></button>
-          <button type="button" class="link" data-url="${SITE_URL}/privacy" data-i18n="privacy"></button>
-        </div>
-      </div>
-    </div>
   `;
   applyI18n(root);
 
@@ -328,20 +326,24 @@ function setupSettings(h: UiHandlers) {
     $<HTMLInputElement>('presence-toggle').checked = isPresenceEnabled();
   };
 
-  const open = () => {
-    renderSettings();
-    dialog.hidden = false;
+  const button = $('open-settings');
+  /** 動画の右下（設定ボタンのすぐ上）に吹き出しのように開く。開いている間はボタンをオンの見た目にする */
+  const setOpen = (open: boolean) => {
+    if (open) renderSettings();
+    dialog.hidden = !open;
+    button.setAttribute('aria-pressed', String(open));
   };
-  const close = () => (dialog.hidden = true);
 
-  $('open-settings').addEventListener('click', open);
-  $('settings-close').addEventListener('click', close);
-  // 画面の外側をクリック、または Esc で閉じる
-  dialog.addEventListener('click', (e) => {
-    if (e.target === dialog) close();
+  button.addEventListener('click', () => setOpen(dialog.hidden));
+  $('settings-close').addEventListener('click', () => setOpen(false));
+  // 設定画面の外をクリック、または Esc で閉じる
+  document.addEventListener('pointerdown', (e) => {
+    if (dialog.hidden) return;
+    const target = e.target as Node;
+    if (!dialog.contains(target) && !button.contains(target)) setOpen(false);
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !dialog.hidden) close();
+    if (e.key === 'Escape' && !dialog.hidden) setOpen(false);
   });
 
   $('theme-seg').addEventListener('click', (e) => {
