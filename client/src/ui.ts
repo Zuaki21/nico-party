@@ -100,6 +100,15 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
           </div>
         </div>
         <div class="setting-row">
+          <span class="setting-label" data-i18n="uiSize"></span>
+          <div class="seg" id="scale-seg">
+            <button type="button" data-scale="0.85" data-i18n="sizeSmall"></button>
+            <button type="button" data-scale="1" data-i18n="sizeNormal"></button>
+            <button type="button" data-scale="1.15" data-i18n="sizeLarge"></button>
+            <button type="button" data-scale="1.3" data-i18n="sizeXLarge"></button>
+          </div>
+        </div>
+        <div class="setting-row">
           <span class="setting-label" data-i18n="language"></span>
           <div class="seg" id="lang-seg">
             <button type="button" data-lang="ja">日本語</button>
@@ -146,6 +155,8 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
     </aside>
   `;
   applyI18n(root);
+  // 再生リスト欄の最小幅などが UI サイズで変わるので、最初に当てておく
+  applyScale(Number(load(SCALE_KEY)) || 1);
 
   const search = setupSearch(h);
   const input = $<HTMLInputElement>('url');
@@ -223,9 +234,19 @@ const wideQuery = window.matchMedia('(min-width: 900px)');
  */
 const MIN_SIDE_WIDTH = 260;
 const MIN_SIDE_HEIGHT = 120;
-const minSide = () => (wideQuery.matches ? MIN_SIDE_WIDTH : MIN_SIDE_HEIGHT);
+const minSide = () => (wideQuery.matches ? MIN_SIDE_WIDTH : MIN_SIDE_HEIGHT) * uiScale;
 /** キュー欄を広げても動画側にこれだけは残す */
 const MIN_MAIN = 200;
+
+/** UI サイズ（画面全体の拡大率）。style.css は rem で書いてあり、--ui-scale で一括で変わる */
+const SCALE_KEY = 'nico-party:scale';
+const SCALES = [0.85, 1, 1.15, 1.3];
+let uiScale = 1;
+
+function applyScale(scale: number) {
+  uiScale = SCALES.includes(scale) ? scale : 1;
+  document.documentElement.style.setProperty('--ui-scale', String(uiScale));
+}
 
 /** キュー欄のドラッグでのサイズ変更と表示・非表示 */
 function setupSidePanel(root: HTMLElement) {
@@ -325,6 +346,9 @@ function setupSettings(h: UiHandlers) {
     for (const b of $('theme-seg').querySelectorAll<HTMLButtonElement>('button')) {
       b.classList.toggle('active', b.dataset.theme === theme);
     }
+    for (const b of $('scale-seg').querySelectorAll<HTMLButtonElement>('button')) {
+      b.classList.toggle('active', Number(b.dataset.scale) === uiScale);
+    }
     for (const b of $('lang-seg').querySelectorAll<HTMLButtonElement>('button')) {
       b.classList.toggle('active', b.dataset.lang === getLang());
     }
@@ -357,6 +381,13 @@ function setupSettings(h: UiHandlers) {
     theme = next;
     save(THEME_KEY, next === 'auto' ? '' : next);
     applyTheme(next);
+    renderSettings();
+  });
+  $('scale-seg').addEventListener('click', (e) => {
+    const next = Number((e.target as HTMLElement).closest<HTMLElement>('[data-scale]')?.dataset.scale);
+    if (!SCALES.includes(next)) return;
+    applyScale(next);
+    save(SCALE_KEY, next === 1 ? '' : String(next));
     renderSettings();
   });
   $('lang-seg').addEventListener('click', (e) => {
