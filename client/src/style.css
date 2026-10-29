@@ -47,6 +47,16 @@ textarea {
   -webkit-user-select: text;
 }
 
+/*
+ * ボタンと入力欄は、ブラウザの初期設定では文字の大きさが固定（約 13.3px）で UI サイズに追従しない。
+ * 中のアイコン（.icon-svg は em 指定）も一緒に大きさが変わるよう、rem で指定する（標準で今までと同じ大きさ）
+ */
+button,
+input {
+  font-family: inherit;
+  font-size: 0.9524rem;
+}
+
 /* 画面の大きさは rem（この文字サイズの何倍か）で書いてあり、UI サイズの設定（ui.ts が --ui-scale を設定）で一括で変わる */
 html {
   font-size: calc(14px * var(--ui-scale, 1));
