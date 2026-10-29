@@ -167,6 +167,8 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
     } else {
       search.open(text);
     }
+    // スマホでは Enter でキーボードを閉じる（パソコンでは続けて入力できるよう閉じない）
+    if (touchQuery.matches) input.blur();
   });
   $('queue').addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
@@ -209,6 +211,9 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
 
   return $('player');
 }
+
+/** スマホなどタッチ操作の端末か */
+const touchQuery = window.matchMedia('(pointer: coarse)');
 
 /** 横に広いときはキュー欄を右、狭いときは下に置く（style.css の media query と揃える） */
 const wideQuery = window.matchMedia('(min-width: 900px)');

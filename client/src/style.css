@@ -63,7 +63,8 @@ body {
 #app {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /* キーボードが出ている間は、見えている高さ（app.ts の --app-height）に合わせる */
+  height: var(--app-height, 100%);
   padding: 8px;
 }
 
@@ -845,5 +846,43 @@ button.link:hover {
     padding-bottom: max(8px, var(--discord-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
     padding-left: max(8px, var(--discord-safe-area-inset-left, env(safe-area-inset-left, 0px)));
     padding-right: max(8px, var(--discord-safe-area-inset-right, env(safe-area-inset-right, 0px)));
+  }
+}
+
+/*
+ * スマホで縦に並べているときは、動画を幅いっぱいの 16:9 に固定し、再生リストが残りの高さを使う。
+ * 大きさを変えるハンドルは出さない（キーボードが出ても動画の位置と大きさは変わらず、再生リストだけ縮む）
+ */
+@media (pointer: coarse) and (max-width: 899px) {
+  .main {
+    flex: none;
+  }
+  .player {
+    flex: none;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+  }
+  .splitter {
+    display: none;
+  }
+  .side {
+    /* ドラッグで保存された大きさ（ui.ts が付ける flex-basis）より優先する */
+    flex: 1 1 auto !important;
+    margin-top: 8px;
+  }
+}
+
+/* PiP など小さく表示されているときは、16:9 に固定せず枠いっぱいに動画を出す */
+#app.compact .main,
+#app.compact .player {
+  flex: 1;
+  aspect-ratio: auto;
+}
+
+@media (max-height: 300px) {
+  .main,
+  .player {
+    flex: 1 !important;
+    aspect-ratio: auto !important;
   }
 }
