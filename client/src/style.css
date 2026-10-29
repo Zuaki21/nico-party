@@ -834,9 +834,18 @@ input.switch:checked::after {
 .settings-links {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.2857rem 1.1429rem;
   padding-top: 0.8571rem;
   border-top: 1px solid var(--border);
+}
+
+/* 設定画面の左下のバージョン（反映できたかの確認に使う） */
+.settings-links .version {
+  color: var(--muted);
+  font-size: 0.8571rem;
+  font-variant-numeric: tabular-nums;
 }
 
 button.link {

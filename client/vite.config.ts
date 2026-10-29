@@ -1,4 +1,4 @@
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vite';
 
 /** 開発用: Activity 内のログを POST /__log で受けて dev.log に追記する */
@@ -18,8 +18,12 @@ function remoteLog(): Plugin {
   };
 }
 
+/** 画面に出すバージョン。リリースのたびに package.json の version を進める */
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string };
+
 export default defineConfig({
   envDir: '..',
+  define: { __APP_VERSION__: JSON.stringify(version) },
   plugins: [remoteLog()],
   build: {
     rollupOptions: {

@@ -8,6 +8,7 @@ import {
   type SearchSort,
 } from '../../shared/protocol';
 import { $ } from './dom';
+import { APP_VERSION } from './env';
 import { applyI18n, onLangChange, t } from './i18n';
 import { LIST_ICON, NEXT_ICON, PREV_ICON, REPEAT_ICON, SETTINGS_ICON, SHUFFLE_ICON } from './icons';
 import { renderPlaylist, setPlayback, setupPlaylist } from './playlist';
@@ -106,6 +107,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
           <input type="checkbox" class="switch" id="presence-toggle" data-i18n-title="presence" />
         </div>
         <div class="settings-links">
+          <span class="version">ver ${APP_VERSION}</span>
           <button type="button" class="link" data-url="${SITE_URL}/" data-i18n="about"></button>
         </div>
       </div>

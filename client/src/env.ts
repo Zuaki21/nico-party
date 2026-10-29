@@ -1,3 +1,7 @@
+/** この画面のバージョン（client/package.json の version をビルド時に埋め込む） */
+declare const __APP_VERSION__: string;
+export const APP_VERSION = __APP_VERSION__;
+
 /** Discord の Activity として開かれているか（通常のブラウザで開いたときはローカル確認用モード） */
 export const inDiscord = new URLSearchParams(location.search).has('frame_id');
 

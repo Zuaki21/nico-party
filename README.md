@@ -65,6 +65,8 @@ cloudflared tunnel --protocol http2 --url http://127.0.0.1:5173
 
 ## デプロイ
 
+反映のたびに `client/package.json` の `version` を進める。設定画面の左下に「ver x.x.x」と出るので、反映できたかはそれで確認できる。
+
 ```sh
 cd client && npx vite build
 cd server && npx wrangler deploy
