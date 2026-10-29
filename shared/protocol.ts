@@ -41,7 +41,8 @@ export interface PlaybackState {
 }
 
 export type ClientMsg =
-  | { t: 'join'; name: string }
+  /** clientId: ページを開いている間は変わらない ID（再接続しても同じメンバーとして扱う） */
+  | { t: 'join'; name: string; clientId?: string }
   | { t: 'control'; itemId: string; playing: boolean; position: number }
   | { t: 'enqueue'; url: string }
   | { t: 'remove'; id: string }
@@ -58,8 +59,10 @@ export type ClientMsg =
   | { t: 'prev'; itemId: string }
   /** 視聴済み・キューの中から id の動画を選んで、そこから再生する（並び順は変えない） */
   | { t: 'jump'; id: string }
-  /** itemId の動画を読み込めなかった。部屋の全員から届いたら次へ進む */
+  /** itemId の動画を読み込めなかった。部屋の全員から届いたら、その動画を再生リストから外して次へ進む */
   | { t: 'loadFailed'; itemId: string }
+  /** loadFailed を送った後で、遅れて読み込めた（報告を取り消す） */
+  | { t: 'loadOk'; itemId: string }
   | { t: 'ping'; clientTime: number };
 
 /**

@@ -90,6 +90,8 @@ let joined = false;
 /** 部屋に入る前（起動直後・再接続中）に行われたユーザー操作。入れたらまとめて送る */
 const pending: ClientMsg[] = [];
 const clock = new ClockSync();
+/** 再接続しても同じメンバーとして扱ってもらうための ID（ページを開き直すと変わる） */
+const clientId = crypto.randomUUID();
 const engine = new SyncEngine(player, send, () => showError(t('loadFailed')));
 
 function sendRaw(msg: ClientMsg) {
@@ -139,7 +141,7 @@ function connect(roomId: string, name: string) {
     sock.onopen = () => {
       retry = 0;
       clock.reset();
-      sendRaw({ t: 'join', name });
+      sendRaw({ t: 'join', name, clientId });
       // 時計のずれは接続直後に数回測るだけにする（短時間ではほとんど変わらないため）。
       // 定期的に測り直すと部屋がずっと起きたままになり、Durable Objects の稼働時間がかさむ
       for (let i = 0; i < 4; i++) setTimeout(ping, i * 300);
@@ -160,6 +162,7 @@ function connect(roomId: string, name: string) {
           applyState(msg.state);
           joined = true;
           for (const m of pending.splice(0)) sendRaw(m);
+          engine.resendLoadReport();
           return;
         case 'state':
           applyState(msg.state);

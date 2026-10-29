@@ -50,6 +50,8 @@ export class SyncEngine {
   private preloadStartedAt = 0;
   /** 開始時刻まで 0 秒で止めておくためのタイマー */
   private holdTimer: number | undefined;
+  /** 読み込めなかったとサーバーに伝えたキュー項目（再接続したら送り直し、遅れて読み込めたら取り消す） */
+  private reportedFailFor: string | null = null;
   private ticks = 0;
 
   constructor(
@@ -74,6 +76,8 @@ export class SyncEngine {
     player.on('seeked', onLocal);
     player.on('load', () => {
       clearTimeout(this.loadTimer);
+      // 読み込めなかったと伝えた後で読み込めたら取り消す
+      if (this.reportedFailFor === this.loadedItemId) this.resendLoadReport();
       this.apply(APPLY_THRESHOLD);
     });
     player.on('ended', () => this.requestNext(true));
@@ -94,6 +98,7 @@ export class SyncEngine {
       clearTimeout(this.startTimer);
       this.preloading = false;
       this.preloadedFor = null;
+      this.reportedFailFor = null;
       const sameVideo = !!item && item.videoId === this.loadedVideoId && this.player.ready();
       this.loadedItemId = item?.id ?? null;
       this.loadedVideoId = item?.videoId ?? null;
@@ -108,7 +113,8 @@ export class SyncEngine {
         this.loadTimer = window.setTimeout(() => {
           if (this.loadedItemId === item.id && !this.player.ready()) {
             this.onLoadFailed();
-            this.send({ t: 'loadFailed', itemId: item.id });
+            this.reportedFailFor = item.id;
+            this.resendLoadReport();
           }
         }, LOAD_TIMEOUT_MS);
       } else {
@@ -117,6 +123,16 @@ export class SyncEngine {
       return; // 読み込み完了 (load) 後に apply する
     }
     this.apply(APPLY_THRESHOLD);
+  }
+
+  /**
+   * 読み込めなかった・遅れて読み込めた、の報告を（もう一度）送る。
+   * 切断中に送った報告は届かないので、部屋に入り直したときにも呼ぶ
+   */
+  resendLoadReport() {
+    const itemId = this.reportedFailFor;
+    if (!itemId || itemId !== this.loadedItemId) return;
+    this.send({ t: this.player.ready() ? 'loadOk' : 'loadFailed', itemId });
   }
 
   private serverNow() {

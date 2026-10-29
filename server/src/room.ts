@@ -92,6 +92,8 @@ export class Room extends DurableObject<Env> {
     switch (msg.t) {
       case 'join': {
         a.name = String(msg.name ?? '').trim().slice(0, 32) || 'guest';
+        // 再接続しても同じメンバーとして扱えるよう、クライアントが決めた ID を使う
+        if (typeof msg.clientId === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(msg.clientId)) a.id = msg.clientId;
         a.joined = true;
         ws.serializeAttachment(a);
         send(ws, {
@@ -223,19 +225,17 @@ export class Room extends DurableObject<Env> {
         return;
       }
 
-      case 'loadFailed': {
+      case 'loadFailed':
+      case 'loadOk': {
         // 一人の読み込みが遅いだけで全員の動画を飛ばさないよう、部屋にいる全員が読み込めなかったときだけ次へ進める
         const s = await this.getState();
         if (!s.current || s.current.id !== msg.itemId) return;
-        const prev = await this.ctx.storage.get<{ itemId: string; ids: string[] }>(LOAD_FAILED_KEY);
+        const prev = await this.getLoadFailed();
         const ids = new Set(prev?.itemId === msg.itemId ? prev.ids : []);
-        ids.add(a.id);
-        if (!this.members().every((m) => ids.has(m.id))) {
-          await this.ctx.storage.put(LOAD_FAILED_KEY, { itemId: msg.itemId, ids: [...ids] });
-          return;
-        }
-        await this.ctx.storage.delete(LOAD_FAILED_KEY);
-        await this.start(s, await this.pickNext(s), a);
+        if (msg.t === 'loadFailed') ids.add(a.id);
+        else ids.delete(a.id);
+        await this.ctx.storage.put(LOAD_FAILED_KEY, { itemId: msg.itemId, ids: [...ids] });
+        await this.skipIfNobodyLoaded(a);
         return;
       }
 
@@ -270,6 +270,26 @@ export class Room extends DurableObject<Env> {
       return;
     }
     this.broadcastMembers(ws);
+    // まだ報告していなかった人が抜けて、残りが全員「読み込めなかった」になったかもしれない
+    await this.skipIfNobodyLoaded(ws.deserializeAttachment() as Attachment, ws);
+  }
+
+  private async getLoadFailed() {
+    return this.ctx.storage.get<{ itemId: string; ids: string[] }>(LOAD_FAILED_KEY);
+  }
+
+  /**
+   * 部屋にいる全員が今の動画を読み込めなかったと報告していたら、その動画を再生リストから外して次へ進める
+   * （視聴済みに残すと、全曲リピートで何度も読み込み直してしまうため）
+   */
+  private async skipIfNobodyLoaded(by: Attachment, exclude?: WebSocket) {
+    const s = await this.getState();
+    const failed = await this.getLoadFailed();
+    if (!s.current || failed?.itemId !== s.current.id) return;
+    const members = this.members(exclude);
+    if (members.length === 0 || !members.every((m) => failed.ids.includes(m.id))) return;
+    await this.ctx.storage.delete(LOAD_FAILED_KEY);
+    await this.start(s, await this.pickNext({ ...s, current: null }), by);
   }
 
   async alarm(): Promise<void> {
