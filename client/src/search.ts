@@ -27,6 +27,19 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue'>) {
   /** 結果の後ろに付けている行（「検索中…」「もっと見る」など。更新のたびに付け替える） */
   let tail: HTMLElement[] = [];
 
+  /** 「もっと見る」の行。取得中は同じボタンを押せなくして文言だけ変える */
+  const moreEl = (loading: boolean) => {
+    const li = document.createElement('li');
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'secondary more';
+    more.textContent = t(loading ? 'fetching' : 'loadMore');
+    more.disabled = loading;
+    more.addEventListener('click', () => fetchPage(items.length));
+    li.append(more);
+    return li;
+  };
+
   /** @param rebuild true なら、並べ終えた結果も作り直す（言語の切り替え） */
   const render = (view: SearchView, rebuild = false) => {
     lastView = view;
@@ -45,20 +58,14 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue'>) {
     list.append(...items.slice(shown).map(resultEl));
     shown = items.length;
     const rows: HTMLElement[] = [];
-    if (view === 'loading') rows.push(noteEl(t('searching')));
+    // 「もっと見る」の取得中は、同じ場所に同じ大きさのボタンを出したままにして、表示が動かないようにする
+    if (view === 'loading') rows.push(items.length > 0 ? moreEl(true) : noteEl(t('searching')));
     else if (view === 'error') rows.push(noteEl(t('searchFailed')));
     else if (items.length === 0) {
       rows.push(noteEl(t('searchNone')));
     } else if (items.length < Math.min(total, SEARCH_MAX_OFFSET + SEARCH_PAGE_SIZE)) {
       // 検索 API はある程度より先の結果を返さないので、そこまでで「もっと見る」を出さない
-      const li = document.createElement('li');
-      const more = document.createElement('button');
-      more.type = 'button';
-      more.className = 'secondary more';
-      more.textContent = t('loadMore');
-      more.addEventListener('click', () => fetchPage(items.length));
-      li.append(more);
-      rows.push(li);
+      rows.push(moreEl(false));
     }
     list.append(...rows);
     tail = rows;
