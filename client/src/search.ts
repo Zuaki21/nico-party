@@ -46,7 +46,10 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue'>) {
       li.append(more);
       rows.push(li);
     }
+    // 作り直してもスクロール位置が先頭へ戻らないよう、置き換える前の位置を戻す
+    const top = list.scrollTop;
     list.replaceChildren(...rows);
+    list.scrollTop = top;
   };
 
   const resultEl = (r: SearchItem) => {
@@ -102,6 +105,9 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue'>) {
       total = res.total;
       items = offset === 0 ? res.items : [...items, ...res.items.slice(0, SEARCH_PAGE_SIZE)];
       render('done');
+      // 「もっと見る」のときは、続きの先頭が見える位置までスクロールする
+      const first = offset > 0 ? list.children[offset] : null;
+      if (first) list.scrollTop += first.getBoundingClientRect().top - list.getBoundingClientRect().top;
     } catch {
       if (my === seq) render('error');
     }
