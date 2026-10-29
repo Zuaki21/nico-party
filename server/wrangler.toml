@@ -4,8 +4,8 @@ compatibility_date = "2025-09-01"
 
 # zuaki.dev のサブドメインで公開する（DNS と証明書は Cloudflare が自動で設定する）
 routes = [{ pattern = "nico-party.zuaki.dev", custom_domain = true }]
-# Discord の URL Mapping を切り替えるまでの間だけ旧 URL も有効にしておく
-workers_dev = true
+# 旧 URL（workers.dev）は使わない（Discord の URL Mapping を切り替えたので無効にした）
+workers_dev = false
 
 # client を vite build した成果物を配信する。API 系だけ Worker で処理する
 [assets]
