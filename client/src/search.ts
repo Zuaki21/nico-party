@@ -22,15 +22,29 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue'>) {
   const added = new Set<string>();
   /** 言語を切り替えたときに同じ状態で描き直す */
   let lastView: SearchView = 'done';
+  /** 画面に並べ終えた結果の数（「もっと見る」では、これより後ろの分だけを足す） */
+  let shown = 0;
+  /** 結果の後ろに付けている行（「検索中…」「もっと見る」など。更新のたびに付け替える） */
+  let tail: HTMLElement[] = [];
 
-  const render = (view: SearchView) => {
+  /** @param rebuild true なら、並べ終えた結果も作り直す（言語の切り替え） */
+  const render = (view: SearchView, rebuild = false) => {
     lastView = view;
     $('search-title').textContent =
       view === 'done'
         ? t('searchCount', { q: query, n: total.toLocaleString(getLang() === 'ja' ? 'ja-JP' : 'en-US') })
         : t('searchQuery', { q: query });
     markSeg('search-sort', 'sort', sort);
-    const rows: HTMLElement[] = items.map(resultEl);
+    // 新しい検索になったときや作り直すときだけ全部を並べ直す。それ以外は後ろに足すだけで、スクロール位置も動かさない
+    if (rebuild || items.length < shown) {
+      list.replaceChildren();
+      shown = 0;
+      tail = [];
+    }
+    for (const el of tail) el.remove();
+    list.append(...items.slice(shown).map(resultEl));
+    shown = items.length;
+    const rows: HTMLElement[] = [];
     if (view === 'loading') rows.push(noteEl(t('searching')));
     else if (view === 'error') rows.push(noteEl(t('searchFailed')));
     else if (items.length === 0) {
@@ -46,10 +60,8 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue'>) {
       li.append(more);
       rows.push(li);
     }
-    // 作り直してもスクロール位置が先頭へ戻らないよう、置き換える前の位置を戻す
-    const top = list.scrollTop;
-    list.replaceChildren(...rows);
-    list.scrollTop = top;
+    list.append(...rows);
+    tail = rows;
   };
 
   const resultEl = (r: SearchItem) => {
@@ -105,9 +117,6 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue'>) {
       total = res.total;
       items = offset === 0 ? res.items : [...items, ...res.items.slice(0, SEARCH_PAGE_SIZE)];
       render('done');
-      // 「もっと見る」のときは、続きの先頭が見える位置までスクロールする
-      const first = offset > 0 ? list.children[offset] : null;
-      if (first) list.scrollTop += first.getBoundingClientRect().top - list.getBoundingClientRect().top;
     } catch {
       if (my === seq) render('error');
     }
@@ -127,7 +136,7 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue'>) {
 
   return {
     rerender() {
-      if (!$('search').hidden) render(lastView);
+      if (!$('search').hidden) render(lastView, true);
     },
     open(q: string) {
       query = q;
