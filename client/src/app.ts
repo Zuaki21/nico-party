@@ -65,6 +65,15 @@ const player = new NicoPlayer(playerEl, (videoId, playerId) => {
     : `https://embed.nicovideo.jp/watch/${videoId}?${params}`;
 });
 
+// iPhone などでキーボードを出すと、入力欄を見せるためにページがずらされる。
+// 画面の配置は固定にしたいので、ずれたらすぐ元の位置に戻す
+const resetScroll = () => {
+  if (window.scrollX !== 0 || window.scrollY !== 0) window.scrollTo(0, 0);
+};
+window.addEventListener('scroll', resetScroll);
+window.visualViewport?.addEventListener('resize', resetScroll);
+window.visualViewport?.addEventListener('scroll', resetScroll);
+
 // 右クリックのメニュー（「検証」など）は出さない。入力欄では貼り付けに使うので残す
 document.addEventListener('contextmenu', (e) => {
   if (!(e.target as HTMLElement).closest('input, textarea')) e.preventDefault();

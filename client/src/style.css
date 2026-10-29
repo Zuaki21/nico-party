@@ -51,6 +51,9 @@ html,
 body {
   margin: 0;
   height: 100%;
+  /* キーボードを出したときなどに、ページ全体がずれたりスクロールしたりしないようにする */
+  overflow: hidden;
+  overscroll-behavior: none;
   background: var(--bg);
   color: var(--text);
   font-family: system-ui, 'Hiragino Sans', 'Yu Gothic UI', sans-serif;
@@ -830,4 +833,17 @@ button.link {
 
 button.link:hover {
   text-decoration: underline;
+}
+
+/*
+ * スマホなどタッチ操作の端末では、画面上端（ステータスバー・ノッチ）に動画がくっつかないよう余白を取る。
+ * Discord が渡す安全領域（--discord-safe-area-inset-*）、無ければ端末の値、どちらも無ければ最低 28px
+ */
+@media (pointer: coarse) {
+  #app {
+    padding-top: max(28px, var(--discord-safe-area-inset-top, env(safe-area-inset-top, 0px)));
+    padding-bottom: max(8px, var(--discord-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+    padding-left: max(8px, var(--discord-safe-area-inset-left, env(safe-area-inset-left, 0px)));
+    padding-right: max(8px, var(--discord-safe-area-inset-right, env(safe-area-inset-right, 0px)));
+  }
 }
