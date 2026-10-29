@@ -6,12 +6,14 @@ import {
   parseVideoId,
   reorder,
   type ClientMsg,
+  type ErrorCode,
   type Member,
   type PlaybackState,
   type QueueItem,
   type ServerMsg,
 } from '../../shared/protocol';
-import { fetchEmbedError, fetchVideoInfo, type NicoEnv } from './nico';
+import type { NicoEnv } from './nico';
+import { fetchEmbedError, fetchVideoInfo } from './nicoApi';
 
 interface Attachment extends Member {
   joined: boolean;
@@ -73,12 +75,14 @@ export class Room extends DurableObject<Env> {
       return;
     }
     const a = ws.deserializeAttachment() as Attachment;
+    if (msg.t === 'ping') {
+      send(ws, { t: 'pong', clientTime: msg.clientTime, serverTime: Date.now() });
+      return;
+    }
+    // join より前に届いた部屋の操作は受け付けない
+    if (msg.t !== 'join' && !a.joined) return;
 
     switch (msg.t) {
-      case 'ping':
-        send(ws, { t: 'pong', clientTime: msg.clientTime, serverTime: Date.now() });
-        return;
-
       case 'join': {
         a.name = String(msg.name ?? '').trim().slice(0, 32) || 'guest';
         a.joined = true;
@@ -97,7 +101,6 @@ export class Room extends DurableObject<Env> {
       }
 
       case 'control': {
-        if (!a.joined) return;
         const s = await this.getState();
         // 動画が切り替わった直後に届いた、前の動画への操作は捨てる
         if (!s.current || s.current.id !== msg.itemId) return;
@@ -108,33 +111,16 @@ export class Room extends DurableObject<Env> {
       }
 
       case 'enqueue': {
-        if (!a.joined) return;
         const videoId = parseVideoId(String(msg.url ?? ''));
-        if (!videoId) {
-          send(ws, { t: 'error', code: 'invalid_url' });
-          return;
-        }
-        const queue = await this.getQueue();
-        if (queue.length >= QUEUE_LIMIT) {
-          send(ws, { t: 'error', code: 'queue_full' });
-          return;
-        }
+        if (!videoId) return sendError(ws, 'invalid_url');
+        if ((await this.getQueue()).length >= QUEUE_LIMIT) return sendError(ws, 'queue_full');
         const [info, embedError] = await Promise.all([
           fetchVideoInfo(videoId),
           fetchEmbedError(videoId),
         ]);
-        if (!info) {
-          send(ws, { t: 'error', code: 'not_found', params: { id: videoId } });
-          return;
-        }
-        if (embedError) {
-          send(ws, { t: 'error', code: 'unplayable', params: { title: info.title, reason: embedError } });
-          return;
-        }
-        if (!info.embeddable) {
-          send(ws, { t: 'error', code: 'not_embeddable', params: { title: info.title } });
-          return;
-        }
+        if (!info) return sendError(ws, 'not_found', { id: videoId });
+        if (embedError) return sendError(ws, 'unplayable', { title: info.title, reason: embedError });
+        if (!info.embeddable) return sendError(ws, 'not_embeddable', { title: info.title });
         const { embeddable: _embeddable, ...meta } = info;
         const item: QueueItem = {
           id: newItemId(),
@@ -156,7 +142,6 @@ export class Room extends DurableObject<Env> {
       }
 
       case 'remove': {
-        if (!a.joined) return;
         // これから再生する動画・視聴済みのどちらからでも消せる
         const queue = await this.getQueue();
         const history = await this.getHistory();
@@ -169,7 +154,6 @@ export class Room extends DurableObject<Env> {
       }
 
       case 'move': {
-        if (!a.joined) return;
         const s = await this.getState();
         const result = reorder(
           await this.getHistory(),
@@ -179,12 +163,11 @@ export class Room extends DurableObject<Env> {
           Number(msg.index) || 0,
         );
         if (!result) return;
-        await this.putLists({ queue: result.queue, history: result.history.slice(-HISTORY_LIMIT) });
+        await this.putLists(result);
         return;
       }
 
       case 'prev': {
-        if (!a.joined) return;
         const s = await this.getState();
         if (!s.current || s.current.id !== msg.itemId) return;
         const history = await this.getHistory();
@@ -203,18 +186,16 @@ export class Room extends DurableObject<Env> {
       }
 
       case 'jump': {
-        if (!a.joined) return;
         const s = await this.getState();
         if (s.current?.id === msg.id) return;
         const result = jumpTo(await this.getHistory(), s.current, await this.getQueue(), String(msg.id));
         if (!result) return;
-        await this.putLists({ queue: result.queue, history: result.history.slice(-HISTORY_LIMIT) });
+        await this.putLists({ queue: result.queue, history: result.history });
         await this.start(s, result.current, a);
         return;
       }
 
       case 'next': {
-        if (!a.joined) return;
         const s = await this.getState();
         // 複数人から同時に届いても1回だけ進める
         if ((s.current?.id ?? null) !== msg.itemId) return;
@@ -228,14 +209,11 @@ export class Room extends DurableObject<Env> {
       }
 
       case 'mode': {
-        if (!a.joined) return;
         const s = await this.getState();
         if (msg.repeat === 'off' || msg.repeat === 'all' || msg.repeat === 'one') s.repeat = msg.repeat;
         if (typeof msg.shuffle === 'boolean') s.shuffle = msg.shuffle;
         // 再生位置の基準 (updatedAt) は変えずに設定だけ配信する
-        s.version++;
-        await this.ctx.storage.put(STATE_KEY, s);
-        this.broadcast({ t: 'state', state: s });
+        await this.putState(s);
         return;
       }
     }
@@ -287,16 +265,21 @@ export class Room extends DurableObject<Env> {
     // シャッフル: これから再生する動画の中からランダムに選ぶ
     const index = s.shuffle && queue.length > 1 ? Math.floor(Math.random() * queue.length) : 0;
     const item = queue.splice(index, 1)[0] ?? null;
-    await this.putLists({ queue, history: history.slice(-HISTORY_LIMIT) });
+    await this.putLists({ queue, history });
     return item;
   }
 
   /** @param delayMs position の基準時刻を今からずらす量（再生開始を遅らせるとき） */
   private async commit(s: PlaybackState, by: Attachment, delayMs = 0) {
     s.updatedAt = Date.now() + delayMs;
-    s.version++;
     s.by = by.id;
     s.byName = by.name;
+    await this.putState(s);
+  }
+
+  /** 版を進めて保存し、全員に送る */
+  private async putState(s: PlaybackState) {
+    s.version++;
     await this.ctx.storage.put(STATE_KEY, s);
     this.broadcast({ t: 'state', state: s });
   }
@@ -313,14 +296,15 @@ export class Room extends DurableObject<Env> {
     return (await this.ctx.storage.get<QueueItem[]>(HISTORY_KEY)) ?? [];
   }
 
-  /** 渡されたリストを保存し、キューと履歴の両方を全員に送る */
+  /** 渡されたリストを保存し、キューと履歴の両方を全員に送る。視聴済みは新しいほうから HISTORY_LIMIT 本だけ残す */
   private async putLists(lists: { queue?: QueueItem[]; history?: QueueItem[] }) {
+    const history = lists.history?.slice(-HISTORY_LIMIT);
     if (lists.queue) await this.ctx.storage.put(QUEUE_KEY, lists.queue);
-    if (lists.history) await this.ctx.storage.put(HISTORY_KEY, lists.history);
+    if (history) await this.ctx.storage.put(HISTORY_KEY, history);
     this.broadcast({
       t: 'queue',
       queue: lists.queue ?? (await this.getQueue()),
-      history: lists.history ?? (await this.getHistory()),
+      history: history ?? (await this.getHistory()),
     });
   }
 
@@ -359,4 +343,9 @@ function newItemId() {
 
 function send(ws: WebSocket, msg: ServerMsg) {
   ws.send(JSON.stringify(msg));
+}
+
+/** 操作した本人にだけエラーを返す */
+function sendError(ws: WebSocket, code: ErrorCode, params?: Record<string, string>) {
+  send(ws, { t: 'error', code, ...(params ? { params } : {}) });
 }

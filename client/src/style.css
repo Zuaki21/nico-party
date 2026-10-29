@@ -1,4 +1,4 @@
-/* 配色は Discord に合わせている。テーマは ui.ts が <html data-theme> で切り替える */
+/* 配色は Discord に合わせている。テーマは settings.ts が <html data-theme> で切り替える */
 :root {
   color-scheme: dark;
   --bg: #1e1f22;
@@ -57,7 +57,7 @@ input {
   font-size: 0.9524rem;
 }
 
-/* 画面の大きさは rem（この文字サイズの何倍か）で書いてあり、UI サイズの設定（ui.ts が --ui-scale を設定）で一括で変わる */
+/* 画面の大きさは rem（この文字サイズの何倍か）で書いてあり、UI サイズの設定（settings.ts が --ui-scale を設定）で一括で変わる */
 html {
   font-size: calc(14px * var(--ui-scale, 1));
 }
@@ -146,7 +146,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.4286rem;
-  /* 既定の大きさ。ドラッグすると ui.ts が flex-basis を上書きする */
+  /* 既定の大きさ。ドラッグすると sidePanel.ts が flex-basis を上書きする */
   flex: 0 0 35%;
   min-height: 0;
   min-width: 0;
@@ -536,7 +536,7 @@ button.icon:hover {
   }
   .side {
     flex-basis: 28.5714rem;
-    /* ui.ts の MIN_SIDE_WIDTH と揃える */
+    /* sidePanel.ts の MIN_SIDE_WIDTH と揃える */
     min-width: 18.5714rem;
   }
   .splitter {
@@ -886,7 +886,7 @@ button.link:hover {
     max-height: 60vh;
   }
   .side {
-    /* ドラッグで保存された大きさ（ui.ts が付ける flex-basis）より優先する */
+    /* ドラッグで保存された大きさ（sidePanel.ts が付ける flex-basis）より優先する */
     flex: 1 1 auto !important;
     margin-top: 0.5714rem;
   }

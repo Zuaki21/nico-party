@@ -107,6 +107,11 @@ export function parseVideoId(input: string): string | null {
   return input.match(/\b(?:sm|so|nm)\d+/)?.[0] ?? null;
 }
 
+/** 視聴済み → 再生中 → キューの順に並べた1本のリスト（画面の再生リストと同じ並び） */
+function flatten(history: QueueItem[], current: QueueItem | null, queue: QueueItem[]) {
+  return [...history, ...(current ? [current] : []), ...queue];
+}
+
 /**
  * 視聴済み・再生中・キューを1本のリストとみなして id の動画を index 番目（自分を抜いた後の位置）に移す。
  * 再生中の動画は動かしても再生中のまま。それより前に置いた動画は視聴済み、後ろはキューになる。
@@ -119,7 +124,7 @@ export function reorder(
   id: string,
   index: number,
 ): { history: QueueItem[]; queue: QueueItem[] } | null {
-  const all = [...history, ...(current ? [current] : []), ...queue];
+  const all = flatten(history, current, queue);
   const from = all.findIndex((q) => q.id === id);
   if (from < 0) return null;
   const [item] = all.splice(from, 1);
@@ -149,7 +154,7 @@ export function jumpTo(
   queue: QueueItem[],
   id: string,
 ): { history: QueueItem[]; current: QueueItem; queue: QueueItem[] } | null {
-  const all = [...history, ...(current ? [current] : []), ...queue];
+  const all = flatten(history, current, queue);
   const i = all.findIndex((q) => q.id === id);
   if (i < 0) return null;
   return { history: all.slice(0, i), current: all[i], queue: all.slice(i + 1) };

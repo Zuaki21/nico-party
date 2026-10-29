@@ -1,4 +1,5 @@
-import { handleNico, searchVideos } from './nico';
+import { handleNico } from './nico';
+import { searchVideos } from './nicoApi';
 import type { Env } from './room';
 
 export { Room } from './room';

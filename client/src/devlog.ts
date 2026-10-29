@@ -11,6 +11,11 @@ export function devlog(text: string) {
   }).catch(() => {});
 }
 
+/** catch した値をログ用の文字列にする（Discord SDK のエラーは Error ではなくオブジェクトで届く） */
+export function describeError(e: unknown) {
+  return e instanceof Error ? e.message : JSON.stringify(e);
+}
+
 /** ページと埋め込みプレイヤー (同一オリジンで配信している場合) のエラーを拾う */
 export function watchErrors(iframe: HTMLIFrameElement) {
   if (!import.meta.env.DEV) return;

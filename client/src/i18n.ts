@@ -4,6 +4,9 @@
  * あとから描く部分は t() で組み立てて、言語が変わったら描き直す（onLangChange）
  */
 
+import type { ErrorCode } from '../../shared/protocol';
+import { load, save } from './storage';
+
 export type Lang = 'ja' | 'en';
 
 const ja = {
@@ -158,12 +161,8 @@ const DICT: Record<Lang, Record<Key, string>> = { ja, en };
 const LANG_KEY = 'nico-party:lang';
 
 function initialLang(): Lang {
-  try {
-    const saved = localStorage.getItem(LANG_KEY);
-    if (saved === 'ja' || saved === 'en') return saved;
-  } catch {
-    // localStorage が使えなくてもブラウザの言語で決める
-  }
+  const saved = load(LANG_KEY);
+  if (saved === 'ja' || saved === 'en') return saved;
   return navigator.language.toLowerCase().startsWith('ja') ? 'ja' : 'en';
 }
 
@@ -179,11 +178,7 @@ export function setLang(next: Lang) {
   if (next === lang) return;
   lang = next;
   document.documentElement.lang = next;
-  try {
-    localStorage.setItem(LANG_KEY, next);
-  } catch {
-    // 保存できなくても今回の表示には反映する
-  }
+  save(LANG_KEY, next);
   for (const fn of listeners) fn();
 }
 
@@ -201,6 +196,24 @@ export function unplayableReason(code: string) {
   if (code === 'sensitive_video') return t('unplayable_sensitive_video');
   if (code === 'externally_unwatchable') return t('unplayable_externally_unwatchable');
   return t('unplayable_other');
+}
+
+/** サーバーから届いたエラー（shared/protocol.ts の ErrorCode）を、選んでいる言語の文に組み立てる */
+export function serverErrorText(code: ErrorCode, params: Record<string, string> = {}) {
+  switch (code) {
+    case 'invalid_url':
+      return t('err_invalid_url');
+    case 'queue_full':
+      return t('err_queue_full');
+    case 'not_found':
+      return t('err_not_found', { id: params.id });
+    case 'unplayable':
+      return t('err_unplayable', { title: params.title, reason: unplayableReason(params.reason) });
+    case 'not_embeddable':
+      return t('err_not_embeddable', { title: params.title });
+    default:
+      return code;
+  }
 }
 
 /** data-i18n（文字）/ data-i18n-title / data-i18n-placeholder の付いた要素を今の言語に書き換える */

@@ -1,6 +1,6 @@
 import type { DiscordSDK } from '@discord/embedded-app-sdk';
 import type { PlaybackState } from '../../shared/protocol';
-import { devlog } from './devlog';
+import { describeError, devlog } from './devlog';
 import { getLang, onLangChange, t } from './i18n';
 
 /** Discord への送信をまとめる時間（送信回数の制限に引っかからないように） */
@@ -71,7 +71,7 @@ export function createPresence(sdk: DiscordSDK, serverNow: () => number, initial
       lastKey = key;
       lastStart = start;
     } catch (e) {
-      devlog(`setActivity failed: ${e instanceof Error ? e.message : JSON.stringify(e)}`);
+      devlog(`setActivity failed: ${describeError(e)}`);
       if (level < 2) {
         level++;
         lastKey = '';
@@ -101,7 +101,7 @@ export function createPresence(sdk: DiscordSDK, serverNow: () => number, initial
       lastKey = '';
       // 空のアクティビティを送って、タイトルなどの表示を消す
       sdk.commands.setActivity({ activity: {} }).catch((e) => {
-        devlog(`clear activity failed: ${e instanceof Error ? e.message : JSON.stringify(e)}`);
+        devlog(`clear activity failed: ${describeError(e)}`);
       });
     },
     setState(s: PlaybackState) {

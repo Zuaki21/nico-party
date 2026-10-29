@@ -1,23 +1,22 @@
 import { Common, DiscordSDK } from '@discord/embedded-app-sdk';
-import { HEARTBEAT, type ClientMsg, type SearchResult, type ServerMsg } from '../../shared/protocol';
-import { ClockSync } from './clock';
-import { devlog, watchErrors } from './devlog';
-import { inDiscord, proxied } from './env';
-import { NicoPlayer } from './nicoPlayer';
-import { createPresence } from './presence';
-import { getLang, t, unplayableReason } from './i18n';
-import { SyncEngine } from './sync';
 import {
-  mountUi,
-  renderConnecting,
-  renderMembers,
-  renderQueue,
-  isPresenceEnabled,
-  renderState,
-  setCompact,
-  showError,
-} from './ui';
-
+  HEARTBEAT,
+  type ClientMsg,
+  type Member,
+  type PlaybackState,
+  type SearchResult,
+  type ServerMsg,
+} from '../../shared/protocol';
+import { ClockSync } from './clock';
+import { describeError, devlog, watchErrors } from './devlog';
+import { inDiscord, proxied } from './env';
+import { getLang, serverErrorText, t } from './i18n';
+import { NicoPlayer } from './nicoPlayer';
+import { renderQueue } from './playlist';
+import { createPresence } from './presence';
+import { isPresenceEnabled } from './settings';
+import { SyncEngine } from './sync';
+import { mountUi, renderConnecting, renderMembers, renderState, setCompact, showError } from './ui';
 
 /**
  * 接続の生存確認の間隔。何も流れない WebSocket は途中で切られることがあるので送っておく。
@@ -116,6 +115,18 @@ function ping() {
   sendRaw({ t: 'ping', clientTime: Date.now() });
 }
 
+/** 部屋の再生状態を、画面・プレイヤー・Discord の表示に反映する */
+function applyState(state: PlaybackState) {
+  renderState(state);
+  engine.update(state);
+  presence?.setState(state);
+}
+
+function applyMembers(members: Member[]) {
+  renderMembers(members);
+  presence?.setMembers(members.length);
+}
+
 function connect(roomId: string, name: string) {
   let retry = 0;
   let heartbeatTimer: number | undefined;
@@ -145,29 +156,23 @@ function connect(roomId: string, name: string) {
           clock.sample(Date.now(), msg.serverTime);
           engine.setClockOffset(clock.offset);
           renderQueue(msg.queue, msg.history);
-          renderMembers(msg.members);
-          renderState(msg.state);
-          engine.update(msg.state);
-          presence?.setMembers(msg.members.length);
-          presence?.setState(msg.state);
+          applyMembers(msg.members);
+          applyState(msg.state);
           joined = true;
           for (const m of pending.splice(0)) sendRaw(m);
           return;
         case 'state':
-          renderState(msg.state);
-          engine.update(msg.state);
-          presence?.setState(msg.state);
+          applyState(msg.state);
           return;
         case 'queue':
           renderQueue(msg.queue, msg.history);
           return;
         case 'members':
-          renderMembers(msg.members);
-          presence?.setMembers(msg.members.length);
+          applyMembers(msg.members);
           return;
         case 'error':
           devlog(`server error: ${msg.code}`);
-          showError(errorMessage(msg.code, msg.params ?? {}));
+          showError(serverErrorText(msg.code, msg.params));
           return;
         case 'pong':
           clock.sample(msg.clientTime, msg.serverTime);
@@ -194,24 +199,6 @@ function connect(roomId: string, name: string) {
 let presence: ReturnType<typeof createPresence> | null = null;
 /** Discord の SDK（Discord の外で開いたときは null） */
 let sdk: DiscordSDK | null = null;
-
-/** サーバーから届いたエラーを、選んでいる言語の文に組み立てる */
-function errorMessage(code: string, params: Record<string, string>) {
-  switch (code) {
-    case 'invalid_url':
-      return t('err_invalid_url');
-    case 'queue_full':
-      return t('err_queue_full');
-    case 'not_found':
-      return t('err_not_found', { id: params.id });
-    case 'unplayable':
-      return t('err_unplayable', { title: params.title, reason: unplayableReason(params.reason) });
-    case 'not_embeddable':
-      return t('err_not_embeddable', { title: params.title });
-    default:
-      return code;
-  }
-}
 
 /** Discord にログインしてもらい、表示名を取得する */
 async function authenticate(sdk: DiscordSDK): Promise<string> {
@@ -245,7 +232,7 @@ function watchLayout(sdk: DiscordSDK) {
           layout_mode === Common.LayoutModeTypeObject.GRID,
       );
     })
-    .catch((e) => devlog(`layout subscribe failed: ${e instanceof Error ? e.message : JSON.stringify(e)}`));
+    .catch((e) => devlog(`layout subscribe failed: ${describeError(e)}`));
 }
 
 async function main() {
@@ -263,7 +250,7 @@ async function main() {
     presence = createPresence(discord, () => Date.now() + clock.offset, isPresenceEnabled());
   } catch (e) {
     // 名前が取れなくても視聴はできるようにする
-    devlog(`authenticate failed: ${e instanceof Error ? e.message : JSON.stringify(e)}`);
+    devlog(`authenticate failed: ${describeError(e)}`);
   }
   watchLayout(discord);
   devlog(`ready as ${name} (instance ${discord.instanceId})`);
@@ -271,6 +258,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  devlog(`main failed: ${e instanceof Error ? e.message : JSON.stringify(e)}`);
+  devlog(`main failed: ${describeError(e)}`);
   showError(t('startFailed', { msg: e instanceof Error ? e.message : String(e) }));
 });
