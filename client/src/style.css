@@ -879,6 +879,12 @@ button.link:hover {
   .splitter {
     display: none;
   }
+  /* 設定画面は設定ボタンの下に開き、再生リストの上に重ねる（動画を隠さない） */
+  .settings {
+    top: calc(100% + 0.4286rem);
+    bottom: auto;
+    max-height: 60vh;
+  }
   .side {
     /* ドラッグで保存された大きさ（ui.ts が付ける flex-basis）より優先する */
     flex: 1 1 auto !important;
