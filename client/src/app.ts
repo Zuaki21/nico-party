@@ -234,12 +234,16 @@ async function authenticate(sdk: DiscordSDK): Promise<string> {
   return user.global_name ?? user.username;
 }
 
-/** PiP（チャットを開いて小さく表示されている状態）では動画だけを表示する */
+/** PiP（チャットを開いて小さく表示されている状態）やグリッド表示では動画だけを表示する */
 function watchLayout(sdk: DiscordSDK) {
   sdk
     .subscribe('ACTIVITY_LAYOUT_MODE_UPDATE', ({ layout_mode }) => {
       devlog(`layout mode ${layout_mode}`);
-      setCompact(layout_mode === Common.LayoutModeTypeObject.PIP);
+      // PiP と、参加者がタイル状に並ぶグリッド表示では、動画だけを枠いっぱいに出す
+      setCompact(
+        layout_mode === Common.LayoutModeTypeObject.PIP ||
+          layout_mode === Common.LayoutModeTypeObject.GRID,
+      );
     })
     .catch((e) => devlog(`layout subscribe failed: ${e instanceof Error ? e.message : JSON.stringify(e)}`));
 }
