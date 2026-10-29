@@ -3,7 +3,7 @@
  * （埋め込みプレイヤーの中継は nico.ts）
  */
 
-import { SEARCH_PAGE_SIZE, type SearchResult, type SearchSort } from '../../shared/protocol';
+import { SEARCH_MAX_OFFSET, SEARCH_PAGE_SIZE, type SearchResult, type SearchSort } from '../../shared/protocol';
 
 /** User-Agent が無いとニコニコの CDN に 403 で弾かれるので、サーバーから問い合わせるときに付ける */
 export const DEFAULT_UA =
@@ -110,7 +110,7 @@ export async function searchVideos(
   const url = new URL(req.url);
   const q = (url.searchParams.get('q') ?? '').trim().slice(0, 100);
   const sort: SearchSort = url.searchParams.get('sort') === 'new' ? 'new' : 'popular';
-  const offset = Math.max(0, Math.min(1000, Number(url.searchParams.get('offset')) || 0));
+  const offset = Math.max(0, Math.min(SEARCH_MAX_OFFSET, Number(url.searchParams.get('offset')) || 0));
   if (!q) return Response.json({ total: 0, items: [] } satisfies SearchResult);
 
   // 同じ検索は Cloudflare のキャッシュから返す（ニコニコへの問い合わせとリクエスト数を抑える）

@@ -42,7 +42,7 @@ export default {
 
 /** Discord SDK の authorize で得た code をアクセストークンに交換する */
 async function exchangeToken(request: Request, env: Env): Promise<Response> {
-  const { code } = await request.json<{ code?: string }>();
+  const { code } = await request.json<{ code?: string }>().catch(() => ({ code: undefined }));
   if (!code) return Response.json({ error: 'code is required' }, { status: 400 });
   const res = await fetch('https://discord.com/api/oauth2/token', {
     method: 'POST',

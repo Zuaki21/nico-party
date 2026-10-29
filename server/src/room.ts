@@ -28,9 +28,15 @@ export interface Env extends NicoEnv {
 const STATE_KEY = 'state';
 const QUEUE_KEY = 'queue';
 const HISTORY_KEY = 'history';
-const QUEUE_LIMIT = 100;
-/** 視聴済みとして残す本数 */
-const HISTORY_LIMIT = 50;
+/** 読み込めなかったと報告してきたメンバー（全員そろったら次へ進める） */
+const LOAD_FAILED_KEY = 'loadFailed';
+/**
+ * 再生リスト全体（視聴済み + 再生中 + これから再生）の上限。
+ * 超える分は動画を追加するときに古い視聴済みから消す（全曲リピートや並べ替えでは消さない）
+ */
+const LIST_LIMIT = 150;
+/** 全員が退出してから部屋を消すまでの猶予。通信が一瞬切れただけで再生リストが消えないように */
+const EMPTY_ROOM_TTL_MS = 60_000;
 /**
  * 動画を切り替えたとき、再生開始をこれだけ先の時刻にする。
  * 各自のプレイヤーの読み込みに数秒かかるので、すぐ開始にすると冒頭が飛ばされてしまう
@@ -74,6 +80,7 @@ export class Room extends DurableObject<Env> {
     } catch {
       return;
     }
+    if (!msg || typeof msg !== 'object') return;
     const a = ws.deserializeAttachment() as Attachment;
     if (msg.t === 'ping') {
       send(ws, { t: 'pong', clientTime: msg.clientTime, serverTime: Date.now() });
@@ -105,7 +112,8 @@ export class Room extends DurableObject<Env> {
         // 動画が切り替わった直後に届いた、前の動画への操作は捨てる
         if (!s.current || s.current.id !== msg.itemId) return;
         s.playing = !!msg.playing;
-        s.position = Math.max(0, Number(msg.position) || 0);
+        const position = Number(msg.position);
+        s.position = Number.isFinite(position) ? Math.max(0, position) : 0;
         await this.commit(s, a);
         return;
       }
@@ -113,7 +121,7 @@ export class Room extends DurableObject<Env> {
       case 'enqueue': {
         const videoId = parseVideoId(String(msg.url ?? ''));
         if (!videoId) return sendError(ws, 'invalid_url');
-        if ((await this.getQueue()).length >= QUEUE_LIMIT) return sendError(ws, 'queue_full');
+        if (!(await this.hasRoom())) return sendError(ws, 'queue_full');
         const [info, embedError] = await Promise.all([
           fetchVideoInfo(videoId),
           fetchEmbedError(videoId),
@@ -128,16 +136,23 @@ export class Room extends DurableObject<Env> {
           addedBy: a.name,
           ...meta,
         };
+        // タイトル取得の await 中に他の操作が入っている可能性があるので取り直す
+        if (!(await this.hasRoom())) return sendError(ws, 'queue_full');
         const s = await this.getState();
-        if (!s.current) {
-          // 何も再生していなければすぐ再生
-          await this.start(s, item, a);
-        } else {
-          // タイトル取得の await 中に他の操作が入っている可能性があるので取り直す
-          const latest = await this.getQueue();
-          latest.push(item);
-          await this.putLists({ queue: latest });
+        const queue = await this.getQueue();
+        queue.push(item);
+        // 上限を超える分は古い視聴済みから消す
+        let history = await this.getHistory();
+        const over = history.length + (s.current ? 1 : 0) + queue.length - LIST_LIMIT;
+        if (over > 0) history = history.slice(over);
+        if (s.current) {
+          await this.putLists({ queue, history });
+          return;
         }
+        // 何も再生していなければすぐ再生する（再生リストの最後まで行った後に再生待ちへ戻した動画があれば、そちらが先）
+        const next = takeNext(queue, s.shuffle);
+        await this.putLists({ queue, history });
+        await this.start(s, next, a);
         return;
       }
 
@@ -173,8 +188,8 @@ export class Room extends DurableObject<Env> {
         const history = await this.getHistory();
         const prev = history.pop();
         if (!prev) {
-          // 戻る先がなければ今の動画を最初から
-          await this.start(s, s.current, a);
+          // 戻る先がなければ今の動画を最初から（ID を変えて、前の再生の終了で届く next を無視できるようにする）
+          await this.start(s, { ...s.current, id: newItemId() }, a);
           return;
         }
         // 今の動画はキューの先頭に戻す
@@ -208,6 +223,22 @@ export class Room extends DurableObject<Env> {
         return;
       }
 
+      case 'loadFailed': {
+        // 一人の読み込みが遅いだけで全員の動画を飛ばさないよう、部屋にいる全員が読み込めなかったときだけ次へ進める
+        const s = await this.getState();
+        if (!s.current || s.current.id !== msg.itemId) return;
+        const prev = await this.ctx.storage.get<{ itemId: string; ids: string[] }>(LOAD_FAILED_KEY);
+        const ids = new Set(prev?.itemId === msg.itemId ? prev.ids : []);
+        ids.add(a.id);
+        if (!this.members().every((m) => ids.has(m.id))) {
+          await this.ctx.storage.put(LOAD_FAILED_KEY, { itemId: msg.itemId, ids: [...ids] });
+          return;
+        }
+        await this.ctx.storage.delete(LOAD_FAILED_KEY);
+        await this.start(s, await this.pickNext(s), a);
+        return;
+      }
+
       case 'mode': {
         const s = await this.getState();
         if (msg.repeat === 'off' || msg.repeat === 'all' || msg.repeat === 'one') s.repeat = msg.repeat;
@@ -234,11 +265,21 @@ export class Room extends DurableObject<Env> {
       // 既に閉じている
     }
     if (this.sockets(ws).length === 0) {
-      // 全員退出したら部屋を破棄
-      await this.ctx.storage.deleteAll();
+      // 全員退出したら、少し待ってから部屋を破棄する（すぐ再接続してきたら残す）
+      await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
       return;
     }
     this.broadcastMembers(ws);
+  }
+
+  async alarm(): Promise<void> {
+    if (this.sockets().length === 0) await this.ctx.storage.deleteAll();
+  }
+
+  /** 動画をもう1本追加できるか（視聴済みは追加するときに消せるので数えない） */
+  private async hasRoom() {
+    const s = await this.getState();
+    return (s.current ? 1 : 0) + (await this.getQueue()).length < LIST_LIMIT;
   }
 
   /** item の再生を先頭から始める（null なら停止）。開始時刻は START_DELAY_MS 先にする */
@@ -262,9 +303,7 @@ export class Room extends DurableObject<Env> {
       queue = history.map((q) => ({ ...q, id: newItemId() }));
       history = [];
     }
-    // シャッフル: これから再生する動画の中からランダムに選ぶ
-    const index = s.shuffle && queue.length > 1 ? Math.floor(Math.random() * queue.length) : 0;
-    const item = queue.splice(index, 1)[0] ?? null;
+    const item = takeNext(queue, s.shuffle);
     await this.putLists({ queue, history });
     return item;
   }
@@ -296,15 +335,14 @@ export class Room extends DurableObject<Env> {
     return (await this.ctx.storage.get<QueueItem[]>(HISTORY_KEY)) ?? [];
   }
 
-  /** 渡されたリストを保存し、キューと履歴の両方を全員に送る。視聴済みは新しいほうから HISTORY_LIMIT 本だけ残す */
+  /** 渡されたリストを保存し、キューと履歴の両方を全員に送る */
   private async putLists(lists: { queue?: QueueItem[]; history?: QueueItem[] }) {
-    const history = lists.history?.slice(-HISTORY_LIMIT);
     if (lists.queue) await this.ctx.storage.put(QUEUE_KEY, lists.queue);
-    if (history) await this.ctx.storage.put(HISTORY_KEY, history);
+    if (lists.history) await this.ctx.storage.put(HISTORY_KEY, lists.history);
     this.broadcast({
       t: 'queue',
       queue: lists.queue ?? (await this.getQueue()),
-      history: history ?? (await this.getHistory()),
+      history: lists.history ?? (await this.getHistory()),
     });
   }
 
@@ -339,6 +377,12 @@ export class Room extends DurableObject<Env> {
 
 function newItemId() {
   return crypto.randomUUID().slice(0, 8);
+}
+
+/** これから再生する動画から次の1本を取り出す。シャッフルならランダムに選ぶ */
+function takeNext(queue: QueueItem[], shuffle = false): QueueItem | null {
+  const index = shuffle && queue.length > 1 ? Math.floor(Math.random() * queue.length) : 0;
+  return queue.splice(index, 1)[0] ?? null;
 }
 
 function send(ws: WebSocket, msg: ServerMsg) {

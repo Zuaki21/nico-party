@@ -10,7 +10,7 @@ const DRIFT_THRESHOLD = 1.5;
 /** 動画の終端とみなす余裕（秒） */
 const END_MARGIN = 0.5;
 /**
- * これだけ待ってもプレイヤーの読み込みが終わらなければ、再生できない動画とみなして次へ進める。
+ * これだけ待ってもプレイヤーの読み込みが終わらなければ、読み込めなかったとサーバーに伝える（全員そろったら次へ進む）。
  * 再生できない動画は追加時にサーバーが弾くが、見つけられなかった種類のエラーへの保険
  */
 const LOAD_TIMEOUT_MS = 20000;
@@ -55,6 +55,8 @@ export class SyncEngine {
   constructor(
     private player: NicoPlayer,
     private send: (msg: ClientMsg) => void,
+    /** 自分のプレイヤーで動画を読み込めなかった */
+    private onLoadFailed: () => void,
   ) {
     const onLocal = () => {
       clearTimeout(this.localTimer);
@@ -89,6 +91,7 @@ export class SyncEngine {
       // 先読みの途中で動画が変わったら、ミュートを元に戻してから切り替える
       if (this.preloading) this.player.mute(this.mutedBefore);
       this.stopHold();
+      clearTimeout(this.startTimer);
       this.preloading = false;
       this.preloadedFor = null;
       const sameVideo = !!item && item.videoId === this.loadedVideoId && this.player.ready();
@@ -104,8 +107,8 @@ export class SyncEngine {
         this.player.load(item.videoId);
         this.loadTimer = window.setTimeout(() => {
           if (this.loadedItemId === item.id && !this.player.ready()) {
-            // 「次へ」と同じ扱いで飛ばす（1曲リピートでも同じ動画を繰り返さない）
-            this.send({ t: 'next', itemId: item.id });
+            this.onLoadFailed();
+            this.send({ t: 'loadFailed', itemId: item.id });
           }
         }, LOAD_TIMEOUT_MS);
       } else {

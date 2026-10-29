@@ -58,6 +58,8 @@ export type ClientMsg =
   | { t: 'prev'; itemId: string }
   /** 視聴済み・キューの中から id の動画を選んで、そこから再生する（並び順は変えない） */
   | { t: 'jump'; id: string }
+  /** itemId の動画を読み込めなかった。部屋の全員から届いたら次へ進む */
+  | { t: 'loadFailed'; itemId: string }
   | { t: 'ping'; clientTime: number };
 
 /**
@@ -182,3 +184,5 @@ export interface SearchItem {
 
 export type SearchSort = 'popular' | 'new';
 export const SEARCH_PAGE_SIZE = 20;
+/** 検索で指定できる開始位置の上限（これより先の結果は取得できない） */
+export const SEARCH_MAX_OFFSET = 1000;

@@ -90,7 +90,7 @@ let joined = false;
 /** 部屋に入る前（起動直後・再接続中）に行われたユーザー操作。入れたらまとめて送る */
 const pending: ClientMsg[] = [];
 const clock = new ClockSync();
-const engine = new SyncEngine(player, send);
+const engine = new SyncEngine(player, send, () => showError(t('loadFailed')));
 
 function sendRaw(msg: ClientMsg) {
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));

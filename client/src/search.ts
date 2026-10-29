@@ -1,4 +1,4 @@
-import { SEARCH_PAGE_SIZE, type SearchItem, type SearchSort } from '../../shared/protocol';
+import { SEARCH_MAX_OFFSET, SEARCH_PAGE_SIZE, type SearchItem, type SearchSort } from '../../shared/protocol';
 import { $, bodyEl, countsMeta, markSeg, noteEl, onSeg, thumbEl } from './dom';
 import { formatDate, getLang, t, unplayableReason } from './i18n';
 import type { UiHandlers } from './ui';
@@ -35,7 +35,8 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue'>) {
     else if (view === 'error') rows.push(noteEl(t('searchFailed')));
     else if (items.length === 0) {
       rows.push(noteEl(t('searchNone')));
-    } else if (items.length < total) {
+    } else if (items.length < Math.min(total, SEARCH_MAX_OFFSET + SEARCH_PAGE_SIZE)) {
+      // 検索 API はある程度より先の結果を返さないので、そこまでで「もっと見る」を出さない
       const li = document.createElement('li');
       const more = document.createElement('button');
       more.type = 'button';
