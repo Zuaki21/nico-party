@@ -11,6 +11,17 @@ import {
   type SearchSort,
 } from '../../shared/protocol';
 import { externalUrl } from './env';
+import {
+  applyI18n,
+  formatCount,
+  formatDate,
+  getLang,
+  onLangChange,
+  setLang,
+  t,
+  unplayableReason,
+  type Lang,
+} from './i18n';
 
 export interface UiHandlers {
   enqueue: (url: string) => void;
@@ -24,7 +35,17 @@ export interface UiHandlers {
   jump: (id: string) => void;
   /** リピート・シャッフルの切り替え（部屋全員に反映される） */
   mode: (m: { repeat?: RepeatMode; shuffle?: boolean }) => void;
+  /** 外部のページを開く（Discord 内では Discord の確認画面を通す） */
+  openLink: (url: string) => void;
+  /** Discord のアクティビティに視聴中の動画を表示するかの切り替え */
+  setPresence: (enabled: boolean) => void;
 }
+
+/** 設定画面の歯車 */
+const SETTINGS_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></g></svg>`;
+
+/** 設定画面から開くページ */
+const SITE_URL = 'https://nico-party.zuaki.dev';
 
 const PREV_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 5a1 1 0 0 1 1 1v4.9l9.5-5.8A1 1 0 0 1 18 6v12a1 1 0 0 1-1.5.9L7 13.1V18a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1Z"/></svg>`;
 const NEXT_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18 5a1 1 0 0 0-1 1v4.9L7.5 5.1A1 1 0 0 0 6 6v12a1 1 0 0 0 1.5.9l9.5-5.8V18a1 1 0 1 0 2 0V6a1 1 0 0 0-1-1Z"/></svg>`;
@@ -33,18 +54,8 @@ const LIST_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">
 
 const SHUFFLE_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h3.5c2 0 3.2 1 4.3 2.7l2.4 4.6c1.1 1.7 2.3 2.7 4.3 2.7H21M3 18h3.5c1.4 0 2.4-.5 3.2-1.3M14.3 7.3c.8-.8 1.8-1.3 3.2-1.3H21M18 3l3 3-3 3M18 15l3 3-3 3"/></g></svg>`;
 const REPEAT_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4"/></g></svg>`;
-const REPEAT_LABEL: Record<RepeatMode, string> = {
-  off: 'リピート: オフ',
-  all: 'リピート: 再生リスト全体',
-  one: 'リピート: 1曲',
-};
+const REPEAT_LABEL = { off: 'repeatOff', all: 'repeatAll', one: 'repeatOne' } as const;
 const NEXT_REPEAT: Record<RepeatMode, RepeatMode> = { off: 'all', all: 'one', one: 'off' };
-
-/** 再生できない理由（埋め込みページのエラーコード）の説明 */
-const UNPLAYABLE_REASON: Record<string, string> = {
-  sensitive_video: 'センシティブな動画のため再生できません',
-  externally_unwatchable: '権利者の設定でニコニコ動画以外での再生が禁止されているため再生できません',
-};
 
 /** キューの「削除」ボタン（ゴミ箱）。文字色で描く */
 const TRASH_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12a2 2 0 0 0 2 1.8h7a2 2 0 0 0 2-1.8l1-12M9 7V4.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V7"/></g></svg>`;
@@ -59,55 +70,93 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
   root.innerHTML = `
     <main class="main">
       <div class="player" id="player">
-        <div class="empty" id="empty">動画のURLを入れるか、キーワードで検索して再生リストに追加してください</div>
+        <div class="empty" id="empty" data-i18n="empty"></div>
       </div>
       <div class="now">
         <div class="now-title" id="now-title"></div>
         <div class="controls">
-          <button id="prev" class="secondary icon-button" title="前の動画に戻る" disabled>${PREV_ICON}</button>
-          <button id="skip" class="secondary icon-button" title="次の動画へ" disabled>${NEXT_ICON}</button>
+          <button id="prev" class="secondary icon-button" data-i18n-title="prev" disabled>${PREV_ICON}</button>
+          <button id="skip" class="secondary icon-button" data-i18n-title="next" disabled>${NEXT_ICON}</button>
         </div>
         <div class="controls">
-          <button id="toggle-theme" class="secondary icon-button"></button>
+          <button id="open-settings" class="secondary icon-button" data-i18n-title="settings">${SETTINGS_ICON}</button>
           <button id="toggle-side" class="secondary icon-button">${LIST_ICON}</button>
         </div>
       </div>
     </main>
-    <div class="splitter" id="splitter" title="ドラッグで大きさを変更"></div>
+    <div class="splitter" id="splitter" data-i18n-title="resize"></div>
     <aside class="side" id="side">
       <form class="bar" id="form">
-        <input type="text" id="url" placeholder="URL・sm番号 または キーワードで検索" autocomplete="off" />
-        <button type="submit" id="submit">追加</button>
+        <input type="text" id="url" data-i18n-placeholder="inputPlaceholder" autocomplete="off" />
+        <button type="submit" id="submit"></button>
         <div class="error" id="error" role="alert" hidden></div>
       </form>
       <div class="queue-head">
-        <span>再生リスト</span>
+        <span data-i18n="playlist"></span>
         <button id="shuffle" class="mode" aria-pressed="false"></button>
         <button id="repeat" class="mode" aria-pressed="false"></button>
         <span class="muted members" id="members"></span>
       </div>
-      <ol class="queue" id="queue"><li class="muted">接続中…</li></ol>
+      <ol class="queue" id="queue"><li class="muted" data-i18n="connecting"></li></ol>
       <div class="search" id="search" hidden>
         <div class="search-head">
-          <button type="button" class="icon" id="search-close" title="検索を閉じて再生リストに戻る">×</button>
+          <button type="button" class="icon" id="search-close" data-i18n-title="searchClose">×</button>
           <span class="search-title" id="search-title"></span>
-          <div class="seg" id="search-sort" title="並び順">
-            <button type="button" data-sort="popular">再生数</button>
-            <button type="button" data-sort="new">新着</button>
+          <div class="seg" id="search-sort" data-i18n-title="sortTitle">
+            <button type="button" data-sort="popular" data-i18n="sortPopular"></button>
+            <button type="button" data-sort="new" data-i18n="sortNew"></button>
           </div>
         </div>
         <ol class="queue" id="results"></ol>
       </div>
     </aside>
+    <div class="settings-backdrop" id="settings" hidden>
+      <div class="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <div class="settings-head">
+          <h2 id="settings-title" data-i18n="settingsTitle"></h2>
+          <button type="button" class="icon" id="settings-close" data-i18n-title="close">×</button>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label" data-i18n="theme"></span>
+          <div class="seg" id="theme-seg">
+            <button type="button" data-theme="auto" data-i18n="themeAuto"></button>
+            <button type="button" data-theme="light" data-i18n="themeLight"></button>
+            <button type="button" data-theme="dark" data-i18n="themeDark"></button>
+          </div>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label" data-i18n="language"></span>
+          <div class="seg" id="lang-seg">
+            <button type="button" data-lang="ja">日本語</button>
+            <button type="button" data-lang="en">English</button>
+          </div>
+        </div>
+        <label class="setting-row">
+          <span>
+            <span class="setting-label" data-i18n="presence"></span>
+            <span class="setting-desc" data-i18n="presenceDesc"></span>
+          </span>
+          <input type="checkbox" class="switch" id="presence-toggle" />
+        </label>
+        <p class="setting-note" data-i18n="settingsNote"></p>
+        <div class="settings-links">
+          <button type="button" class="link" data-url="${SITE_URL}/" data-i18n="about"></button>
+          <button type="button" class="link" data-url="${SITE_URL}/terms" data-i18n="terms"></button>
+          <button type="button" class="link" data-url="${SITE_URL}/privacy" data-i18n="privacy"></button>
+        </div>
+      </div>
+    </div>
   `;
+  applyI18n(root);
 
   const search = setupSearch(h);
   const input = $<HTMLInputElement>('url');
   // URL や sm 番号ならそのまま追加、それ以外は検索。ボタンの表示も入力に合わせて変える
   const updateSubmit = () => {
     const text = input.value.trim();
-    $('submit').textContent = !text || parseVideoId(text) ? '追加' : '検索';
+    $('submit').textContent = !text || parseVideoId(text) ? t('add') : t('search');
   };
+  updateSubmit();
   input.addEventListener('input', updateSubmit);
   $('form').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -148,7 +197,17 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
   });
   setupSidePanel(root);
   setupReorder(h.move);
-  setupTheme();
+  setupSettings(h);
+
+  // 言語が変わったら、固定の文言を書き換え、あとから描いた部分を描き直す
+  onLangChange(() => {
+    applyI18n(root);
+    updateSubmit();
+    if (lastState) renderState(lastState);
+    else renderList();
+    if (lastMembers) renderMembers(lastMembers);
+    search.rerender();
+  });
 
   return $('player');
 }
@@ -181,7 +240,8 @@ function setupSidePanel(root: HTMLElement) {
 
   const setHidden = (hidden: boolean) => {
     root.classList.toggle('side-hidden', hidden);
-    toggle.title = hidden ? '再生リストを表示' : '再生リストを隠す';
+    toggle.dataset.i18nTitle = hidden ? 'showList' : 'hideList';
+    toggle.title = t(hidden ? 'showList' : 'hideList');
     toggle.setAttribute('aria-pressed', String(!hidden));
     save('nico-party:side-hidden', hidden ? '1' : '');
   };
@@ -227,41 +287,85 @@ function setupSidePanel(root: HTMLElement) {
 }
 
 type Theme = 'light' | 'dark';
-
-// 絵文字は環境によってカラー表示になるので、文字色で描く SVG にする
-const SUN_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></g></svg>`;
-const MOON_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.5 14.6A8.5 8.5 0 0 1 9.4 3.5a8.5 8.5 0 1 0 11.1 11.1Z"/></svg>`;
+/** auto: Discord のテーマ（無ければ OS の設定）に合わせる */
+type ThemeChoice = 'auto' | Theme;
 const THEME_KEY = 'nico-party:theme';
+const PRESENCE_KEY = 'nico-party:presence';
 
-/**
- * ライト / ダークの切り替え。手動で選んだものを優先し、無ければ Discord のテーマ
- * （Activity の URL に theme=light などが付く）、それも無ければ OS の設定に合わせる
- */
-function setupTheme() {
-  const button = $('toggle-theme');
+/** Discord に視聴中の動画を表示するか（各自の設定。既定はオン） */
+export function isPresenceEnabled() {
+  return load(PRESENCE_KEY) !== 'off';
+}
+
+/** テーマを当てる。auto なら Discord のテーマ（Activity の URL の theme）、無ければ OS の設定に合わせる */
+function applyTheme(choice: ThemeChoice) {
   const discord = new URLSearchParams(location.search).get('theme');
-  const saved = load(THEME_KEY);
-  const initial: Theme =
-    saved === 'light' || saved === 'dark'
-      ? saved
+  const theme: Theme =
+    choice !== 'auto'
+      ? choice
       : discord === 'light' || discord === 'dark'
         ? discord
         : window.matchMedia('(prefers-color-scheme: light)').matches
           ? 'light'
           : 'dark';
+  document.documentElement.dataset.theme = theme;
+}
 
-  const apply = (theme: Theme) => {
-    document.documentElement.dataset.theme = theme;
-    // 押すと切り替わる先を表示する
-    button.innerHTML = theme === 'dark' ? SUN_ICON : MOON_ICON;
-    button.title = theme === 'dark' ? 'ライトモードにする' : 'ダークモードにする';
+/** 設定画面（テーマ・言語・Discord への表示・リンク）。設定は各自の画面だけに効き、次回も引き継ぐ */
+function setupSettings(h: UiHandlers) {
+  const dialog = $('settings');
+  const saved = load(THEME_KEY);
+  let theme: ThemeChoice = saved === 'light' || saved === 'dark' ? saved : 'auto';
+  applyTheme(theme);
+
+  const renderSettings = () => {
+    for (const b of $('theme-seg').querySelectorAll<HTMLButtonElement>('button')) {
+      b.classList.toggle('active', b.dataset.theme === theme);
+    }
+    for (const b of $('lang-seg').querySelectorAll<HTMLButtonElement>('button')) {
+      b.classList.toggle('active', b.dataset.lang === getLang());
+    }
+    $<HTMLInputElement>('presence-toggle').checked = isPresenceEnabled();
   };
 
-  apply(initial);
-  button.addEventListener('click', () => {
-    const next: Theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-    apply(next);
-    save(THEME_KEY, next);
+  const open = () => {
+    renderSettings();
+    dialog.hidden = false;
+  };
+  const close = () => (dialog.hidden = true);
+
+  $('open-settings').addEventListener('click', open);
+  $('settings-close').addEventListener('click', close);
+  // 画面の外側をクリック、または Esc で閉じる
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog) close();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !dialog.hidden) close();
+  });
+
+  $('theme-seg').addEventListener('click', (e) => {
+    const next = (e.target as HTMLElement).closest<HTMLElement>('[data-theme]')?.dataset.theme;
+    if (next !== 'auto' && next !== 'light' && next !== 'dark') return;
+    theme = next;
+    save(THEME_KEY, next === 'auto' ? '' : next);
+    applyTheme(next);
+    renderSettings();
+  });
+  $('lang-seg').addEventListener('click', (e) => {
+    const next = (e.target as HTMLElement).closest<HTMLElement>('[data-lang]')?.dataset.lang;
+    if (next !== 'ja' && next !== 'en') return;
+    setLang(next as Lang);
+    renderSettings();
+  });
+  $<HTMLInputElement>('presence-toggle').addEventListener('change', (e) => {
+    const enabled = (e.target as HTMLInputElement).checked;
+    save(PRESENCE_KEY, enabled ? '' : 'off');
+    h.setPresence(enabled);
+  });
+  dialog.querySelector('.settings-links')!.addEventListener('click', (e) => {
+    const url = (e.target as HTMLElement).closest<HTMLElement>('[data-url]')?.dataset.url;
+    if (url) h.openLink(url);
   });
 }
 
@@ -292,11 +396,15 @@ const lists = {
   shuffle: false,
 };
 let scrolledTo: string | null = null;
+/** 言語を切り替えたときに描き直すため、最後に受け取った状態とメンバー */
+let lastState: PlaybackState | null = null;
+let lastMembers: Member[] | null = null;
 
 export function renderState(s: PlaybackState) {
+  lastState = s;
   const cur = s.current;
   $('empty').hidden = !!cur;
-  $('now-title').textContent = cur ? `▶ ${cur.title}（${cur.addedBy}）` : '';
+  $('now-title').textContent = cur ? t('nowPlaying', { title: cur.title, name: cur.addedBy }) : '';
   lists.current = cur;
   lists.repeat = s.repeat ?? 'off';
   lists.shuffle = s.shuffle ?? false;
@@ -308,13 +416,13 @@ export function renderState(s: PlaybackState) {
 function renderMode() {
   const shuffle = $('shuffle');
   shuffle.innerHTML = SHUFFLE_ICON;
-  shuffle.title = lists.shuffle ? 'シャッフル: オン' : 'シャッフル: オフ';
+  shuffle.title = t(lists.shuffle ? 'shuffleOn' : 'shuffleOff');
   shuffle.setAttribute('aria-pressed', String(lists.shuffle));
   const repeat = $('repeat');
   repeat.innerHTML = REPEAT_ICON;
   // 1曲リピートはボタンの右上に「1」のバッジを付ける（style.css）
   repeat.dataset.repeat = lists.repeat;
-  repeat.title = REPEAT_LABEL[lists.repeat];
+  repeat.title = t(REPEAT_LABEL[lists.repeat]);
   repeat.setAttribute('aria-pressed', String(lists.repeat !== 'off'));
 }
 
@@ -342,7 +450,7 @@ function renderList() {
   if (ol.childElementCount === 0) {
     const li = document.createElement('li');
     li.className = 'muted';
-    li.textContent = '（空です）';
+    li.textContent = t('listEmpty');
     ol.append(li);
   }
   // 再生中の動画が変わったら、それが見える位置までスクロールする
@@ -364,13 +472,13 @@ function itemEl(q: QueueItem, kind: ItemKind) {
   const handle = document.createElement('span');
   handle.className = 'handle';
   handle.textContent = '⋮⋮';
-  handle.title = 'ドラッグで並べ替え';
+  handle.title = t('dragToReorder');
 
   const thumb = thumbEl(q.thumbnail, q.length);
   if (kind === 'current') {
     const badge = document.createElement('span');
     badge.className = 'badge';
-    badge.textContent = '▶ 再生中';
+    badge.textContent = t('playingBadge');
     thumb.append(badge);
   }
 
@@ -386,7 +494,7 @@ function itemEl(q: QueueItem, kind: ItemKind) {
     q.author,
     q.views !== undefined ? `▶ ${formatCount(q.views)}` : null,
     q.comments !== undefined ? `💬 ${formatCount(q.comments)}` : null,
-    `追加: ${q.addedBy}`,
+    t('addedBy', { name: q.addedBy }),
   ]
     .filter(Boolean)
     .join('  ·  ');
@@ -401,12 +509,12 @@ function itemEl(q: QueueItem, kind: ItemKind) {
     const play = document.createElement('button');
     play.className = 'icon play';
     play.dataset.play = q.id;
-    play.title = 'ここから再生';
+    play.title = t('playFromHere');
     play.innerHTML = PLAY_ICON;
     const del = document.createElement('button');
     del.className = 'icon remove';
     del.dataset.remove = q.id;
-    del.title = '再生リストから削除';
+    del.title = t('removeFromList');
     del.innerHTML = TRASH_ICON;
     actions.append(play, del);
     li.append(actions);
@@ -420,13 +528,6 @@ function formatTime(sec: number) {
   const m = Math.floor((t % 3600) / 60);
   const ss = String(t % 60).padStart(2, '0');
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
-}
-
-/** 12345 → 1.2万 のように短く表示する */
-function formatCount(n: number) {
-  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1).replace(/\.0$/, '')}億`;
-  if (n >= 10_000) return `${(n / 10_000).toFixed(1).replace(/\.0$/, '')}万`;
-  return n.toLocaleString('ja-JP');
 }
 
 let dragging = false;
@@ -553,23 +654,29 @@ function setupSearch(h: UiHandlers) {
     return li;
   };
 
+  /** 言語を切り替えたときに同じ状態で描き直す */
+  let lastRender: 'loading' | 'done' | 'error' = 'done';
+
   const render = (state: 'loading' | 'done' | 'error') => {
+    lastRender = state;
     $('search-title').textContent =
-      state === 'done' ? `「${query}」 ${total.toLocaleString('ja-JP')}件` : `「${query}」`;
+      state === 'done'
+        ? t('searchCount', { q: query, n: total.toLocaleString(getLang() === 'ja' ? 'ja-JP' : 'en-US') })
+        : t('searchQuery', { q: query });
     for (const b of $('search-sort').querySelectorAll<HTMLButtonElement>('button')) {
       b.classList.toggle('active', b.dataset.sort === sort);
     }
     const rows: HTMLElement[] = items.map(resultEl);
-    if (state === 'loading') rows.push(note('検索中…'));
-    else if (state === 'error') rows.push(note('検索に失敗しました。時間をおいて試してください'));
+    if (state === 'loading') rows.push(note(t('searching')));
+    else if (state === 'error') rows.push(note(t('searchFailed')));
     else if (items.length === 0) {
-      rows.push(note('見つかりませんでした（投稿されたばかりの動画は、URL を貼ると追加できます）'));
+      rows.push(note(t('searchNone')));
     } else if (items.length < total) {
       const li = document.createElement('li');
       const more = document.createElement('button');
       more.type = 'button';
       more.className = 'secondary more';
-      more.textContent = 'もっと見る';
+      more.textContent = t('loadMore');
       more.addEventListener('click', () => load(items.length));
       li.append(more);
       rows.push(li);
@@ -592,13 +699,13 @@ function setupSearch(h: UiHandlers) {
     add.className = 'add';
     const mark = (done: boolean) => {
       add.textContent = done ? '✓' : '＋';
-      add.title = done ? '追加しました' : '再生リストに追加';
+      add.title = t(done ? 'added' : 'addToList');
       add.disabled = done;
     };
     mark(added.has(r.videoId));
     if (r.unplayable) {
       // 再生できない動画は選べないようにする（サーバーでも追加を断る）
-      const reason = UNPLAYABLE_REASON[r.unplayable] ?? '埋め込みプレイヤーでは再生できない動画です';
+      const reason = unplayableReason(r.unplayable);
       li.classList.add('unplayable');
       li.title = reason;
       add.disabled = true;
@@ -606,7 +713,7 @@ function setupSearch(h: UiHandlers) {
       add.title = reason;
       const badge = document.createElement('span');
       badge.className = 'badge unplayable-badge';
-      badge.textContent = '再生不可';
+      badge.textContent = t('unplayableBadge');
       li.querySelector('.thumb')!.append(badge);
     }
     add.addEventListener('click', () => {
@@ -650,6 +757,9 @@ function setupSearch(h: UiHandlers) {
   });
 
   return {
+    rerender() {
+      if (!$('search').hidden) render(lastRender);
+    },
     open(q: string) {
       query = q;
       added.clear();
@@ -693,20 +803,15 @@ function bodyEl(titleText: string, videoId: string, meta: (string | null | undef
   return body;
 }
 
-/** 2024-05-01T12:00:00+09:00 → 2024/5/1 */
-function formatDate(iso: string) {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
-}
-
 /** 部屋に入れていない間の表示。waiting は接続後に送る操作の数 */
 export function renderConnecting(waiting = 0) {
-  $('members').textContent = waiting > 0 ? `接続中…（${waiting}件の操作を待機中）` : '接続中…';
+  $('members').textContent = waiting > 0 ? t('connectingPending', { n: waiting }) : t('connecting');
   $('members').title = '';
 }
 
 export function renderMembers(members: Member[]) {
-  $('members').textContent = `${members.length}人で視聴中`;
+  lastMembers = members;
+  $('members').textContent = t('watching', { n: members.length });
   $('members').title = members.map((m) => m.name).join(', ');
 }
 

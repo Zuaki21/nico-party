@@ -5,12 +5,14 @@ import { devlog, watchErrors } from './devlog';
 import { inDiscord, proxied } from './env';
 import { NicoPlayer } from './nicoPlayer';
 import { createPresence } from './presence';
+import { getLang, t, unplayableReason } from './i18n';
 import { SyncEngine } from './sync';
 import {
   mountUi,
   renderConnecting,
   renderMembers,
   renderQueue,
+  isPresenceEnabled,
   renderState,
   setCompact,
   showError,
@@ -32,6 +34,12 @@ const playerEl = mountUi(document.querySelector<HTMLElement>('#app')!, {
   move: (id, index) => request({ t: 'move', id, index }),
   jump: (id) => request({ t: 'jump', id }),
   mode: (m) => request({ t: 'mode', ...m }),
+  openLink: (url) => {
+    // Discord 内では iframe から外のページへ移れないので、Discord の「外部リンクを開く」を使う
+    if (sdk) sdk.commands.openExternalLink({ url }).catch(() => {});
+    else window.open(url, '_blank', 'noopener');
+  },
+  setPresence: (enabled) => presence?.setEnabled(enabled),
   search: async (q, sort, offset) => {
     const params = new URLSearchParams({ q, sort, offset: String(offset) });
     const res = await fetch(proxied(`/api/search?${params}`));
@@ -146,8 +154,8 @@ function connect(roomId: string, name: string) {
           presence?.setMembers(msg.members.length);
           return;
         case 'error':
-          devlog(`server error: ${msg.message}`);
-          showError(msg.message);
+          devlog(`server error: ${msg.code}`);
+          showError(errorMessage(msg.code, msg.params ?? {}));
           return;
         case 'pong':
           clock.sample(msg.clientTime, msg.serverTime);
@@ -172,6 +180,26 @@ function connect(roomId: string, name: string) {
 
 /** 見ている動画を Discord のアクティビティに表示する（ログインできたときだけ） */
 let presence: ReturnType<typeof createPresence> | null = null;
+/** Discord の SDK（Discord の外で開いたときは null） */
+let sdk: DiscordSDK | null = null;
+
+/** サーバーから届いたエラーを、選んでいる言語の文に組み立てる */
+function errorMessage(code: string, params: Record<string, string>) {
+  switch (code) {
+    case 'invalid_url':
+      return t('err_invalid_url');
+    case 'queue_full':
+      return t('err_queue_full');
+    case 'not_found':
+      return t('err_not_found', { id: params.id });
+    case 'unplayable':
+      return t('err_unplayable', { title: params.title, reason: unplayableReason(params.reason) });
+    case 'not_embeddable':
+      return t('err_not_embeddable', { title: params.title });
+    default:
+      return code;
+  }
+}
 
 /** Discord にログインしてもらい、表示名を取得する */
 async function authenticate(sdk: DiscordSDK): Promise<string> {
@@ -210,22 +238,23 @@ async function main() {
     connect('local-dev', `ブラウザ${Math.floor(Math.random() * 100)}`);
     return;
   }
-  const sdk = new DiscordSDK(import.meta.env.VITE_DISCORD_CLIENT_ID);
-  await sdk.ready();
-  let name = 'ゲスト';
+  const discord = new DiscordSDK(import.meta.env.VITE_DISCORD_CLIENT_ID);
+  sdk = discord;
+  await discord.ready();
+  let name = getLang() === 'ja' ? 'ゲスト' : 'Guest';
   try {
-    name = await authenticate(sdk);
-    presence = createPresence(sdk, () => Date.now() + clock.offset);
+    name = await authenticate(discord);
+    presence = createPresence(discord, () => Date.now() + clock.offset, isPresenceEnabled());
   } catch (e) {
     // 名前が取れなくても視聴はできるようにする
     devlog(`authenticate failed: ${e instanceof Error ? e.message : JSON.stringify(e)}`);
   }
-  watchLayout(sdk);
-  devlog(`ready as ${name} (instance ${sdk.instanceId})`);
-  connect(sdk.instanceId, name);
+  watchLayout(discord);
+  devlog(`ready as ${name} (instance ${discord.instanceId})`);
+  connect(discord.instanceId, name);
 }
 
 main().catch((e) => {
   devlog(`main failed: ${e instanceof Error ? e.message : JSON.stringify(e)}`);
-  showError(`起動に失敗しました: ${e instanceof Error ? e.message : e}`);
+  showError(t('startFailed', { msg: e instanceof Error ? e.message : String(e) }));
 });

@@ -111,12 +111,12 @@ export class Room extends DurableObject<Env> {
         if (!a.joined) return;
         const videoId = parseVideoId(String(msg.url ?? ''));
         if (!videoId) {
-          send(ws, { t: 'error', message: '動画のURLまたはIDを入力してください（例: sm9）' });
+          send(ws, { t: 'error', code: 'invalid_url' });
           return;
         }
         const queue = await this.getQueue();
         if (queue.length >= QUEUE_LIMIT) {
-          send(ws, { t: 'error', message: '再生リストがいっぱいです' });
+          send(ws, { t: 'error', code: 'queue_full' });
           return;
         }
         const [info, embedError] = await Promise.all([
@@ -124,15 +124,15 @@ export class Room extends DurableObject<Env> {
           fetchEmbedError(videoId),
         ]);
         if (!info) {
-          send(ws, { t: 'error', message: `${videoId} が見つかりません（削除された動画かもしれません）` });
+          send(ws, { t: 'error', code: 'not_found', params: { id: videoId } });
           return;
         }
         if (embedError) {
-          send(ws, { t: 'error', message: unplayableMessage(info.title, embedError) });
+          send(ws, { t: 'error', code: 'unplayable', params: { title: info.title, reason: embedError } });
           return;
         }
         if (!info.embeddable) {
-          send(ws, { t: 'error', message: `${info.title} は埋め込みが禁止されているため再生できません` });
+          send(ws, { t: 'error', code: 'not_embeddable', params: { title: info.title } });
           return;
         }
         const { embeddable: _embeddable, ...meta } = info;
@@ -350,18 +350,6 @@ export class Room extends DurableObject<Env> {
 
   private broadcastMembers(exclude?: WebSocket) {
     this.broadcast({ t: 'members', members: this.members(exclude) }, exclude);
-  }
-}
-
-/** 埋め込みプレイヤーで再生できない動画を追加しようとしたときのエラーメッセージ */
-function unplayableMessage(title: string, code: string) {
-  switch (code) {
-    case 'sensitive_video':
-      return `「${title}」はセンシティブな動画のため再生できません`;
-    case 'externally_unwatchable':
-      return `「${title}」は権利者の設定でニコニコ動画以外での再生が禁止されているため再生できません`;
-    default:
-      return `「${title}」は再生できない動画です`;
   }
 }
 

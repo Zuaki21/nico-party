@@ -60,6 +60,12 @@ export type ClientMsg =
   | { t: 'jump'; id: string }
   | { t: 'ping'; clientTime: number };
 
+/**
+ * invalid_url: 動画 ID が読み取れない / queue_full: 再生リストが上限 / not_found: 動画が無い (id) /
+ * unplayable: 埋め込みで再生できない (title, reason=埋め込みページのエラーコード) / not_embeddable: 埋め込み禁止 (title)
+ */
+export type ErrorCode = 'invalid_url' | 'queue_full' | 'not_found' | 'unplayable' | 'not_embeddable';
+
 export type ServerMsg =
   | {
       t: 'welcome';
@@ -74,7 +80,8 @@ export type ServerMsg =
   /** queue: これから再生する動画 / history: 再生し終えた動画（古い順） */
   | { t: 'queue'; queue: QueueItem[]; history: QueueItem[] }
   | { t: 'members'; members: Member[] }
-  | { t: 'error'; message: string }
+  /** 文言は各自の画面で、選んでいる言語で組み立てる（client/src/i18n.ts の err_*） */
+  | { t: 'error'; code: ErrorCode; params?: Record<string, string> }
   | { t: 'pong'; clientTime: number; serverTime: number };
 
 /**
