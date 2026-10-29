@@ -886,3 +886,28 @@ button.link:hover {
     aspect-ratio: auto !important;
   }
 }
+
+/*
+ * PiP の枠が 16:9 より縦長（スマホの正方形の PiP など）のときは、上下に黒帯が出ないよう
+ * 動画の高さを枠に合わせ、はみ出た左右を切り落とす（プレイヤーごと横に広げて中央に置く）
+ */
+#app.compact .player {
+  container-type: size;
+}
+
+@media (max-height: 300px) {
+  .player {
+    container-type: size;
+  }
+}
+
+@container (max-aspect-ratio: 16 / 9) {
+  .player iframe {
+    left: 50%;
+    right: auto;
+    width: auto;
+    height: 100%;
+    aspect-ratio: 16 / 9;
+    transform: translateX(-50%);
+  }
+}
