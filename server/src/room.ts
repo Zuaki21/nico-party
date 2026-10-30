@@ -25,6 +25,8 @@ export interface Env extends NicoEnv {
   DISCORD_CLIENT_SECRET: string;
 }
 
+/** 動画の開始からこの時間は、自動送り（動画の終了）を受け付けない */
+const AUTO_NEXT_GUARD_MS = 3000;
 const STATE_KEY = 'state';
 const QUEUE_KEY = 'queue';
 const HISTORY_KEY = 'history';
@@ -216,6 +218,10 @@ export class Room extends DurableObject<Env> {
         const s = await this.getState();
         // 複数人から同時に届いても1回だけ進める
         if ((s.current?.id ?? null) !== msg.itemId) return;
+        // 動画が切り替わった直後の自動送りは、前の動画の終了通知が遅れて届いたものなので捨てる
+        // （全員の終了通知が少しずつずれるため、次の動画の ID で届いて一気に飛んでしまう）。
+        // 本当に短い動画は、クライアント側の「終わっているのに進まない」確認が進める
+        if (msg.auto && Date.now() - s.updatedAt < AUTO_NEXT_GUARD_MS) return;
         // 1曲リピート: 最後まで再生されたときは同じ動画をもう一度（ID を変えて、重複した next を無視できるようにする）
         if (msg.auto && s.repeat === 'one' && s.current) {
           await this.start(s, { ...s.current, id: newItemId() }, a);

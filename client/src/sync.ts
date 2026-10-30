@@ -3,6 +3,12 @@ import type { NicoPlayer } from './nicoPlayer';
 
 /** 自分が操作した直後に発火するイベントを「ユーザー操作」と誤認しない時間 */
 const SUPPRESS_MS = 800;
+/**
+ * 自分のプレイヤーを途中の位置へシークさせた直後は、読み込みが終わって位置の通知が追いつくまで時間がかかる。
+ * その間に出る再生・シーク完了のイベントや 0 秒付近の位置通知を、ユーザー操作として全員に送ってしまわないための時間
+ * （途中参加したときに、全員の動画が最初に戻されるのを防ぐ）
+ */
+const SEEK_SUPPRESS_MS = 4000;
 /** 誰かの操作を受けたとき、これ以上ずれていたらシーク */
 const APPLY_THRESHOLD = 1.0;
 /** 定期チェックでのシーク閾値（シーク連発でカクつかないよう大きめ） */
@@ -145,8 +151,8 @@ export class SyncEngine {
     return s.position;
   }
 
-  private suppress() {
-    this.suppressUntil = Date.now() + SUPPRESS_MS;
+  private suppress(ms = SUPPRESS_MS) {
+    this.suppressUntil = Math.max(this.suppressUntil, Date.now() + ms);
   }
 
   /** 部屋の状態に自分のプレイヤーを合わせる */
@@ -178,7 +184,7 @@ export class SyncEngine {
     }
 
     if (Math.abs(p.getTime() - target) > threshold) {
-      this.suppress();
+      this.suppress(target > 1 ? SEEK_SUPPRESS_MS : SUPPRESS_MS);
       p.seek(target);
     }
     if (s.playing && p.isPaused()) {
@@ -285,6 +291,8 @@ export class SyncEngine {
 
   /** 動画が最後まで再生されたので次へ進める（1曲リピートならサーバーが同じ動画を繰り返す） */
   private requestNext(auto: boolean) {
+    // 動画を読み込み直している最中に、前の動画の終了通知が遅れて届いても、次の動画の終了と取り違えない
+    if (auto && !this.player.ready()) return;
     if (this.state?.current && this.state.current.id === this.loadedItemId) {
       this.send({ t: 'next', itemId: this.loadedItemId, auto });
     }
