@@ -32,6 +32,8 @@ export interface PlaybackState {
   /** position を記録したサーバー時刻 (ms)。動画の切り替え直後は少し先の時刻（その時刻に再生開始） */
   updatedAt: number;
   version: number;
+  /** 今の動画の再生を始めた（start した）サーバー時刻 (ms)。シークや一時停止では変わらない */
+  startedAt?: number;
   /** 最後に操作したメンバー */
   by: string | null;
   byName: string | null;

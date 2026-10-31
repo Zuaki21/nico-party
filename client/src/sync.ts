@@ -33,6 +33,8 @@ const HOLD_INTERVAL_MS = 300;
 const PRELOAD_PLAY_MS = 400;
 /** 全員の動画が終わっているはずなのに次へ進んでいないとき、自分から進めるまでの猶予（秒） */
 const STUCK_MARGIN = 3;
+/** 自動送りの要求を送り直す間隔 */
+const NEXT_RESEND_MS = 4000;
 /** ローカル操作をまとめる時間（シークバーのドラッグ等） */
 const LOCAL_DEBOUNCE_MS = 150;
 
@@ -72,6 +74,8 @@ export class SyncEngine {
   private localHoldUntil = 0;
   /** 読み込み完了の直後で、最初の同期をしている */
   private justLoaded = false;
+  /** この時刻までは、自動送りの要求を送り直さない */
+  private nextSentUntil = 0;
   private holdTimeout: number | undefined;
   /** プレイヤーをクリック・キー操作した直後（この時刻まで）はユーザー操作とみなす */
   private interactUntil = 0;
@@ -132,6 +136,11 @@ export class SyncEngine {
       if (this.preloading) this.player.mute(this.mutedBefore);
       this.stopHold();
       clearTimeout(this.startTimer);
+      // 前の動画への操作の保護や送信待ちは、新しい動画に持ち越さない（最初の同期が遅れるため）
+      clearTimeout(this.localTimer);
+      clearTimeout(this.holdTimeout);
+      this.localHoldUntil = 0;
+      this.nextSentUntil = 0;
       this.preloading = false;
       this.preloadedFor = null;
       this.reportedFailFor = null;
@@ -211,7 +220,7 @@ export class SyncEngine {
     if (Date.now() < this.localHoldUntil) {
       // 保持が終わったら、保留した他の人の操作を反映する
       clearTimeout(this.holdTimeout);
-      this.holdTimeout = window.setTimeout(() => this.apply(APPLY_THRESHOLD), this.localHoldUntil - Date.now() + 50);
+      this.holdTimeout = window.setTimeout(() => this.apply(threshold), this.localHoldUntil - Date.now() + 50);
       return;
     }
     if (!s?.current || s.current.id !== this.loadedItemId || !p.ready()) return;
@@ -354,9 +363,13 @@ export class SyncEngine {
   private requestNext(auto: boolean) {
     // 動画を読み込み直している最中に、前の動画の終了通知が遅れて届いても、次の動画の終了と取り違えない
     if (auto && !this.player.ready()) return;
-    if (this.state?.current && this.state.current.id === this.loadedItemId) {
-      this.send({ t: 'next', itemId: this.loadedItemId, auto });
+    if (!this.state?.current || this.state.current.id !== this.loadedItemId) return;
+    // 終わっているのに進まない確認が毎秒呼ばれても、数秒に1回しか送らない
+    if (auto) {
+      if (Date.now() < this.nextSentUntil) return;
+      this.nextSentUntil = Date.now() + NEXT_RESEND_MS;
     }
+    this.send({ t: 'next', itemId: this.loadedItemId, auto });
   }
 
   private onTick() {

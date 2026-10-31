@@ -155,7 +155,7 @@ function connect(roomId: string, name: string) {
       const msg = JSON.parse(e.data) as ServerMsg;
       switch (msg.t) {
         case 'welcome':
-          clock.sample(Date.now(), msg.serverTime);
+          clock.provisional(msg.serverTime);
           engine.setClockOffset(clock.offset);
           renderQueue(msg.queue, msg.history);
           applyMembers(msg.members);
@@ -205,14 +205,17 @@ let sdk: DiscordSDK | null = null;
 
 /** Discord にログインしてもらい、表示名を取得する */
 async function authenticate(sdk: DiscordSDK): Promise<string> {
-  const { code } = await sdk.commands.authorize({
-    client_id: import.meta.env.VITE_DISCORD_CLIENT_ID,
-    response_type: 'code',
-    state: '',
-    prompt: 'none',
-    // rpc.activities.write: 見ている動画を Discord のアクティビティ（〇〇を視聴中）に表示するため
-    scope: ['identify', 'rpc.activities.write'],
-  });
+  const authorize = (prompt?: 'none') =>
+    sdk.commands.authorize({
+      client_id: import.meta.env.VITE_DISCORD_CLIENT_ID,
+      response_type: 'code',
+      state: '',
+      ...(prompt ? { prompt } : {}),
+      // rpc.activities.write: 見ている動画を Discord のアクティビティ（〇〇を視聴中）に表示するため
+      scope: ['identify', 'rpc.activities.write'],
+    });
+  // 許可済みなら確認画面なしで通る。未許可・権限が増えた人は失敗するので、確認画面を出して取り直す
+  const { code } = await authorize('none').catch(() => authorize());
   const res = await fetch(proxied('/api/token'), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

@@ -68,6 +68,11 @@ export function createPresence(sdk: DiscordSDK, serverNow: () => number, initial
     if (key === lastKey && Math.abs(start - lastStart) < RESEND_DRIFT_MS) return;
     try {
       await sdk.commands.setActivity({ activity });
+      // 送信中にオフにされた。遅れて完了した送信で、消したはずの表示が戻ってしまうので、もう一度消す
+      if (!enabled) {
+        sdk.commands.setActivity({ activity: {} }).catch(() => {});
+        return;
+      }
       lastKey = key;
       lastStart = start;
     } catch (e) {

@@ -16,6 +16,14 @@ export class ClockSync {
     this.offset = this.samples.reduce((a, b) => (b.rtt < a.rtt ? b : a)).offset;
   }
 
+  /**
+   * 往復時間を測れないサンプル（welcome の serverTime など）。ping/pong の結果が出るまでの仮の値にする。
+   * 片道遅延を引けないので、samples には入れない（入れると rtt 0 として常に採用され、本物のサンプルが負ける）
+   */
+  provisional(serverTime: number, now = Date.now()) {
+    if (this.samples.length === 0) this.offset = serverTime - now;
+  }
+
   reset() {
     this.samples = [];
     this.offset = 0;

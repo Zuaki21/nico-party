@@ -93,6 +93,8 @@ export class Room extends DurableObject<Env> {
 
     switch (msg.t) {
       case 'join': {
+        // 入室済みのソケットから届いた join で、ID や名前が途中で変わらないようにする
+        if (a.joined) return;
         a.name = String(msg.name ?? '').trim().slice(0, 32) || 'guest';
         // 再接続しても同じメンバーとして扱えるよう、クライアントが決めた ID を使う
         if (typeof msg.clientId === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(msg.clientId)) a.id = msg.clientId;
@@ -221,7 +223,7 @@ export class Room extends DurableObject<Env> {
         // 動画が切り替わった直後の自動送りは、前の動画の終了通知が遅れて届いたものなので捨てる
         // （全員の終了通知が少しずつずれるため、次の動画の ID で届いて一気に飛んでしまう）。
         // 本当に短い動画は、クライアント側の「終わっているのに進まない」確認が進める
-        if (msg.auto && Date.now() - s.updatedAt < AUTO_NEXT_GUARD_MS) return;
+        if (msg.auto && Date.now() - (s.startedAt ?? 0) < AUTO_NEXT_GUARD_MS) return;
         // 1曲リピート: 最後まで再生されたときは同じ動画をもう一度（ID を変えて、重複した next を無視できるようにする）
         if (msg.auto && s.repeat === 'one' && s.current) {
           await this.start(s, { ...s.current, id: newItemId() }, a);
@@ -313,6 +315,7 @@ export class Room extends DurableObject<Env> {
     s.current = item;
     s.playing = item !== null;
     s.position = 0;
+    s.startedAt = Date.now();
     await this.commit(s, by, item ? START_DELAY_MS : 0);
   }
 
