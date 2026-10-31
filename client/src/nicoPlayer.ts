@@ -99,6 +99,7 @@ export class NicoPlayer {
       devlog(`link click: ${href} -> ${url ?? '(ignored)'}`);
       if (url) this.linkHandler?.(url);
     };
+    allowSelectingDescription(doc);
     doc.addEventListener('click', onClick, true);
     doc.addEventListener('auxclick', onClick, true);
     devlog('tag hook: attached');
@@ -254,4 +255,33 @@ function realUrl(href: string, base: string): string | null {
   // 開くのは http(s) だけ（javascript: などは開かない）。Discord が開く前に確認の画面を出す
   if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
   return u.href;
+}
+
+/**
+ * 動画の詳細（説明文）だけ、文字を選択できるようにする。
+ * プレイヤーは説明文の要素に user-select: auto を付けているが、外側の要素が none なので、auto が none として働いて選べない。
+ * 説明文のクラス名はビルドごとに変わる文字列なので、スタイルシートから user-select: auto を持つ規則を探して、その要素と中身を text にする。
+ * 説明文以外（操作バー・再生時間など）はプレイヤーの設定のまま
+ */
+function allowSelectingDescription(doc: Document) {
+  const selectors: string[] = [];
+  for (const sheet of Array.from(doc.styleSheets)) {
+    let rules: CSSRuleList;
+    try {
+      rules = sheet.cssRules;
+    } catch {
+      continue;
+    }
+    for (const rule of Array.from(rules)) {
+      const r = rule as CSSStyleRule;
+      if (r.selectorText && r.style?.getPropertyValue('user-select') === 'auto') selectors.push(r.selectorText);
+    }
+  }
+  devlog(`selectable description rules: ${selectors.join(', ') || '(none)'}`);
+  if (selectors.length === 0) return;
+  const style = doc.createElement('style');
+  style.textContent = selectors
+    .flatMap((sel) => [sel, `${sel} *`])
+    .join(', ') + ' { -webkit-user-select: text !important; -moz-user-select: text !important; user-select: text !important; }';
+  (doc.head ?? doc.documentElement).append(style);
 }
