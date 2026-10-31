@@ -13,6 +13,8 @@ const SEEK_SUPPRESS_MS = 4000;
 const APPLY_THRESHOLD = 1.0;
 /** 定期チェックでのシーク閾値（シーク連発でカクつかないよう大きめ） */
 const DRIFT_THRESHOLD = 1.5;
+/** プレイヤーをクリックした（フォーカスが移った）あと、ユーザー操作とみなす時間 */
+const INTERACT_MS = 5000;
 /** 動画の終端とみなす余裕（秒） */
 const END_MARGIN = 0.5;
 /**
@@ -59,6 +61,10 @@ export class SyncEngine {
   /** 読み込めなかったとサーバーに伝えたキュー項目（再接続したら送り直し、遅れて読み込めたら取り消す） */
   private reportedFailFor: string | null = null;
   private ticks = 0;
+  /** マウス・タッチがプレイヤーの上にある */
+  private pointerInside = false;
+  /** プレイヤーをクリック・キー操作した直後（この時刻まで）はユーザー操作とみなす */
+  private interactUntil = 0;
 
   constructor(
     private player: NicoPlayer,
@@ -66,6 +72,15 @@ export class SyncEngine {
     /** 自分のプレイヤーで動画を読み込めなかった */
     private onLoadFailed: () => void,
   ) {
+    // プレイヤーは別オリジンの iframe で、中の操作は見えない。
+    // ポインターが上にある・クリックでフォーカスが移った、のどちらかのときだけ、変化をユーザー操作とみなす
+    // （同期のための自分の操作や読み込みの副作用を、誤って全員に送らないため）
+    const iframe = player.iframe;
+    iframe.addEventListener('pointerenter', () => (this.pointerInside = true));
+    iframe.addEventListener('pointerleave', () => (this.pointerInside = false));
+    window.addEventListener('blur', () => {
+      if (document.activeElement === iframe) this.interactUntil = Date.now() + INTERACT_MS;
+    });
     const onLocal = () => {
       clearTimeout(this.localTimer);
       this.localTimer = window.setTimeout(() => this.onLocalChange(), LOCAL_DEBOUNCE_MS);
@@ -275,6 +290,8 @@ export class SyncEngine {
     if (!s?.current || s.current.id !== this.loadedItemId) return;
     // 先読みのための再生・停止はユーザーの操作ではない
     if (this.preloading) return;
+    // プレイヤーを触っていないのに起きた変化は、同期や読み込みの副作用
+    if (!this.pointerInside && Date.now() >= this.interactUntil) return;
     if (Date.now() < this.suppressUntil || !p.ready()) return;
     // 再生終了による停止は ended で処理する
     if (p.isEnded()) return;
