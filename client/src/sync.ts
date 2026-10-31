@@ -4,7 +4,7 @@ import type { NicoPlayer } from './nicoPlayer';
 /** 自分が操作した直後に発火するイベントを「ユーザー操作」と誤認しない時間 */
 const SUPPRESS_MS = 800;
 /**
- * 自分のプレイヤーを途中の位置へシークさせた直後は、読み込みが終わって位置の通知が追いつくまで時間がかかる。
+ * 読み込み直後に、自分のプレイヤーを途中の位置へシークさせた直後は、読み込みが終わって位置の通知が追いつくまで時間がかかる。
  * その間に出る再生・シーク完了のイベントや 0 秒付近の位置通知を、ユーザー操作として全員に送ってしまわないための時間
  * （途中参加したときに、全員の動画が最初に戻されるのを防ぐ）
  */
@@ -70,6 +70,9 @@ export class SyncEngine {
   private pointerInside = false;
   /** この時刻までは、ユーザーの操作を優先して部屋の状態を反映しない */
   private localHoldUntil = 0;
+  /** 読み込み完了の直後で、最初の同期をしている */
+  private justLoaded = false;
+  private holdTimeout: number | undefined;
   /** プレイヤーをクリック・キー操作した直後（この時刻まで）はユーザー操作とみなす */
   private interactUntil = 0;
 
@@ -108,7 +111,10 @@ export class SyncEngine {
       clearTimeout(this.loadTimer);
       // 読み込めなかったと伝えた後で読み込めたら取り消す
       if (this.reportedFailFor === this.loadedItemId) this.resendLoadReport();
+      // 読み込み直後の途中シークだけ、長めに無視する（それ以外では、ユーザーの次の操作を長く受け付けなくなってしまう）
+      this.justLoaded = true;
       this.apply(APPLY_THRESHOLD);
+      this.justLoaded = false;
     });
     player.on('ended', () => this.requestNext(true));
     window.setInterval(() => this.onTick(), 1000);
@@ -190,7 +196,12 @@ export class SyncEngine {
     const s = this.state;
     const p = this.player;
     // ユーザーが操作した直後。その操作が部屋に反映されるまで巻き戻さない（this.state は更新済みなので、後の定期補正で合う）
-    if (Date.now() < this.localHoldUntil) return;
+    if (Date.now() < this.localHoldUntil) {
+      // 保持が終わったら、保留した他の人の操作を反映する
+      clearTimeout(this.holdTimeout);
+      this.holdTimeout = window.setTimeout(() => this.apply(APPLY_THRESHOLD), this.localHoldUntil - Date.now() + 50);
+      return;
+    }
     if (!s?.current || s.current.id !== this.loadedItemId || !p.ready()) return;
 
     const target = this.expected(s);
@@ -216,7 +227,7 @@ export class SyncEngine {
     }
 
     if (Math.abs(p.getTime() - target) > threshold) {
-      this.suppress(target > 1 ? SEEK_SUPPRESS_MS : SUPPRESS_MS);
+      this.suppress(this.justLoaded && target > 1 ? SEEK_SUPPRESS_MS : SUPPRESS_MS);
       p.seek(target);
     }
     if (s.playing && p.isPaused()) {
