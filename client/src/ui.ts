@@ -49,6 +49,12 @@ const touchQuery = window.matchMedia('(pointer: coarse)');
 let current: QueueItem | null = null;
 let lastMembers: Member[] | null = null;
 
+/** 指定した言葉で検索する（プレイヤー内のタグのクリックから呼ばれる） */
+export function searchFor(q: string) {
+  searchByTag?.(q);
+}
+let searchByTag: ((q: string) => void) | null = null;
+
 /** 画面の骨組みを作り、プレイヤーを入れる要素を返す */
 export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
   root.innerHTML = `
@@ -171,7 +177,14 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
     if (touchQuery.matches) input.blur();
   });
   setupPlaylist(h);
-  setupSidePanel(root);
+  const sidePanel = setupSidePanel(root);
+  // プレイヤー内のタグを押したときは、そのタグで検索する（欄が隠れていれば出す）
+  searchByTag = (tag) => {
+    sidePanel.show();
+    input.value = tag;
+    updateSubmit();
+    search.open(tag);
+  };
 
   // 言語が変わったら、固定の文言を書き換え、あとから描いた部分を描き直す
   onLangChange(() => {

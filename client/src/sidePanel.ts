@@ -17,7 +17,7 @@ const MIN_MAIN = 200;
 const HIDDEN_KEY = 'nico-party:side-hidden';
 
 /** 再生リスト欄のドラッグでのサイズ変更と表示・非表示 */
-export function setupSidePanel(root: HTMLElement) {
+export function setupSidePanel(root: HTMLElement): { show: () => void } {
   const side = $('side');
   const splitter = $('splitter');
   const toggle = $('toggle-side');
@@ -76,4 +76,6 @@ export function setupSidePanel(root: HTMLElement) {
     side.style.flexBasis = '';
     save(sizeKey(), '');
   });
+
+  return { show: () => setHidden(false) };
 }

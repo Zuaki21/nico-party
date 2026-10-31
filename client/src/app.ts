@@ -17,7 +17,13 @@ import { createPresence } from './presence';
 import { isPresenceEnabled } from './settings';
 import { setupViewport } from './viewport';
 import { SyncEngine } from './sync';
-import { mountUi, renderConnecting, renderMembers, renderState, setCompact, showError } from './ui';
+import { mountUi, renderConnecting, renderMembers, renderState, searchFor, setCompact, showError } from './ui';
+
+/** Discord 内では iframe から外のページへ移れないので、Discord の「外部リンクを開く」を使う */
+function openExternal(url: string) {
+  if (sdk) sdk.commands.openExternalLink({ url }).catch(() => {});
+  else window.open(url, '_blank', 'noopener');
+}
 
 /** サーバーが発行した、ニコニコの中継と検索を使うための通行証（Discord にログインできたときだけ） */
 let nicoPass: string | undefined;
@@ -30,11 +36,7 @@ const playerEl = mountUi(document.querySelector<HTMLElement>('#app')!, {
   move: (id, index) => request({ t: 'move', id, index }),
   jump: (id) => request({ t: 'jump', id }),
   mode: (m) => request({ t: 'mode', ...m }),
-  openLink: (url) => {
-    // Discord 内では iframe から外のページへ移れないので、Discord の「外部リンクを開く」を使う
-    if (sdk) sdk.commands.openExternalLink({ url }).catch(() => {});
-    else window.open(url, '_blank', 'noopener');
-  },
+  openLink: (url) => openExternal(url),
   setPresence: (enabled) => presence?.setEnabled(enabled),
   search: async (q, sort, offset) => {
     const params = new URLSearchParams({ q, sort, offset: String(offset) });
@@ -65,6 +67,8 @@ const player = new NicoPlayer(playerEl, (videoId, playerId) => {
 
 setupViewport();
 
+player.onTag(searchFor);
+player.onLink(openExternal);
 watchErrors(player.iframe);
 for (const ev of ['load', 'play', 'pause', 'ended'] as const) player.on(ev, () => devlog(`player ${ev}`));
 
