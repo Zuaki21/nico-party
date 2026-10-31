@@ -60,6 +60,8 @@ const ja = {
   err_not_embeddable: '「{title}」は埋め込みが禁止されているため再生できません',
   loadFailed: 'この動画を読み込めませんでした（全員が読み込めなかったときは再生リストから外して次へ進みます）',
   startFailed: '起動に失敗しました: {msg}',
+  err_too_fast: '動画の追加が早すぎます。少し待ってからもう一度お試しください',
+  notConnected: '接続中のため、この操作はできません。つながってからもう一度お試しください',
   settingsTitle: '設定',
   close: '閉じる',
   theme: 'テーマ',
@@ -137,6 +139,8 @@ const en: Record<Key, string> = {
   err_not_embeddable: '"{title}" cannot be played because embedding is disabled',
   loadFailed: 'Could not load this video (if no one can load it, it will be removed and skipped)',
   startFailed: 'Failed to start: {msg}',
+  err_too_fast: 'You are adding videos too quickly. Please wait a moment',
+  notConnected: 'Not connected yet. Please try again once connected',
   settingsTitle: 'Settings',
   close: 'Close',
   theme: 'Theme',
@@ -207,6 +211,8 @@ export function serverErrorText(code: ErrorCode, params: Record<string, string> 
   switch (code) {
     case 'invalid_url':
       return t('err_invalid_url');
+    case 'too_fast':
+      return t('err_too_fast');
     case 'queue_full':
       return t('err_queue_full');
     case 'not_found':

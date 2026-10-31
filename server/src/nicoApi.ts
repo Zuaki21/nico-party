@@ -27,12 +27,16 @@ export interface VideoInfo {
   embeddable: boolean;
 }
 
+/** ニコニコへの問い合わせを待つ上限（応答しない相手で、リクエストが溜まり続けないように） */
+const FETCH_TIMEOUT_MS = 8000;
+
 /** キュー表示用の動画情報を取得する。存在しない・削除された動画なら null */
 export async function fetchVideoInfo(videoId: string): Promise<VideoInfo | null> {
   let xml: string;
   try {
     xml = await fetch(`https://ext.nicovideo.jp/api/getthumbinfo/${videoId}`, {
       headers: { 'user-agent': DEFAULT_UA },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     }).then((r) => r.text());
   } catch {
     return null;
@@ -69,6 +73,7 @@ export async function fetchEmbedError(videoId: string): Promise<string | null> {
   try {
     const res = await fetch(`https://embed.nicovideo.jp/watch/${videoId}`, {
       headers: { 'user-agent': DEFAULT_UA, 'accept-language': 'ja-JP,ja;q=0.9' },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     // エラーコードは先頭から 44KB ほどの data-props に入っているので、そこまで読んだら打ち切る
     const reader = res.body!.getReader();
@@ -131,7 +136,10 @@ export async function searchVideos(
     _limit: String(SEARCH_PAGE_SIZE),
     _context: 'nico-party',
   }).toString();
-  const res = await fetch(api, { headers: { 'user-agent': 'nico-party (https://nico-party.zuaki.dev)' } });
+  const res = await fetch(api, {
+    headers: { 'user-agent': 'nico-party (https://nico-party.zuaki.dev)' },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
   if (!res.ok) return Response.json({ error: 'search failed' }, { status: 502 });
 
   const json = await res.json<{

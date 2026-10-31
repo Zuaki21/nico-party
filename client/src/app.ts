@@ -1,29 +1,21 @@
 import { Common, DiscordSDK } from '@discord/embedded-app-sdk';
 import {
-  HEARTBEAT,
   type ClientMsg,
   type Member,
   type PlaybackState,
   type SearchResult,
   type ServerMsg,
 } from '../../shared/protocol';
-import { ClockSync } from './clock';
 import { describeError, devlog, watchErrors } from './devlog';
 import { inDiscord, proxied } from './env';
 import { getLang, serverErrorText, t } from './i18n';
 import { NicoPlayer } from './nicoPlayer';
 import { renderQueue } from './playlist';
+import { RoomConnection } from './roomConnection';
 import { createPresence } from './presence';
 import { isPresenceEnabled } from './settings';
 import { SyncEngine } from './sync';
 import { mountUi, renderConnecting, renderMembers, renderState, setCompact, showError } from './ui';
-
-/**
- * 接続の生存確認の間隔。何も流れない WebSocket は途中で切られることがあるので送っておく。
- * サーバー側は自動応答で返すので、部屋 (Durable Object) を起こさない
- */
-const HEARTBEAT_INTERVAL_MS = 30_000;
-const RECONNECT_MAX_MS = 10_000;
 
 const playerEl = mountUi(document.querySelector<HTMLElement>('#app')!, {
   enqueue: (url) => request({ t: 'enqueue', url }),
@@ -84,37 +76,14 @@ document.addEventListener('contextmenu', (e) => {
 watchErrors(player.iframe);
 for (const ev of ['load', 'play', 'pause', 'ended'] as const) player.on(ev, () => devlog(`player ${ev}`));
 
-let ws: WebSocket | null = null;
-/** welcome を受け取り、部屋に入れている */
-let joined = false;
-/** 部屋に入る前（起動直後・再接続中）に行われたユーザー操作。入れたらまとめて送る */
-const pending: ClientMsg[] = [];
-const clock = new ClockSync();
 /** 再接続しても同じメンバーとして扱ってもらうための ID（ページを開き直すと変わる） */
 const clientId = crypto.randomUUID();
-const engine = new SyncEngine(player, send, () => showError(t('loadFailed')));
+let conn: RoomConnection | null = null;
+const engine = new SyncEngine(player, (msg) => conn?.send(msg), () => showError(t('loadFailed')));
 
-function sendRaw(msg: ClientMsg) {
-  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
-}
-
-/** 同期エンジンからの送信。部屋に入っていないときの再生操作は意味がないので捨てる */
-function send(msg: ClientMsg) {
-  if (joined) sendRaw(msg);
-}
-
-/** ユーザー操作（追加・削除・スキップ）。接続前なら取っておく */
+/** ユーザー操作（追加・削除・スキップ）。部屋に入れていなければ、動画の追加以外は受け付けない */
 function request(msg: ClientMsg) {
-  if (joined) {
-    sendRaw(msg);
-  } else {
-    pending.push(msg);
-    renderConnecting(pending.length);
-  }
-}
-
-function ping() {
-  sendRaw({ t: 'ping', clientTime: Date.now() });
+  if (!conn?.request(msg)) showError(t('notConnected'));
 }
 
 /** 部屋の再生状態を、画面・プレイヤー・Discord の表示に反映する */
@@ -129,73 +98,37 @@ function applyMembers(members: Member[]) {
   presence?.setMembers(members.length);
 }
 
+function onMessage(msg: ServerMsg) {
+  switch (msg.t) {
+    case 'welcome':
+      engine.setClockOffset(conn!.clock.offset);
+      renderQueue(msg.queue, msg.history);
+      applyMembers(msg.members);
+      applyState(msg.state);
+      engine.resendLoadReport();
+      return;
+    case 'state':
+      applyState(msg.state);
+      return;
+    case 'queue':
+      renderQueue(msg.queue, msg.history);
+      return;
+    case 'members':
+      applyMembers(msg.members);
+      return;
+    case 'error':
+      devlog(`server error: ${msg.code}`);
+      showError(serverErrorText(msg.code, msg.params));
+      return;
+    case 'pong':
+      engine.setClockOffset(conn!.clock.offset);
+      return;
+  }
+}
+
 function connect(roomId: string, name: string) {
-  let retry = 0;
-  let heartbeatTimer: number | undefined;
-
-  const open = () => {
-    const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
-    const sock = new WebSocket(`${scheme}://${location.host}${proxied(`/ws/${roomId}`)}`);
-    ws = sock;
-
-    sock.onopen = () => {
-      retry = 0;
-      clock.reset();
-      sendRaw({ t: 'join', name, clientId });
-      // 時計のずれは接続直後に数回測るだけにする（短時間ではほとんど変わらないため）。
-      // 定期的に測り直すと部屋がずっと起きたままになり、Durable Objects の稼働時間がかさむ
-      for (let i = 0; i < 4; i++) setTimeout(ping, i * 300);
-      heartbeatTimer = window.setInterval(() => {
-        if (sock.readyState === WebSocket.OPEN) sock.send(HEARTBEAT);
-      }, HEARTBEAT_INTERVAL_MS);
-    };
-
-    sock.onmessage = (e) => {
-      if (e.data === HEARTBEAT) return;
-      const msg = JSON.parse(e.data) as ServerMsg;
-      switch (msg.t) {
-        case 'welcome':
-          clock.provisional(msg.serverTime);
-          engine.setClockOffset(clock.offset);
-          renderQueue(msg.queue, msg.history);
-          applyMembers(msg.members);
-          applyState(msg.state);
-          joined = true;
-          for (const m of pending.splice(0)) sendRaw(m);
-          engine.resendLoadReport();
-          return;
-        case 'state':
-          applyState(msg.state);
-          return;
-        case 'queue':
-          renderQueue(msg.queue, msg.history);
-          return;
-        case 'members':
-          applyMembers(msg.members);
-          return;
-        case 'error':
-          devlog(`server error: ${msg.code}`);
-          showError(serverErrorText(msg.code, msg.params));
-          return;
-        case 'pong':
-          clock.sample(msg.clientTime, msg.serverTime);
-          engine.setClockOffset(clock.offset);
-          return;
-      }
-    };
-
-    sock.onclose = () => {
-      clearInterval(heartbeatTimer);
-      if (ws !== sock) return;
-      ws = null;
-      joined = false;
-      renderConnecting(pending.length);
-      const delay = Math.min(RECONNECT_MAX_MS, 500 * 2 ** retry++);
-      setTimeout(open, delay);
-    };
-  };
-
-  open();
+  conn = new RoomConnection({ roomId, name, clientId, onMessage, onWaiting: renderConnecting });
+  conn.start();
 }
 
 /** 見ている動画を Discord のアクティビティに表示する（ログインできたときだけ） */
@@ -253,7 +186,7 @@ async function main() {
   let name = getLang() === 'ja' ? 'ゲスト' : 'Guest';
   try {
     name = await authenticate(discord);
-    presence = createPresence(discord, () => Date.now() + clock.offset, isPresenceEnabled());
+    presence = createPresence(discord, () => Date.now() + (conn?.clock.offset ?? 0), isPresenceEnabled());
   } catch (e) {
     // 名前が取れなくても視聴はできるようにする
     devlog(`authenticate failed: ${describeError(e)}`);

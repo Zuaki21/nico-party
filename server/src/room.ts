@@ -3,6 +3,7 @@ import {
   HEARTBEAT,
   initialState,
   jumpTo,
+  parseClientMsg,
   parseVideoId,
   reorder,
   type ClientMsg,
@@ -17,6 +18,8 @@ import { fetchEmbedError, fetchVideoInfo } from './nicoApi';
 
 interface Attachment extends Member {
   joined: boolean;
+  /** 最後に動画を追加した時刻（連打で外部への問い合わせが増えないようにする） */
+  lastEnqueueAt?: number;
 }
 
 export interface Env extends NicoEnv {
@@ -44,6 +47,8 @@ const EMPTY_ROOM_TTL_MS = 60_000;
  * 各自のプレイヤーの読み込みに数秒かかるので、すぐ開始にすると冒頭が飛ばされてしまう
  */
 const START_DELAY_MS = 3000;
+/** 同じ人が動画を追加できる間隔 */
+const ENQUEUE_COOLDOWN_MS = 1500;
 
 /**
  * 1部屋 (= Activity の instanceId) = 1 Durable Object。
@@ -76,13 +81,13 @@ export class Room extends DurableObject<Env> {
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     if (typeof raw !== 'string') return;
-    let msg: ClientMsg;
+    let msg: ClientMsg | null;
     try {
-      msg = JSON.parse(raw);
+      msg = parseClientMsg(JSON.parse(raw));
     } catch {
       return;
     }
-    if (!msg || typeof msg !== 'object') return;
+    if (!msg) return;
     const a = ws.deserializeAttachment() as Attachment;
     if (msg.t === 'ping') {
       send(ws, { t: 'pong', clientTime: msg.clientTime, serverTime: Date.now() });
@@ -125,6 +130,11 @@ export class Room extends DurableObject<Env> {
       }
 
       case 'enqueue': {
+        if (a.lastEnqueueAt && Date.now() - a.lastEnqueueAt < ENQUEUE_COOLDOWN_MS) {
+          return sendError(ws, 'too_fast');
+        }
+        a.lastEnqueueAt = Date.now();
+        ws.serializeAttachment(a);
         const videoId = parseVideoId(String(msg.url ?? ''));
         if (!videoId) return sendError(ws, 'invalid_url');
         if (!(await this.hasRoom())) return sendError(ws, 'queue_full');
@@ -249,8 +259,8 @@ export class Room extends DurableObject<Env> {
 
       case 'mode': {
         const s = await this.getState();
-        if (msg.repeat === 'off' || msg.repeat === 'all' || msg.repeat === 'one') s.repeat = msg.repeat;
-        if (typeof msg.shuffle === 'boolean') s.shuffle = msg.shuffle;
+        if (msg.repeat) s.repeat = msg.repeat;
+        if (msg.shuffle !== undefined) s.shuffle = msg.shuffle;
         // 再生位置の基準 (updatedAt) は変えずに設定だけ配信する
         await this.putState(s);
         return;
@@ -385,7 +395,7 @@ export class Room extends DurableObject<Env> {
     return this.sockets(exclude)
       .map((ws) => ws.deserializeAttachment() as Attachment)
       .filter((a) => a.joined)
-      .map(({ joined: _joined, ...m }) => m);
+      .map(({ joined: _joined, lastEnqueueAt: _last, ...m }) => m);
   }
 
   private broadcast(msg: ServerMsg, exclude?: WebSocket) {

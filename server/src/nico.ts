@@ -63,6 +63,10 @@ const text = (body: string, type: string) =>
 
 /** /nico/* を処理する。path は `/nico` を除いた残り */
 export async function handleNico(req: Request, env: NicoEnv, path: string): Promise<Response> {
+  // 中継先の URL に連結するので、パスをたどって別の場所へ行ける文字（.. や %）は受け付けない
+  if (!/^[\w\-./]*$/.test(path) || path.split('/').includes('..')) {
+    return new Response('Not found', { status: 404 });
+  }
   const url = new URL(req.url);
   const query = url.search;
   const replace = rewriter(`https://${env.DISCORD_CLIENT_ID}.discordsays.com`);
