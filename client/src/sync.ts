@@ -15,6 +15,11 @@ const APPLY_THRESHOLD = 1.0;
 const DRIFT_THRESHOLD = 1.5;
 /** プレイヤーをクリックした（フォーカスが移った）あと、ユーザー操作とみなす時間 */
 const INTERACT_MS = 5000;
+/**
+ * ユーザーが操作してから、その操作が部屋に届いて返ってくるまで、部屋の状態で上書きしない時間。
+ * これが無いと、操作の直後に届いた他の状態更新や定期補正で、操作が無かったことにされてシークが戻る
+ */
+const LOCAL_HOLD_MS = 1500;
 /** 動画の終端とみなす余裕（秒） */
 const END_MARGIN = 0.5;
 /**
@@ -63,6 +68,8 @@ export class SyncEngine {
   private ticks = 0;
   /** マウス・タッチがプレイヤーの上にある */
   private pointerInside = false;
+  /** この時刻までは、ユーザーの操作を優先して部屋の状態を反映しない */
+  private localHoldUntil = 0;
   /** プレイヤーをクリック・キー操作した直後（この時刻まで）はユーザー操作とみなす */
   private interactUntil = 0;
 
@@ -82,6 +89,8 @@ export class SyncEngine {
       if (document.activeElement === iframe) this.interactUntil = Date.now() + INTERACT_MS;
     });
     const onLocal = () => {
+      // 操作を検知した時点（送信を待つ間も）から、部屋の状態で巻き戻されないようにする
+      if (this.isUserInput()) this.localHoldUntil = Date.now() + LOCAL_HOLD_MS;
       clearTimeout(this.localTimer);
       this.localTimer = window.setTimeout(() => this.onLocalChange(), LOCAL_DEBOUNCE_MS);
     };
@@ -170,10 +179,18 @@ export class SyncEngine {
     this.suppressUntil = Math.max(this.suppressUntil, Date.now() + ms);
   }
 
+  /** 今起きた変化が、プレイヤーへのユーザー操作によるものと考えられるか */
+  private isUserInput() {
+    if (Date.now() < this.suppressUntil || this.preloading) return false;
+    return this.pointerInside || Date.now() < this.interactUntil;
+  }
+
   /** 部屋の状態に自分のプレイヤーを合わせる */
   private apply(threshold: number) {
     const s = this.state;
     const p = this.player;
+    // ユーザーが操作した直後。その操作が部屋に反映されるまで巻き戻さない（this.state は更新済みなので、後の定期補正で合う）
+    if (Date.now() < this.localHoldUntil) return;
     if (!s?.current || s.current.id !== this.loadedItemId || !p.ready()) return;
 
     const target = this.expected(s);
@@ -291,7 +308,10 @@ export class SyncEngine {
     // 先読みのための再生・停止はユーザーの操作ではない
     if (this.preloading) return;
     // プレイヤーを触っていないのに起きた変化は、同期や読み込みの副作用
-    if (!this.pointerInside && Date.now() >= this.interactUntil) return;
+    if (!this.pointerInside && Date.now() >= this.interactUntil) {
+      this.localHoldUntil = 0;
+      return;
+    }
     if (Date.now() < this.suppressUntil || !p.ready()) return;
     // 再生終了による停止は ended で処理する
     if (p.isEnded()) return;
@@ -303,6 +323,7 @@ export class SyncEngine {
     if (expected < 0 && !playing) return;
     // 部屋の状態と一致しているなら送らない（同期による変化のエコー等）
     if (playing === s.playing && Math.abs(position - Math.max(0, expected)) < APPLY_THRESHOLD) return;
+    this.localHoldUntil = Date.now() + LOCAL_HOLD_MS;
     this.send({ t: 'control', itemId: s.current.id, playing, position });
   }
 
