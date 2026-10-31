@@ -16,8 +16,12 @@ import {
 import type { NicoEnv } from './nico';
 import { fetchEmbedError, fetchVideoInfo } from './nicoApi';
 
+type LoadFailed = { itemId: string; ids: string[] };
+
 interface Attachment extends Member {
   joined: boolean;
+  /** 名前が Discord のものとして確かめられている */
+  verified?: boolean;
   /** 最後に動画を追加した時刻（連打で外部への問い合わせが増えないようにする） */
   lastEnqueueAt?: number;
 }
@@ -27,6 +31,11 @@ export interface Env extends NicoEnv {
   ASSETS: Fetcher;
   DISCORD_CLIENT_SECRET: string;
 }
+
+/** index.ts が通行証を確かめたとき、その名前（URL エンコード済み）を渡すヘッダー */
+export const VERIFIED_NAME_HEADER = 'x-nico-party-verified-name';
+/** ログインできなかった人の表示名として、クライアントが送ってくる名前（他の名前の申告は受け付けない） */
+const GUEST_NAMES = ['ゲスト', 'Guest'];
 
 /** 動画の開始からこの時間は、自動送り（動画の終了）を受け付けない */
 const AUTO_NEXT_GUARD_MS = 3000;
@@ -57,6 +66,14 @@ const ENQUEUE_COOLDOWN_MS = 1500;
  * 各 WebSocket の attachment に保持する。
  */
 export class Room extends DurableObject<Env> {
+  private cache: {
+    state?: PlaybackState;
+    queue?: QueueItem[];
+    history?: QueueItem[];
+    failed?: LoadFailed;
+    failedLoaded: boolean;
+  } = { failedLoaded: false };
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     // 生存確認には部屋を起こさずに自動で返事をする
@@ -70,10 +87,12 @@ export class Room extends DurableObject<Env> {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server);
+    const verifiedName = request.headers.get(VERIFIED_NAME_HEADER);
     const attachment: Attachment = {
       id: crypto.randomUUID().slice(0, 8),
-      name: 'guest',
+      name: verifiedName !== null ? decodeURIComponent(verifiedName).slice(0, 32) : 'guest',
       joined: false,
+      ...(verifiedName !== null ? { verified: true } : {}),
     };
     server.serializeAttachment(attachment);
     return new Response(null, { status: 101, webSocket: client });
@@ -100,7 +119,8 @@ export class Room extends DurableObject<Env> {
       case 'join': {
         // 入室済みのソケットから届いた join で、ID や名前が途中で変わらないようにする
         if (a.joined) return;
-        a.name = String(msg.name ?? '').trim().slice(0, 32) || 'guest';
+        // 確かめられた名前はそのまま使う。ログインできなかった人は、他の人の名前を名乗れないよう定型のゲスト名だけ受け付ける
+        if (!a.verified) a.name = GUEST_NAMES.includes(msg.name) ? msg.name : 'guest';
         // 再接続しても同じメンバーとして扱えるよう、クライアントが決めた ID を使う
         if (typeof msg.clientId === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(msg.clientId)) a.id = msg.clientId;
         a.joined = true;
@@ -252,7 +272,7 @@ export class Room extends DurableObject<Env> {
         const ids = new Set(prev?.itemId === msg.itemId ? prev.ids : []);
         if (msg.t === 'loadFailed') ids.add(a.id);
         else ids.delete(a.id);
-        await this.ctx.storage.put(LOAD_FAILED_KEY, { itemId: msg.itemId, ids: [...ids] });
+        await this.putLoadFailed({ itemId: msg.itemId, ids: [...ids] });
         await this.skipIfNobodyLoaded(a);
         return;
       }
@@ -293,7 +313,18 @@ export class Room extends DurableObject<Env> {
   }
 
   private async getLoadFailed() {
-    return this.ctx.storage.get<{ itemId: string; ids: string[] }>(LOAD_FAILED_KEY);
+    if (!this.cache.failedLoaded) {
+      this.cache.failed = await this.ctx.storage.get<LoadFailed>(LOAD_FAILED_KEY);
+      this.cache.failedLoaded = true;
+    }
+    return this.cache.failed;
+  }
+
+  private async putLoadFailed(failed: LoadFailed | undefined) {
+    this.cache.failed = failed;
+    this.cache.failedLoaded = true;
+    if (failed) await this.ctx.storage.put(LOAD_FAILED_KEY, failed);
+    else await this.ctx.storage.delete(LOAD_FAILED_KEY);
   }
 
   /**
@@ -306,12 +337,15 @@ export class Room extends DurableObject<Env> {
     if (!s.current || failed?.itemId !== s.current.id) return;
     const members = this.members(exclude);
     if (members.length === 0 || !members.every((m) => failed.ids.includes(m.id))) return;
-    await this.ctx.storage.delete(LOAD_FAILED_KEY);
+    await this.putLoadFailed(undefined);
     await this.start(s, await this.pickNext({ ...s, current: null }), by);
   }
 
   async alarm(): Promise<void> {
-    if (this.sockets().length === 0) await this.ctx.storage.deleteAll();
+    if (this.sockets().length === 0) {
+      await this.ctx.storage.deleteAll();
+      this.cache = { failedLoaded: false };
+    }
   }
 
   /** 動画をもう1本追加できるか（視聴済みは追加するときに消せるので数えない） */
@@ -358,26 +392,34 @@ export class Room extends DurableObject<Env> {
   /** 版を進めて保存し、全員に送る */
   private async putState(s: PlaybackState) {
     s.version++;
+    this.cache.state = { ...s };
     await this.ctx.storage.put(STATE_KEY, s);
     this.broadcast({ t: 'state', state: s });
   }
 
+  // 読み込みは、起こされてから最初の1回だけ storage に行き、あとはメモリのものを使う（書き込むときに両方更新する）。
+  // 呼び出し側が受け取ったものを書き換えても、メモリの中身が勝手に変わらないようにコピーを返す
   private async getState(): Promise<PlaybackState> {
-    return (await this.ctx.storage.get<PlaybackState>(STATE_KEY)) ?? initialState();
+    this.cache.state ??= (await this.ctx.storage.get<PlaybackState>(STATE_KEY)) ?? initialState();
+    return { ...this.cache.state };
   }
 
   private async getQueue(): Promise<QueueItem[]> {
-    return (await this.ctx.storage.get<QueueItem[]>(QUEUE_KEY)) ?? [];
+    this.cache.queue ??= (await this.ctx.storage.get<QueueItem[]>(QUEUE_KEY)) ?? [];
+    return [...this.cache.queue];
   }
 
   private async getHistory(): Promise<QueueItem[]> {
-    return (await this.ctx.storage.get<QueueItem[]>(HISTORY_KEY)) ?? [];
+    this.cache.history ??= (await this.ctx.storage.get<QueueItem[]>(HISTORY_KEY)) ?? [];
+    return [...this.cache.history];
   }
 
   /** 渡されたリストを保存し、キューと履歴の両方を全員に送る */
   private async putLists(lists: { queue?: QueueItem[]; history?: QueueItem[] }) {
-    if (lists.queue) await this.ctx.storage.put(QUEUE_KEY, lists.queue);
-    if (lists.history) await this.ctx.storage.put(HISTORY_KEY, lists.history);
+    const entries: Record<string, QueueItem[]> = {};
+    if (lists.queue) entries[QUEUE_KEY] = this.cache.queue = [...lists.queue];
+    if (lists.history) entries[HISTORY_KEY] = this.cache.history = [...lists.history];
+    if (Object.keys(entries).length > 0) await this.ctx.storage.put(entries);
     this.broadcast({
       t: 'queue',
       queue: lists.queue ?? (await this.getQueue()),

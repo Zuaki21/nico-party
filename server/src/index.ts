@@ -1,6 +1,7 @@
 import { handleNico } from './nico';
 import { searchVideos } from './nicoApi';
-import type { Env } from './room';
+import { issuePass, verifyPass } from './pass';
+import { VERIFIED_NAME_HEADER, type Env } from './room';
 
 export { Room } from './room';
 
@@ -32,8 +33,13 @@ export default {
     // 部屋 = Activity の instanceId。同じボイスチャンネルで起動した人は同じ部屋に入る
     const match = path.match(ROOM_PATH);
     if (match) {
+      // 通行証があれば、Discord のものとして確かめた名前を部屋に渡す。外から来た同名のヘッダーは信用しない
+      const headers = new Headers(request.headers);
+      headers.delete(VERIFIED_NAME_HEADER);
+      const name = await verifyPass(env.DISCORD_CLIENT_SECRET, url.searchParams.get('pass'));
+      if (name !== null) headers.set(VERIFIED_NAME_HEADER, encodeURIComponent(name));
       const id = env.ROOM.idFromName(match[1]);
-      return env.ROOM.get(id).fetch(request);
+      return env.ROOM.get(id).fetch(new Request(request, { headers }));
     }
 
     return new Response('Not found', { status: 404 });
@@ -56,5 +62,14 @@ async function exchangeToken(request: Request, env: Env): Promise<Response> {
   });
   const data = await res.json<{ access_token?: string }>();
   if (!data.access_token) return Response.json({ error: 'token exchange failed' }, { status: 400 });
-  return Response.json({ access_token: data.access_token });
+  // 名前はサーバーが Discord から取得する（クライアントの申告は信用しない）。取れなくても視聴はできるよう、通行証なしで返す
+  const me = await fetch('https://discord.com/api/users/@me', {
+    headers: { authorization: `Bearer ${data.access_token}` },
+    signal: AbortSignal.timeout(5000),
+  })
+    .then((r) => (r.ok ? r.json<{ global_name?: string | null; username?: string }>() : null))
+    .catch(() => null);
+  const name = me?.global_name ?? me?.username;
+  const pass = name ? await issuePass(env.DISCORD_CLIENT_SECRET, name) : undefined;
+  return Response.json({ access_token: data.access_token, pass });
 }

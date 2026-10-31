@@ -20,6 +20,8 @@ export interface RoomConnectionOptions {
   name: string;
   /** 再接続しても同じメンバーとして扱ってもらうための ID（ページを開き直すと変わる） */
   clientId: string;
+  /** サーバーが名前を確かめた通行証（無いと、名前はゲスト扱いになる） */
+  pass?: string;
   /** サーバーからのメッセージ（welcome の時点で入室済みになっている） */
   onMessage: (msg: ServerMsg) => void;
   /** 部屋に入っていない間に溜まっている操作の数が変わった（切断中・接続中の表示用） */
@@ -95,7 +97,8 @@ export class RoomConnection {
   private open() {
     const { roomId, name, clientId } = this.opts;
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
-    const sock = new WebSocket(`${scheme}://${location.host}${proxied(`/ws/${roomId}`)}`);
+    const query = this.opts.pass ? `?pass=${encodeURIComponent(this.opts.pass)}` : '';
+    const sock = new WebSocket(`${scheme}://${location.host}${proxied(`/ws/${roomId}`)}${query}`);
     this.ws = sock;
 
     sock.onopen = () => {
