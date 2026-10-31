@@ -13,8 +13,6 @@
   --current-bg: rgba(88, 101, 242, 0.25);
   --dragging-bg: #3a3c43;
   --thumb-bg: #111;
-  /* 取り消し・削除ボタンの背景（白い文字が乗る赤） */
-  --danger-solid: #b95458;
 }
 
 :root[data-theme='light'] {
@@ -1034,8 +1032,8 @@ button.add.done:hover .when-hover {
 }
 
 button.add.done:hover {
-  background: var(--danger-solid);
-  color: #fff;
+  /* 再生リストの削除ボタン（.actions button.remove:hover）と同じ色にする */
+  color: var(--danger);
 }
 
 /* 再生中の行は背景が薄い色なので、操作ボタンの背景もそれに合わせる */
