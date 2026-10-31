@@ -99,14 +99,6 @@ export class NicoPlayer {
       devlog(`link click: ${href} -> ${url ?? '(ignored)'}`);
       if (url) this.linkHandler?.(url);
     };
-    // プレイヤー（ニコニコ側）は多くの場所で文字の選択を止めているので、動画の詳細などをコピーして調べものに使えるよう、
-    // 選択できるようにする。ボタンだけは、押したときに文字が選択されないよう今までどおりにする
-    const style = doc.createElement('style');
-    style.textContent = `
-      *, *::before, *::after { -webkit-user-select: text !important; -moz-user-select: text !important; user-select: text !important; }
-      button, [role='button'] { -webkit-user-select: none !important; -moz-user-select: none !important; user-select: none !important; }
-    `;
-    (doc.head ?? doc.documentElement).append(style);
     doc.addEventListener('click', onClick, true);
     doc.addEventListener('auxclick', onClick, true);
     devlog('tag hook: attached');
