@@ -164,6 +164,12 @@ export class Room extends DurableObject<Env> {
       }
 
       case 'remove': {
+        // 再生中の動画を消したら、視聴済みには残さず、次の動画へ進める
+        const current = await this.getState();
+        if (current.current?.id === msg.id) {
+          await this.start(current, await this.pickNext({ ...current, current: null }), a);
+          return;
+        }
         // これから再生する動画・視聴済みのどちらからでも消せる
         const queue = await this.getQueue();
         const history = await this.getHistory();

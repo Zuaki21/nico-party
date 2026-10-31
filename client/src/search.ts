@@ -11,7 +11,7 @@ type SearchView = 'loading' | 'done' | 'error';
  * キーワード検索。結果は再生リスト欄の場所に切り替えて表示し、「＋」で再生リストに追加する。
  * 検索はニコニコのスナップショット検索 API（1 日 1 回更新）なので、投稿直後の動画は出てこない
  */
-export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove' | 'skip'>, onOpen: () => void) {
+export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>, onOpen: () => void) {
   const list = $('results');
   let query = '';
   let sort: SearchSort = 'popular';
@@ -107,12 +107,9 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove' 
     }
     add.addEventListener('click', () => {
       if (added.has(r.videoId)) {
+        // 追加してすぐ再生が始まった動画も、そのまま外せる（サーバーが次の動画へ進める）
         const target = findAddedItem(r.videoId);
-        if (target) {
-          // 追加してすぐ再生が始まった動画は、再生リストから外す前に、いったん次へ進めて視聴済みにする
-          if (target.playing) h.skip(target.id);
-          h.remove(target.id);
-        }
+        if (target) h.remove(target.id);
         added.delete(r.videoId);
         mark(false);
         return;

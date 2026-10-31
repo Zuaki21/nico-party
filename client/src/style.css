@@ -14,7 +14,7 @@
   --dragging-bg: #3a3c43;
   --thumb-bg: #111;
   /* 取り消し・削除ボタンの背景（白い文字が乗る赤） */
-  --danger-solid: #d83c3e;
+  --danger-solid: #b95458;
 }
 
 :root[data-theme='light'] {
@@ -1030,4 +1030,9 @@ button.add.done:hover .when-hover {
 button.add.done:hover {
   background: var(--danger-solid);
   color: #fff;
+}
+
+/* 再生中の行は背景が薄い色なので、操作ボタンの背景もそれに合わせる */
+.queue li.current .actions {
+  background: linear-gradient(to right, transparent, color-mix(in srgb, var(--panel), var(--accent) 22%) 1.7143rem);
 }

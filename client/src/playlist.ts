@@ -60,14 +60,14 @@ export function setupPlaylist(h: Pick<UiHandlers, 'remove' | 'jump' | 'skip' | '
  * 再生リストの中から、videoId の動画を探す（検索結果の「追加済み」を取り消すため）。
  * 同じ動画が複数あれば、あとから追加されたもの（これから再生する中の後ろ）を優先する
  */
-export function findAddedItem(videoId: string): { id: string; playing: boolean } | null {
+export function findAddedItem(videoId: string): { id: string } | null {
   const { history, current, queue } = lists;
   const last = (list: QueueItem[]) => [...list].reverse().find((q) => q.videoId === videoId);
   const upcoming = last(queue);
-  if (upcoming) return { id: upcoming.id, playing: false };
-  if (current?.videoId === videoId) return { id: current.id, playing: true };
+  if (upcoming) return { id: upcoming.id };
+  if (current?.videoId === videoId) return { id: current.id };
   const done = last(history);
-  return done ? { id: done.id, playing: false } : null;
+  return done ? { id: done.id } : null;
 }
 
 /** 前へ・次へのボタンに乗せたときに出す、移動先 */
@@ -171,24 +171,25 @@ function itemEl(q: QueueItem, kind: ItemKind) {
   ]);
 
   li.append(handle, thumb, body);
-  // 再生中の動画は「前へ」「次へ」で操作する
   // 「ここから再生」と「削除」。マウスを乗せたときだけ、動画情報の右端に重ねて出す
+  // （再生中の動画は、すでに再生しているので「ここから再生」は出さない。削除すると次の動画へ進む）
+  const actions = document.createElement('div');
+  actions.className = 'actions';
   if (kind !== 'current') {
-    const actions = document.createElement('div');
-    actions.className = 'actions';
     const play = document.createElement('button');
     play.className = 'icon play';
     play.dataset.play = q.id;
     play.title = t('playFromHere');
     play.innerHTML = PLAY_ICON;
-    const del = document.createElement('button');
-    del.className = 'icon remove';
-    del.dataset.remove = q.id;
-    del.title = t('removeFromList');
-    del.innerHTML = TRASH_ICON;
-    actions.append(play, del);
-    li.append(actions);
+    actions.append(play);
   }
+  const del = document.createElement('button');
+  del.className = 'icon remove';
+  del.dataset.remove = q.id;
+  del.title = t('removeFromList');
+  del.innerHTML = TRASH_ICON;
+  actions.append(del);
+  li.append(actions);
   return li;
 }
 
