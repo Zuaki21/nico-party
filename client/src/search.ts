@@ -1,6 +1,7 @@
 import { SEARCH_MAX_OFFSET, SEARCH_PAGE_SIZE, type SearchItem, type SearchSort } from '../../shared/protocol';
 import { $, bodyEl, countsMeta, markSeg, noteEl, onSeg, thumbEl } from './dom';
 import { formatDate, getLang, t, unplayableReason } from './i18n';
+import { findAddedItem } from './playlist';
 import type { UiHandlers } from './ui';
 
 type SearchView = 'loading' | 'done' | 'error';
@@ -9,7 +10,7 @@ type SearchView = 'loading' | 'done' | 'error';
  * キーワード検索。結果は再生リスト欄の場所に切り替えて表示し、「＋」で再生リストに追加する。
  * 検索はニコニコのスナップショット検索 API（1 日 1 回更新）なので、投稿直後の動画は出てこない
  */
-export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue'>, onOpen: () => void) {
+export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove' | 'skip'>, onOpen: () => void) {
   const list = $('results');
   let query = '';
   let sort: SearchSort = 'popular';
@@ -82,10 +83,11 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue'>, onOpen: (
     const add = document.createElement('button');
     add.type = 'button';
     add.className = 'add';
+    // 追加済みの ✓ を押すと、間違えて追加したものを再生リストから外して元に戻せる
     const mark = (done: boolean) => {
       add.textContent = done ? '✓' : '＋';
-      add.title = t(done ? 'added' : 'addToList');
-      add.disabled = done;
+      add.title = t(done ? 'removeAdded' : 'addToList');
+      add.classList.toggle('done', done);
     };
     mark(added.has(r.videoId));
     if (r.unplayable) {
@@ -102,6 +104,17 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue'>, onOpen: (
       li.querySelector('.thumb')!.append(badge);
     }
     add.addEventListener('click', () => {
+      if (added.has(r.videoId)) {
+        const target = findAddedItem(r.videoId);
+        if (target) {
+          // 追加してすぐ再生が始まった動画は、再生リストから外す前に、いったん次へ進めて視聴済みにする
+          if (target.playing) h.skip(target.id);
+          h.remove(target.id);
+        }
+        added.delete(r.videoId);
+        mark(false);
+        return;
+      }
       h.enqueue(r.videoId);
       added.add(r.videoId);
       mark(true);

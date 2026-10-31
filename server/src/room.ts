@@ -22,8 +22,6 @@ interface Attachment extends Member {
   joined: boolean;
   /** 名前が Discord のものとして確かめられている */
   verified?: boolean;
-  /** 最後に動画を追加した時刻（連打で外部への問い合わせが増えないようにする） */
-  lastEnqueueAt?: number;
 }
 
 export interface Env extends NicoEnv {
@@ -56,8 +54,8 @@ const EMPTY_ROOM_TTL_MS = 60_000;
  * 各自のプレイヤーの読み込みに数秒かかるので、すぐ開始にすると冒頭が飛ばされてしまう
  */
 const START_DELAY_MS = 3000;
-/** 同じ人が動画を追加できる間隔 */
-const ENQUEUE_COOLDOWN_MS = 1500;
+/** 動画の追加の順番待ちがこれだけ溜まっていたら、新しい追加は断る */
+const ENQUEUE_WAITING_LIMIT = 20;
 
 /**
  * 1部屋 (= Activity の instanceId) = 1 Durable Object。
@@ -66,6 +64,10 @@ const ENQUEUE_COOLDOWN_MS = 1500;
  * 各 WebSocket の attachment に保持する。
  */
 export class Room extends DurableObject<Env> {
+  /** 動画の追加を 1 件ずつ処理するための列と、順番待ちの数 */
+  private enqueueChain: Promise<void> = Promise.resolve();
+  private enqueueWaiting = 0;
+
   private cache: {
     state?: PlaybackState;
     queue?: QueueItem[];
@@ -150,45 +152,14 @@ export class Room extends DurableObject<Env> {
       }
 
       case 'enqueue': {
-        if (a.lastEnqueueAt && Date.now() - a.lastEnqueueAt < ENQUEUE_COOLDOWN_MS) {
-          return sendError(ws, 'too_fast');
-        }
-        a.lastEnqueueAt = Date.now();
-        ws.serializeAttachment(a);
-        const videoId = parseVideoId(String(msg.url ?? ''));
-        if (!videoId) return sendError(ws, 'invalid_url');
-        if (!(await this.hasRoom())) return sendError(ws, 'queue_full');
-        const [info, embedError] = await Promise.all([
-          fetchVideoInfo(videoId),
-          fetchEmbedError(videoId),
-        ]);
-        if (!info) return sendError(ws, 'not_found', { id: videoId });
-        if (embedError) return sendError(ws, 'unplayable', { title: info.title, reason: embedError });
-        if (!info.embeddable) return sendError(ws, 'not_embeddable', { title: info.title });
-        const { embeddable: _embeddable, ...meta } = info;
-        const item: QueueItem = {
-          id: newItemId(),
-          videoId,
-          addedBy: a.name,
-          ...meta,
-        };
-        // タイトル取得の await 中に他の操作が入っている可能性があるので取り直す
-        if (!(await this.hasRoom())) return sendError(ws, 'queue_full');
-        const s = await this.getState();
-        const queue = await this.getQueue();
-        queue.push(item);
-        // 上限を超える分は古い視聴済みから消す
-        let history = await this.getHistory();
-        const over = history.length + (s.current ? 1 : 0) + queue.length - LIST_LIMIT;
-        if (over > 0) history = history.slice(over);
-        if (s.current) {
-          await this.putLists({ queue, history });
-          return;
-        }
-        // 何も再生していなければすぐ再生する（再生リストの最後まで行った後に再生待ちへ戻した動画があれば、そちらが先）
-        const next = takeNext(queue, s.shuffle);
-        await this.putLists({ queue, history });
-        await this.start(s, next, a);
+        // 動画の追加は、受け取った順に 1 件ずつ処理する（続けて追加しても弾かず、順番どおりに並ぶ）。
+        // 溜まりすぎている（自動化など）ときだけ断る
+        if (this.enqueueWaiting >= ENQUEUE_WAITING_LIMIT) return sendError(ws, 'too_fast');
+        this.enqueueWaiting++;
+        const url = msg.url;
+        const job = this.enqueueChain.then(() => this.enqueue(ws, a, url));
+        this.enqueueChain = job.catch(() => {}).finally(() => this.enqueueWaiting--);
+        await this.enqueueChain;
         return;
       }
 
@@ -294,6 +265,45 @@ export class Room extends DurableObject<Env> {
 
   async webSocketError(ws: WebSocket): Promise<void> {
     await this.onLeave(ws);
+  }
+
+  /** 動画を 1 本、再生リストに追加する（enqueue の列から 1 件ずつ呼ばれる） */
+  private async enqueue(ws: WebSocket, a: Attachment, url: string) {
+    const videoId = parseVideoId(String(url ?? ''));
+    if (!videoId) return sendError(ws, 'invalid_url');
+    if (!(await this.hasRoom())) return sendError(ws, 'queue_full');
+    const [info, embedError] = await Promise.all([
+      fetchVideoInfo(videoId),
+      fetchEmbedError(videoId),
+    ]);
+    if (!info) return sendError(ws, 'not_found', { id: videoId });
+    if (embedError) return sendError(ws, 'unplayable', { title: info.title, reason: embedError });
+    if (!info.embeddable) return sendError(ws, 'not_embeddable', { title: info.title });
+    const { embeddable: _embeddable, ...meta } = info;
+    const item: QueueItem = {
+      id: newItemId(),
+      videoId,
+      addedBy: a.name,
+      ...meta,
+    };
+    // タイトル取得の await 中に他の操作が入っている可能性があるので取り直す
+    if (!(await this.hasRoom())) return sendError(ws, 'queue_full');
+    const s = await this.getState();
+    const queue = await this.getQueue();
+    queue.push(item);
+    // 上限を超える分は古い視聴済みから消す
+    let history = await this.getHistory();
+    const over = history.length + (s.current ? 1 : 0) + queue.length - LIST_LIMIT;
+    if (over > 0) history = history.slice(over);
+    if (s.current) {
+      await this.putLists({ queue, history });
+      return;
+    }
+    // 何も再生していなければすぐ再生する（再生リストの最後まで行った後に再生待ちへ戻した動画があれば、そちらが先）
+    const next = takeNext(queue, s.shuffle);
+    await this.putLists({ queue, history });
+    await this.start(s, next, a);
+    return;
   }
 
   private async onLeave(ws: WebSocket) {
@@ -437,7 +447,7 @@ export class Room extends DurableObject<Env> {
     return this.sockets(exclude)
       .map((ws) => ws.deserializeAttachment() as Attachment)
       .filter((a) => a.joined)
-      .map(({ joined: _joined, lastEnqueueAt: _last, ...m }) => m);
+      .map(({ joined: _joined, verified: _verified, ...m }) => m);
   }
 
   private broadcast(msg: ServerMsg, exclude?: WebSocket) {

@@ -56,6 +56,20 @@ export function setupPlaylist(h: Pick<UiHandlers, 'remove' | 'jump' | 'skip' | '
   refreshNavPreview = setupNavPreview(navPreview);
 }
 
+/**
+ * 再生リストの中から、videoId の動画を探す（検索結果の「追加済み」を取り消すため）。
+ * 同じ動画が複数あれば、あとから追加されたもの（これから再生する中の後ろ）を優先する
+ */
+export function findAddedItem(videoId: string): { id: string; playing: boolean } | null {
+  const { history, current, queue } = lists;
+  const last = (list: QueueItem[]) => [...list].reverse().find((q) => q.videoId === videoId);
+  const upcoming = last(queue);
+  if (upcoming) return { id: upcoming.id, playing: false };
+  if (current?.videoId === videoId) return { id: current.id, playing: true };
+  const done = last(history);
+  return done ? { id: done.id, playing: false } : null;
+}
+
 /** 前へ・次へのボタンに乗せたときに出す、移動先 */
 function navPreview(kind: NavKind): NavPreview {
   const { history, current, queue } = lists;

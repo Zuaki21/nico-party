@@ -1005,3 +1005,13 @@ button.link:hover {
   /* 長い英数字だけのタイトルでもカードからはみ出さない */
   overflow-wrap: anywhere;
 }
+
+/* 追加済みの ✓（押すと再生リストから外せる）。乗せたときに外せることが分かるよう × にする */
+button.add.done:hover {
+  font-size: 0;
+}
+
+button.add.done:hover::before {
+  content: '×';
+  font-size: 1.2857rem;
+}
