@@ -188,7 +188,19 @@ export class SyncEngine {
   /** 今起きた変化が、プレイヤーへのユーザー操作によるものと考えられるか */
   private isUserInput() {
     if (Date.now() < this.suppressUntil || this.preloading) return false;
-    return this.pointerInside || Date.now() < this.interactUntil;
+    return this.engaged();
+  }
+
+  /**
+   * プレイヤーを触れる状態か。ポインターが上にある・フォーカスがプレイヤーにある（キーボード操作）・クリック直後。
+   * フォーカスがあるあいだは、クリックしなくても矢印キーなどでシークできるので、ユーザー操作とみなす
+   */
+  private engaged() {
+    return (
+      this.pointerInside ||
+      document.activeElement === this.player.iframe ||
+      Date.now() < this.interactUntil
+    );
   }
 
   /** 部屋の状態に自分のプレイヤーを合わせる */
@@ -319,7 +331,7 @@ export class SyncEngine {
     // 先読みのための再生・停止はユーザーの操作ではない
     if (this.preloading) return;
     // プレイヤーを触っていないのに起きた変化は、同期や読み込みの副作用
-    if (!this.pointerInside && Date.now() >= this.interactUntil) {
+    if (!this.engaged()) {
       this.localHoldUntil = 0;
       return;
     }
