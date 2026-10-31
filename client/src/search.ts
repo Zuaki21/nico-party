@@ -1,6 +1,7 @@
 import { SEARCH_MAX_OFFSET, SEARCH_PAGE_SIZE, type SearchItem, type SearchSort } from '../../shared/protocol';
 import { $, bodyEl, countsMeta, markSeg, noteEl, onSeg, thumbEl } from './dom';
 import { formatDate, getLang, t, unplayableReason } from './i18n';
+import { TRASH_ICON } from './icons';
 import { findAddedItem } from './playlist';
 import type { UiHandlers } from './ui';
 
@@ -85,7 +86,8 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove' 
     add.className = 'add';
     // 追加済みの ✓ を押すと、間違えて追加したものを再生リストから外して元に戻せる
     const mark = (done: boolean) => {
-      add.textContent = done ? '✓' : '＋';
+      // 追加済みは ✓、そこにマウスを乗せるとゴミ箱（style.css）。どちらも置いておき、見た目は CSS で切り替える
+      add.innerHTML = done ? `<span class="when-idle">✓</span><span class="when-hover">${TRASH_ICON}</span>` : '＋';
       add.title = t(done ? 'removeAdded' : 'addToList');
       add.classList.toggle('done', done);
     };
