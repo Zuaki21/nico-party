@@ -103,6 +103,12 @@ function decodeXml(s: string) {
     .replace(/&amp;/g, '&');
 }
 
+const SORT_FIELD: Record<SearchSort, string> = {
+  popular: '-viewCounter',
+  new: '-startTime',
+  likes: '-likeCounter',
+};
+
 /**
  * ニコニコのスナップショット検索 API（公式）でキーワード検索する。
  * データは 1 日 1 回の更新なので、投稿されたばかりの動画は出てこない。
@@ -114,7 +120,8 @@ export async function searchVideos(
 ): Promise<Response> {
   const url = new URL(req.url);
   const q = (url.searchParams.get('q') ?? '').trim().slice(0, 100);
-  const sort: SearchSort = url.searchParams.get('sort') === 'new' ? 'new' : 'popular';
+  const sortParam = url.searchParams.get('sort');
+  const sort: SearchSort = sortParam === 'new' || sortParam === 'likes' ? sortParam : 'popular';
   const offset = Math.max(0, Math.min(SEARCH_MAX_OFFSET, Number(url.searchParams.get('offset')) || 0));
   if (!q) return Response.json({ total: 0, items: [] } satisfies SearchResult);
 
@@ -131,7 +138,7 @@ export async function searchVideos(
     q,
     targets: 'title,description,tags',
     fields: 'contentId,title,viewCounter,commentCounter,lengthSeconds,thumbnailUrl,startTime',
-    _sort: sort === 'new' ? '-startTime' : '-viewCounter',
+    _sort: SORT_FIELD[sort],
     _offset: String(offset),
     _limit: String(SEARCH_PAGE_SIZE),
     _context: 'nico-party',

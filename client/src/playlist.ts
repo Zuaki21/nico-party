@@ -1,5 +1,6 @@
 import { reorder, type PlaybackState, type QueueItem, type RepeatMode } from '../../shared/protocol';
 import { $, bodyEl, countsMeta, noteEl, thumbEl } from './dom';
+import { setupNavPreview, type NavKind, type NavPreview } from './navPreview';
 import { PLAY_ICON, TRASH_ICON } from './icons';
 import { t } from './i18n';
 import type { UiHandlers } from './ui';
@@ -16,6 +17,8 @@ const lists = {
   shuffle: false,
 };
 let scrolledTo: string | null = null;
+/** ボタンに乗せて出しているカードを、再生リストが変わったときに更新する */
+let refreshNavPreview: () => void = () => {};
 /** 並べ替えのドラッグ中 */
 let dragging = false;
 /** ドラッグ中、リストの端に近づいたら自動でスクロールする範囲 (px) */
@@ -50,6 +53,24 @@ export function setupPlaylist(h: Pick<UiHandlers, 'remove' | 'jump' | 'skip' | '
   $('repeat').addEventListener('click', () => h.mode({ repeat: NEXT_REPEAT[lists.repeat] }));
   renderMode();
   setupReorder(h.move);
+  refreshNavPreview = setupNavPreview(navPreview);
+}
+
+/** 前へ・次へのボタンに乗せたときに出す、移動先 */
+function navPreview(kind: NavKind): NavPreview {
+  const { history, current, queue } = lists;
+  if (kind === 'prev') {
+    const prev = history[history.length - 1];
+    return prev ? { item: prev } : null;
+  }
+  if (lists.shuffle && queue.length > 1) return { text: t('nextRandom') };
+  if (queue.length > 0) return { item: queue[0] };
+  // 全曲リピートで最後まで来ていたら、視聴済みの最初に戻る
+  if (lists.repeat === 'all') {
+    const first = history[0] ?? current;
+    return first ? { item: first } : null;
+  }
+  return null;
 }
 
 export function setPlayback(s: PlaybackState) {
@@ -90,6 +111,7 @@ function renderList() {
   $<HTMLButtonElement>('prev').disabled = !current || history.length === 0;
   // 全曲リピート中は、次が無くても最初に戻れる
   $<HTMLButtonElement>('skip').disabled = !current || (queue.length === 0 && lists.repeat !== 'all');
+  refreshNavPreview();
   // 並べ替えのドラッグ中に描き直すと掴んでいる要素が消えるので、終わってから描く
   if (dragging) return;
   const ol = $('queue');

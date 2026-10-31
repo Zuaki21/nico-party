@@ -13,6 +13,9 @@ const ja = {
   empty: '動画のURLを入れるか、キーワードで検索して再生リストに追加してください',
   nowPlaying: '▶ {title}（{name}）',
   prev: '前の動画に戻る',
+  prevVideo: '前の動画',
+  nextVideo: '次の動画',
+  nextRandom: 'シャッフル中なので、次の動画はランダムに選ばれます',
   next: '次の動画へ',
   settings: '設定',
   showList: '再生リストを表示',
@@ -36,10 +39,13 @@ const ja = {
   addedBy: '追加: {name}',
   playFromHere: 'ここから再生',
   removeFromList: '再生リストから削除',
-  searchClose: '検索を閉じて再生リストに戻る',
+  tabList: '再生リスト',
+  tabSearch: '検索',
+  searchHint: '上の入力欄にキーワードを入れて「検索」を押すと、ここに結果が出ます',
   sortTitle: '並び順',
   sortPopular: '再生数',
   sortNew: '新着',
+  sortLikes: '人気',
   searchQuery: '「{q}」',
   searchCount: '「{q}」 {n}件',
   searching: '検索中…',
@@ -93,6 +99,9 @@ const en: Record<Key, string> = {
   empty: 'Paste a video URL or search by keyword to add it to the playlist',
   nowPlaying: '▶ {title} ({name})',
   prev: 'Previous video',
+  prevVideo: 'Previous',
+  nextVideo: 'Next',
+  nextRandom: 'Shuffle is on, so the next video is picked at random',
   next: 'Next video',
   settings: 'Settings',
   showList: 'Show playlist',
@@ -116,10 +125,13 @@ const en: Record<Key, string> = {
   addedBy: 'Added by {name}',
   playFromHere: 'Play from here',
   removeFromList: 'Remove from playlist',
-  searchClose: 'Close search and go back to the playlist',
+  tabList: 'Playlist',
+  tabSearch: 'Search',
+  searchHint: 'Type keywords in the box above and press Search to see results here',
   sortTitle: 'Sort',
   sortPopular: 'Views',
   sortNew: 'Newest',
+  sortLikes: 'Popular',
   searchQuery: '"{q}"',
   searchCount: '"{q}" {n} results',
   searching: 'Searching…',
@@ -232,6 +244,10 @@ export function serverErrorText(code: ErrorCode, params: Record<string, string> 
 export function applyI18n(root: ParentNode = document) {
   for (const el of root.querySelectorAll<HTMLElement>('[data-i18n]')) {
     el.textContent = t(el.dataset.i18n as Key);
+  }
+  // 画面に出すカードで説明するボタン（title だとブラウザの吹き出しと重なるので、読み上げ用の名前だけ付ける）
+  for (const el of root.querySelectorAll<HTMLElement>('[data-i18n-label]')) {
+    el.setAttribute('aria-label', t(el.dataset.i18nLabel as Key));
   }
   for (const el of root.querySelectorAll<HTMLElement>('[data-i18n-title]')) {
     el.title = t(el.dataset.i18nTitle as Key);

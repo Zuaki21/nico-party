@@ -9,8 +9,7 @@ type SearchView = 'loading' | 'done' | 'error';
  * キーワード検索。結果は再生リスト欄の場所に切り替えて表示し、「＋」で再生リストに追加する。
  * 検索はニコニコのスナップショット検索 API（1 日 1 回更新）なので、投稿直後の動画は出てこない
  */
-export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue'>) {
-  const side = $('side');
+export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue'>, onOpen: () => void) {
   const list = $('results');
   let query = '';
   let sort: SearchSort = 'popular';
@@ -115,6 +114,10 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue'>) {
     const my = ++seq;
     if (offset === 0) {
       items = [];
+      // 最初の検索では案内の文や前の検索の結果を消す
+      list.replaceChildren();
+      shown = 0;
+      tail = [];
       list.scrollTop = 0;
     }
     render('loading');
@@ -129,27 +132,32 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue'>) {
     }
   };
 
-  $('search-close').addEventListener('click', () => {
-    seq++;
-    side.classList.remove('searching');
-    $('search').hidden = true;
-  });
   onSeg('search-sort', 'sort', (next) => {
-    if ((next === 'popular' || next === 'new') && next !== sort) {
+    if ((next === 'popular' || next === 'new' || next === 'likes') && next !== sort) {
       sort = next;
       fetchPage(0);
     }
   });
 
+  /** まだ検索していないときの案内 */
+  const showHint = () => {
+    $('search-title').textContent = '';
+    markSeg('search-sort', 'sort', sort);
+    list.replaceChildren(noteEl(t('searchHint')));
+    shown = 0;
+    tail = [];
+  };
+  showHint();
+
   return {
     rerender() {
-      if (!$('search').hidden) render(lastView, true);
+      if (query) render(lastView, true);
+      else showHint();
     },
     open(q: string) {
       query = q;
       added.clear();
-      side.classList.add('searching');
-      $('search').hidden = false;
+      onOpen();
       fetchPage(0);
     },
   };

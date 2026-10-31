@@ -234,7 +234,8 @@ export interface SearchItem {
   unplayable?: string;
 }
 
-export type SearchSort = 'popular' | 'new';
+/** popular: 再生数 / new: 新着 / likes: 人気（ニコニコの検索 API に人気順は無いので、いいね数で並べる） */
+export type SearchSort = 'popular' | 'new' | 'likes';
 export const SEARCH_PAGE_SIZE = 20;
 /** 検索で指定できる開始位置の上限（これより先の結果は取得できない） */
 export const SEARCH_MAX_OFFSET = 1000;

@@ -7,7 +7,7 @@ import {
   type SearchResult,
   type SearchSort,
 } from '../../shared/protocol';
-import { $ } from './dom';
+import { $, markSeg, onSeg } from './dom';
 import { APP_VERSION } from './env';
 import { applyI18n, onLangChange, t } from './i18n';
 import { LIST_ICON, NEXT_ICON, PREV_ICON, REPEAT_ICON, SETTINGS_ICON, SHUFFLE_ICON } from './icons';
@@ -59,8 +59,8 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
       <div class="now">
         <div class="now-title" id="now-title"></div>
         <div class="controls">
-          <button id="prev" class="secondary icon-button" data-i18n-title="prev" disabled>${PREV_ICON}</button>
-          <button id="skip" class="secondary icon-button" data-i18n-title="next" disabled>${NEXT_ICON}</button>
+          <button id="prev" class="secondary icon-button" data-i18n-label="prev" disabled>${PREV_ICON}</button>
+          <button id="skip" class="secondary icon-button" data-i18n-label="next" disabled>${NEXT_ICON}</button>
         </div>
         <div class="controls">
           <button id="open-settings" class="secondary icon-button" data-i18n-title="settings" aria-pressed="false">${SETTINGS_ICON}</button>
@@ -119,20 +119,23 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
         <button type="submit" id="submit"></button>
         <div class="error" id="error" role="alert" hidden></div>
       </form>
+      <div class="tabs" id="side-tabs" role="tablist">
+        <button type="button" role="tab" data-tab="list" data-i18n="tabList"></button>
+        <button type="button" role="tab" data-tab="search" data-i18n="tabSearch"></button>
+      </div>
       <div class="queue-head">
-        <span data-i18n="playlist"></span>
         <button id="shuffle" class="mode" aria-pressed="false">${SHUFFLE_ICON}</button>
         <button id="repeat" class="mode" aria-pressed="false">${REPEAT_ICON}</button>
         <span class="muted members" id="members"></span>
       </div>
       <ol class="queue" id="queue"><li class="muted" data-i18n="connecting"></li></ol>
-      <div class="search" id="search" hidden>
+      <div class="search" id="search">
         <div class="search-head">
-          <button type="button" class="icon" id="search-close" data-i18n-title="searchClose">×</button>
           <span class="search-title" id="search-title"></span>
           <div class="seg" id="search-sort" data-i18n-title="sortTitle">
             <button type="button" data-sort="popular" data-i18n="sortPopular"></button>
             <button type="button" data-sort="new" data-i18n="sortNew"></button>
+            <button type="button" data-sort="likes" data-i18n="sortLikes"></button>
           </div>
         </div>
         <ol class="queue" id="results"></ol>
@@ -143,7 +146,8 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
   // 再生リスト欄の最小幅などが UI サイズで変わるので、保存されている設定を最初に当てておく
   setupSettings(h);
 
-  const search = setupSearch(h);
+  const showTab = setupTabs();
+  const search = setupSearch(h, () => showTab('search'));
   const input = $<HTMLInputElement>('url');
   // URL や sm 番号ならそのまま追加、それ以外は検索。ボタンの表示も入力に合わせて変える
   const updateSubmit = () => {
@@ -180,6 +184,21 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
   });
 
   return $('player');
+}
+
+/** 再生リストと検索結果の切り替え。切り替え関数を返す */
+function setupTabs() {
+  const side = $('side');
+  const show = (tab: string) => {
+    side.dataset.tab = tab;
+    markSeg('side-tabs', 'tab', tab);
+    for (const b of $('side-tabs').querySelectorAll<HTMLButtonElement>('button')) {
+      b.setAttribute('aria-selected', String(b.dataset.tab === tab));
+    }
+  };
+  onSeg('side-tabs', 'tab', show);
+  show('list');
+  return show;
 }
 
 export function renderState(s: PlaybackState) {
