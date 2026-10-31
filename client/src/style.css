@@ -43,6 +43,12 @@ body {
   -webkit-user-select: none;
 }
 
+/* サムネイルなどの画像は、ドラッグして外（メモ帳など）に持ち出せないようにする */
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
 input,
 textarea {
   user-select: text;

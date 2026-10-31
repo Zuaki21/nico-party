@@ -16,4 +16,9 @@ export function setupViewport() {
   document.addEventListener('contextmenu', (e) => {
     if (!(e.target as HTMLElement).closest('input, textarea')) e.preventDefault();
   });
+
+  // 画像（サムネイル）や文字をドラッグして、メモ帳などの外へ持ち出せないようにする。入力欄の中の文字は除く
+  document.addEventListener('dragstart', (e) => {
+    if (!(e.target instanceof Element && e.target.closest('input, textarea'))) e.preventDefault();
+  });
 }
