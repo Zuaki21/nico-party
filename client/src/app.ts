@@ -19,6 +19,9 @@ import { setupViewport } from './viewport';
 import { SyncEngine } from './sync';
 import { mountUi, renderConnecting, renderMembers, renderState, setCompact, showError } from './ui';
 
+/** サーバーが発行した、ニコニコの中継と検索を使うための通行証（Discord にログインできたときだけ） */
+let nicoPass: string | undefined;
+
 const playerEl = mountUi(document.querySelector<HTMLElement>('#app')!, {
   enqueue: (url) => request({ t: 'enqueue', url }),
   remove: (id) => request({ t: 'remove', id }),
@@ -35,7 +38,9 @@ const playerEl = mountUi(document.querySelector<HTMLElement>('#app')!, {
   setPresence: (enabled) => presence?.setEnabled(enabled),
   search: async (q, sort, offset) => {
     const params = new URLSearchParams({ q, sort, offset: String(offset) });
-    const res = await fetch(proxied(`/api/search?${params}`));
+    const res = await fetch(proxied(`/api/search?${params}`), {
+      headers: nicoPass ? { 'x-nico-pass': nicoPass } : {},
+    });
     if (!res.ok) throw new Error(`search failed: ${res.status}`);
     return (await res.json()) as SearchResult;
   },
@@ -54,7 +59,7 @@ const player = new NicoPlayer(playerEl, (videoId, playerId) => {
   if (inDiscord) params.set('referer', location.href);
   // Discord 内では埋め込み HTML を自前サーバーで書き換えて配信する (server/src/nico.ts)
   return inDiscord
-    ? `/.proxy/nico/nico-embed/${videoId}?${params}`
+    ? `/.proxy/nico/${nicoPass ?? 'none'}/nico-embed/${videoId}?${params}`
     : `https://embed.nicovideo.jp/watch/${videoId}?${params}`;
 });
 
@@ -135,12 +140,14 @@ async function main() {
   let name = getLang() === 'ja' ? 'ゲスト' : 'Guest';
   let pass: string | undefined;
   try {
-    ({ name, pass } = await authenticate(discord));
+    ({ name, pass, nicoPass } = await authenticate(discord));
     presence = createPresence(discord, () => Date.now() + (conn?.clock.offset ?? 0), isPresenceEnabled());
   } catch (e) {
     // 名前が取れなくても視聴はできるようにする
     devlog(`authenticate failed: ${describeError(e)}`);
   }
+  // 通行証がないと、動画の読み込みと検索ができない
+  if (!nicoPass) showError(t('loginRequired'));
   watchLayout(discord, setCompact);
   devlog(`ready as ${name} (instance ${discord.instanceId})`);
   connect(discord.instanceId, name, pass);

@@ -1,9 +1,12 @@
 import { handleNico } from './nico';
 import { searchVideos } from './nicoApi';
-import { issuePass, verifyPass } from './pass';
+import { issuePass, verifyPass, withinRateLimit } from './pass';
 import { VERIFIED_NAME_HEADER, type Env } from './room';
 
 export { Room } from './room';
+
+/** 1 人が 1 分間にできる検索の回数 */
+const SEARCH_LIMIT_PER_MIN = 30;
 
 const ROOM_PATH = /^\/ws\/([A-Za-z0-9_-]{1,128})$/;
 
@@ -23,6 +26,12 @@ export default {
     }
 
     if (path === '/api/search' && request.method === 'GET') {
+      // 検索は 1 回でニコニコへ多数の問い合わせをするので、ログインした人だけ・回数を制限して受け付ける
+      const claims = await verifyPass(env.DISCORD_CLIENT_SECRET, 'nico', request.headers.get('x-nico-pass'));
+      if (!claims) return new Response('Unauthorized', { status: 401 });
+      if (!withinRateLimit(`search:${claims.u}`, SEARCH_LIMIT_PER_MIN, 60_000)) {
+        return new Response('Too many requests', { status: 429 });
+      }
       return searchVideos(request, ctx);
     }
 
@@ -36,8 +45,8 @@ export default {
       // 通行証があれば、Discord のものとして確かめた名前を部屋に渡す。外から来た同名のヘッダーは信用しない
       const headers = new Headers(request.headers);
       headers.delete(VERIFIED_NAME_HEADER);
-      const name = await verifyPass(env.DISCORD_CLIENT_SECRET, url.searchParams.get('pass'));
-      if (name !== null) headers.set(VERIFIED_NAME_HEADER, encodeURIComponent(name));
+      const claims = await verifyPass(env.DISCORD_CLIENT_SECRET, 'ws', url.searchParams.get('pass'));
+      if (claims?.n !== undefined) headers.set(VERIFIED_NAME_HEADER, encodeURIComponent(claims.n));
       const id = env.ROOM.idFromName(match[1]);
       return env.ROOM.get(id).fetch(new Request(request, { headers }));
     }
@@ -67,9 +76,13 @@ async function exchangeToken(request: Request, env: Env): Promise<Response> {
     headers: { authorization: `Bearer ${data.access_token}` },
     signal: AbortSignal.timeout(5000),
   })
-    .then((r) => (r.ok ? r.json<{ global_name?: string | null; username?: string }>() : null))
+    .then((r) => (r.ok ? r.json<{ id?: string; global_name?: string | null; username?: string }>() : null))
     .catch(() => null);
   const name = me?.global_name ?? me?.username;
-  const pass = name ? await issuePass(env.DISCORD_CLIENT_SECRET, name) : undefined;
-  return Response.json({ access_token: data.access_token, pass });
+  if (!me?.id || !name) return Response.json({ access_token: data.access_token });
+  const [pass, nicoPass] = await Promise.all([
+    issuePass(env.DISCORD_CLIENT_SECRET, 'ws', { u: me.id, n: name }),
+    issuePass(env.DISCORD_CLIENT_SECRET, 'nico', { u: me.id }),
+  ]);
+  return Response.json({ access_token: data.access_token, pass, nicoPass });
 }

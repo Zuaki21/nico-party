@@ -1,12 +1,24 @@
 /**
- * Discord でログインした人の名前を、サーバーが確かめたものとして部屋に渡すための「通行証」。
- * /api/token でトークンを交換したときにサーバーが Discord から名前を取得して署名し、
- * WebSocket の接続に付けて返してもらう。クライアントが申告する名前は信用しない。
+ * Discord でログインした人であることを示す「通行証」（HMAC 署名つき）。
+ * /api/token でトークンを交換したときに、サーバーが Discord からユーザーの情報を取得して発行する。
  * 署名の鍵には DISCORD_CLIENT_SECRET を使う（サーバーしか知らない）。
+ *
+ * 用途ごとに scope を分けて、取り違えて使えないようにしている。
+ *   ws:   WebSocket の接続に付ける。名前を確かめたものとして部屋に渡す
+ *   nico: ニコニコの中継 (/nico/<通行証>/...) と検索の呼び出しに付ける。名前は入れない（URL に載るため）
  */
 
-/** 通行証の有効期間。Activity を開いている間は再接続のたびに使うので、長めにしておく */
-const PASS_TTL_MS = 12 * 60 * 60 * 1000;
+export type PassScope = 'ws' | 'nico';
+
+export interface PassClaims {
+  /** Discord のユーザー ID（レート制限の単位） */
+  u: string;
+  /** 表示名（ws の通行証のみ） */
+  n?: string;
+}
+
+/** 通行証の有効期間。Activity を開きっぱなしの間は同じものを使い続けるので、長めにしておく */
+const PASS_TTL_MS = 24 * 60 * 60 * 1000;
 
 const encoder = new TextEncoder();
 
@@ -20,15 +32,20 @@ async function hmacKey(secret: string, usage: 'sign' | 'verify') {
   return crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [usage]);
 }
 
-/** 名前入りの通行証を作る */
-export async function issuePass(secret: string, name: string): Promise<string> {
-  const payload = toBase64Url(encoder.encode(JSON.stringify({ n: name, exp: Date.now() + PASS_TTL_MS })));
+/** 通行証を作る */
+export async function issuePass(secret: string, scope: PassScope, claims: PassClaims): Promise<string> {
+  const body = { ...claims, s: scope, exp: Date.now() + PASS_TTL_MS };
+  const payload = toBase64Url(encoder.encode(JSON.stringify(body)));
   const sig = await crypto.subtle.sign('HMAC', await hmacKey(secret, 'sign'), encoder.encode(payload));
   return `${payload}.${toBase64Url(new Uint8Array(sig))}`;
 }
 
-/** 通行証を確かめて名前を返す。無い・壊れている・期限切れ・署名が合わない場合は null */
-export async function verifyPass(secret: string, pass: string | null): Promise<string | null> {
+/** 通行証を確かめて中身を返す。無い・壊れている・期限切れ・署名や scope が合わない場合は null */
+export async function verifyPass(
+  secret: string,
+  scope: PassScope,
+  pass: string | null | undefined,
+): Promise<PassClaims | null> {
   if (!pass) return null;
   const [payload, sig, ...rest] = pass.split('.');
   if (!payload || !sig || rest.length > 0) return null;
@@ -40,10 +57,27 @@ export async function verifyPass(secret: string, pass: string | null): Promise<s
       encoder.encode(payload),
     );
     if (!ok) return null;
-    const { n, exp } = JSON.parse(new TextDecoder().decode(fromBase64Url(payload))) as { n?: unknown; exp?: unknown };
-    if (typeof n !== 'string' || typeof exp !== 'number' || exp < Date.now()) return null;
-    return n;
+    const body = JSON.parse(new TextDecoder().decode(fromBase64Url(payload))) as Record<string, unknown>;
+    if (body.s !== scope || typeof body.exp !== 'number' || body.exp < Date.now()) return null;
+    if (typeof body.u !== 'string') return null;
+    return { u: body.u, ...(typeof body.n === 'string' ? { n: body.n } : {}) };
   } catch {
     return null;
   }
+}
+
+/** 通行証ごとの呼び出し回数の制限（このサーバー内の集計なので目安。大量の呼び出しを抑えるためのもの） */
+const windows = new Map<string, { start: number; count: number }>();
+
+/** @returns 制限内なら true */
+export function withinRateLimit(key: string, limit: number, windowMs: number): boolean {
+  const now = Date.now();
+  const w = windows.get(key);
+  if (!w || now - w.start >= windowMs) {
+    // 古い集計が溜まり続けないよう、新しい窓を作るときに掃除する
+    if (windows.size > 5000) for (const [k, v] of windows) if (now - v.start >= windowMs) windows.delete(k);
+    windows.set(key, { start: now, count: 1 });
+    return true;
+  }
+  return ++w.count <= limit;
 }
