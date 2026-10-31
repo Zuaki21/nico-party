@@ -62,7 +62,7 @@ export class NicoPlayer {
 
   /**
    * プレイヤー内のリンクのクリックを、ニコニコのページを開く代わりに自分で受ける。
-   * タグ（.../tag/<タグ>）は検索に、それ以外のニコニコのページは外部のブラウザで開く。
+   * タグ（.../tag/<タグ>）は検索に、それ以外のリンクは外部のブラウザで開く。
    * 中継経由（/.proxy/nico/...）なら親と同じオリジンなので、中のページに触れる。
    * ニコニコの直接埋め込み（ローカル確認用）は別オリジンで触れないので、何もしない
    */
@@ -238,7 +238,7 @@ export class NicoPlayer {
 /**
  * プレイヤーの中のリンクを、外部のブラウザで開く本当の URL にする。
  * 中継は URL を `<自分のオリジン>/.proxy/external/<ホストの . を -- にしたもの>/...`（Discord の URL Mapping）に
- * 書き換えているので、それを元に戻す。ニコニコ以外の行き先は開かない
+ * 書き換えているので、それを元に戻す。ニコニコ以外のサイトへのリンクは書き換えられていないので、そのまま使う
  */
 function realUrl(href: string, base: string): string | null {
   let u: URL;
@@ -251,6 +251,7 @@ function realUrl(href: string, base: string): string | null {
   if (m && u.origin === location.origin) {
     u = new URL(`https://${m[1].replaceAll('--', '.')}${m[2] ?? '/'}${u.search}${u.hash}`);
   }
-  if (u.protocol !== 'https:' || !/(^|\.)nicovideo\.jp$/.test(u.hostname)) return null;
+  // 開くのは http(s) だけ（javascript: などは開かない）。Discord が開く前に確認の画面を出す
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
   return u.href;
 }
