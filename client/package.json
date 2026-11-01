@@ -1,12 +1,13 @@
 {
   "name": "nico-party-client",
   "private": true,
-  "version": "1.7.11",
+  "version": "1.7.12",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:sync": "node scripts/sync-check/check.cjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

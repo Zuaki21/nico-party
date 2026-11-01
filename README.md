@@ -63,6 +63,17 @@ cloudflared tunnel --protocol http2 --url http://127.0.0.1:5173
 - 開発中は Activity 内のログが `client/dev.log` に書き出される
 - 通常のブラウザで `http://127.0.0.1:5173` を開くと、全タブ共通の部屋で同期だけを確認できる
 
+## 同期エンジンの確認
+
+`client/src/player/sync` を変更したときは、動画の同期の挙動が変わっていないかを、偽のプレイヤー・偽の時計で確かめられる。
+
+```sh
+cd client && npm run check:sync              # 記録 (scripts/sync-check/expected.json) と比べる
+cd client && npm run check:sync -- --update  # 意図して挙動を変えたときに、記録を作り直す
+```
+
+途中参加・開始待ち・ユーザー操作・動画の切り替え・読み込み失敗など、21 の場面を流して、プレイヤーとサーバーへの呼び出しを時刻つきで比べる。
+
 ## デプロイ
 
 反映のたびに `client/package.json` の `version` を進める。設定画面の左下に「ver x.x.x」と出るので、反映できたかはそれで確認できる。
