@@ -2,7 +2,7 @@ import { SEARCH_MAX_OFFSET, SEARCH_PAGE_SIZE, type SearchItem, type SearchSort }
 import { $, bodyEl, countsMeta, markSeg, noteEl, onSeg, thumbEl } from './dom';
 import { formatDate, getLang, t, unplayableReason } from './i18n';
 import { TRASH_ICON } from './icons';
-import { findAddedItem } from './playlist';
+import { findAddedItem, isInPlaylist, onPlaylistChange } from './playlist';
 import type { UiHandlers } from './ui';
 
 type SearchView = 'loading' | 'done' | 'error';
@@ -19,14 +19,34 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
   let total = 0;
   /** 古い検索の結果が後から届いても無視するための番号 */
   let seq = 0;
-  /** この検索中に追加した動画（ボタンを ✓ にする） */
-  const added = new Set<string>();
+  /**
+   * ボタンの ✓（追加済み）は、再生リストの中にあるかで決める（他の人が消した・追加したときも合う）。
+   * ただし、押した直後はサーバーから再生リストが届くまで少し間があるので、その間だけ押した結果を優先する
+   */
+  const pending = new Map<string, { added: boolean; until: number }>();
+  const PENDING_MS = 3000;
+  const isAdded = (videoId: string) => {
+    const p = pending.get(videoId);
+    if (p && Date.now() < p.until) return p.added;
+    pending.delete(videoId);
+    return isInPlaylist(videoId);
+  };
+  /** 並んでいる結果の、ボタンの表示を更新する関数（並べ直すたびに作り直す） */
+  const refreshers = new Set<() => void>();
   /** 言語を切り替えたときに同じ状態で描き直す */
   let lastView: SearchView = 'done';
   /** 画面に並べ終えた結果の数（「もっと見る」では、これより後ろの分だけを足す） */
   let shown = 0;
   /** 結果の後ろに付けている行（「検索中…」「もっと見る」など。更新のたびに付け替える） */
   let tail: HTMLElement[] = [];
+
+  /** 並んでいる行をすべて消して、最初から並べ直せる状態にする */
+  const reset = () => {
+    list.replaceChildren();
+    shown = 0;
+    tail = [];
+    refreshers.clear();
+  };
 
   /** 「もっと見る」の行。取得中は同じボタンを押せなくして文言だけ変える */
   const moreEl = (loading: boolean) => {
@@ -50,11 +70,7 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
         : t('searchQuery', { q: query });
     markSeg('search-sort', 'sort', sort);
     // 新しい検索になったときや作り直すときだけ全部を並べ直す。それ以外は後ろに足すだけで、スクロール位置も動かさない
-    if (rebuild || items.length < shown) {
-      list.replaceChildren();
-      shown = 0;
-      tail = [];
-    }
+    if (rebuild || items.length < shown) reset();
     for (const el of tail) el.remove();
     list.append(...items.slice(shown).map(resultEl));
     shown = items.length;
@@ -91,14 +107,14 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
       add.title = t(done ? 'removeAdded' : 'addToList');
       add.classList.toggle('done', done);
     };
-    mark(added.has(r.videoId));
+    const refresh = () => mark(isAdded(r.videoId));
+    refresh();
     if (r.unplayable) {
       // 再生できない動画は選べないようにする（サーバーでも追加を断る）
       const reason = unplayableReason(r.unplayable);
       li.classList.add('unplayable');
       li.title = reason;
       add.disabled = true;
-      add.textContent = '＋';
       add.title = reason;
       const badge = document.createElement('span');
       badge.className = 'badge unplayable-badge';
@@ -106,18 +122,18 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
       li.querySelector('.thumb')!.append(badge);
     }
     add.addEventListener('click', () => {
-      if (added.has(r.videoId)) {
+      if (isAdded(r.videoId)) {
         // 追加してすぐ再生が始まった動画も、そのまま外せる（サーバーが次の動画へ進める）
         const target = findAddedItem(r.videoId);
         if (target) h.remove(target.id);
-        added.delete(r.videoId);
-        mark(false);
-        return;
+        pending.set(r.videoId, { added: false, until: Date.now() + PENDING_MS });
+      } else {
+        h.enqueue(r.videoId);
+        pending.set(r.videoId, { added: true, until: Date.now() + PENDING_MS });
       }
-      h.enqueue(r.videoId);
-      added.add(r.videoId);
-      mark(true);
+      refresh();
     });
+    if (!r.unplayable) refreshers.add(refresh);
     li.append(add);
     return li;
   };
@@ -127,9 +143,7 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
     if (offset === 0) {
       items = [];
       // 最初の検索では案内の文や前の検索の結果を消す
-      list.replaceChildren();
-      shown = 0;
-      tail = [];
+      reset();
       list.scrollTop = 0;
     }
     render('loading');
@@ -155,11 +169,15 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
   const showHint = () => {
     $('search-title').textContent = '';
     markSeg('search-sort', 'sort', sort);
-    list.replaceChildren(noteEl(t('searchHint')));
-    shown = 0;
-    tail = [];
+    reset();
+    list.append(noteEl(t('searchHint')));
   };
   showHint();
+
+  onPlaylistChange(() => {
+    for (const [id, p] of pending) if (isInPlaylist(id) === p.added) pending.delete(id);
+    for (const refresh of refreshers) refresh();
+  });
 
   return {
     rerender() {
@@ -168,7 +186,7 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
     },
     open(q: string) {
       query = q;
-      added.clear();
+      pending.clear();
       onOpen();
       fetchPage(0);
     },

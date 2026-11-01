@@ -2,8 +2,10 @@ import { Common, type DiscordSDK } from '@discord/embedded-app-sdk';
 import { describeError, devlog } from './devlog';
 import { proxied } from './env';
 
-/** Discord にログインしてもらい、表示名を取得する */
-/** @returns 表示名と、サーバーが発行した通行証（WebSocket 用・ニコニコの中継と検索用。取得できなかったときは undefined） */
+/**
+ * Discord にログインしてもらい、表示名を取得する。
+ * @returns 表示名と、サーバーが発行した通行証（WebSocket 用・ニコニコの中継と検索用。取得できなかったときは undefined）
+ */
 export async function authenticate(sdk: DiscordSDK): Promise<{ name: string; pass?: string; nicoPass?: string }> {
   const authorize = (prompt?: 'none') =>
     sdk.commands.authorize({

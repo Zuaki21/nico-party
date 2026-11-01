@@ -236,7 +236,7 @@ export class SyncEngine {
     if (Date.now() < this.localHoldUntil) {
       // 保持が終わったら、保留した他の人の操作を反映する
       clearTimeout(this.holdTimeout);
-      this.holdTimeout = window.setTimeout(() => this.apply(threshold), this.localHoldUntil - Date.now() + 50);
+      this.holdTimeout = window.setTimeout(() => this.apply(APPLY_THRESHOLD), this.localHoldUntil - Date.now() + 50);
       return;
     }
     if (!s?.current || s.current.id !== this.loadedItemId || !p.ready()) return;
@@ -330,7 +330,10 @@ export class SyncEngine {
       return;
     }
     this.endCatchUp();
+    // タイムアウトで位置が合っていないままのときは、ここでシークが入る。読み込み直後と同じく長めに無視する
+    this.justLoaded = true;
     this.apply(APPLY_THRESHOLD);
+    this.justLoaded = false;
   }
 
   private endCatchUp() {

@@ -108,6 +108,7 @@ function applyMembers(members: Member[]) {
 function onMessage(msg: ServerMsg) {
   switch (msg.t) {
     case 'welcome':
+      clearTimeout(slowTimer);
       hideLoading();
       if (loginFailed) {
         loginFailed = false;
@@ -141,11 +142,13 @@ function onMessage(msg: ServerMsg) {
 /** Discord にログインできなかった（通行証がない）。部屋に入れたときに案内を出す */
 let loginFailed = false;
 
+let slowTimer: number | undefined;
+
 /** 部屋に入るまでこれ以上かかったら、時間がかかっていると伝える */
 const SLOW_CONNECT_MS = 10_000;
 
 function connect(roomId: string, name: string, pass?: string) {
-  setTimeout(slowLoading, SLOW_CONNECT_MS);
+  slowTimer = window.setTimeout(slowLoading, SLOW_CONNECT_MS);
   conn = new RoomConnection({ roomId, name, clientId, pass, onMessage, onWaiting: renderConnecting });
   conn.start();
 }

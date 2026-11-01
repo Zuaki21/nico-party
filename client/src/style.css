@@ -35,6 +35,11 @@
   box-sizing: border-box;
 }
 
+/* hidden 属性の要素は、クラスで display を指定していても必ず隠す */
+[hidden] {
+  display: none !important;
+}
+
 /* アプリとして使う画面なので、入力欄以外の文字は選択させない */
 body {
   user-select: none;
@@ -129,9 +134,6 @@ body {
   text-align: center;
 }
 
-.empty[hidden] {
-  display: none;
-}
 
 .now {
   display: flex;
@@ -344,9 +346,6 @@ button.icon:hover {
   box-shadow: 0 0.2857rem 0.8571rem rgba(0, 0, 0, 0.3);
 }
 
-.error[hidden] {
-  display: none;
-}
 
 /* 残り表示時間のバー。消えるまでに右から左へ縮む */
 .error {
@@ -769,9 +768,6 @@ button.more {
   box-shadow: 0 0.5714rem 1.7143rem rgba(0, 0, 0, 0.4);
 }
 
-.settings[hidden] {
-  display: none;
-}
 
 /* 設定画面を開いている間は、設定ボタンをオンの見た目にする */
 #open-settings[aria-pressed='true'] {
@@ -979,9 +975,6 @@ button.link:hover {
   pointer-events: none;
 }
 
-.nav-preview[hidden] {
-  display: none;
-}
 
 .nav-preview-label {
   margin-bottom: 0.3571rem;
@@ -1090,6 +1083,3 @@ button.add.done:hover {
   background: #000;
 }
 
-.player-cover[hidden] {
-  display: none;
-}

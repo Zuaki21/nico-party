@@ -70,9 +70,9 @@ export function countsMeta(views: number | undefined, comments: number | undefin
 }
 
 function formatTime(sec: number) {
-  const t = Math.max(0, Math.floor(sec));
-  const h = Math.floor(t / 3600);
-  const m = Math.floor((t % 3600) / 60);
-  const ss = String(t % 60).padStart(2, '0');
+  const total = Math.max(0, Math.floor(sec));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const ss = String(total % 60).padStart(2, '0');
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
 }

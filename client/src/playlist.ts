@@ -56,6 +56,17 @@ export function setupPlaylist(h: Pick<UiHandlers, 'remove' | 'jump' | 'skip' | '
   refreshNavPreview = setupNavPreview(navPreview);
 }
 
+/** 再生リストが変わったときに呼ぶ関数（検索結果の「追加済み」の表示を更新するため） */
+const changeListeners: (() => void)[] = [];
+export function onPlaylistChange(fn: () => void) {
+  changeListeners.push(fn);
+}
+
+/** videoId の動画が、これから再生する中か再生中にあるか（視聴済みは含めない。もう一度追加したいことがあるため） */
+export function isInPlaylist(videoId: string): boolean {
+  return lists.current?.videoId === videoId || lists.queue.some((q) => q.videoId === videoId);
+}
+
 /**
  * 再生リストの中から、videoId の動画を探す（検索結果の「追加済み」を取り消すため）。
  * 同じ動画が複数あれば、あとから追加されたもの（これから再生する中の後ろ）を優先する
@@ -126,6 +137,7 @@ function renderList() {
   // 全曲リピート中は、次が無くても最初に戻れる
   $<HTMLButtonElement>('skip').disabled = !current || (queue.length === 0 && lists.repeat !== 'all');
   refreshNavPreview();
+  for (const fn of changeListeners) fn();
   // 並べ替えのドラッグ中に描き直すと掴んでいる要素が消えるので、終わってから描く
   if (dragging) return;
   const ol = $('queue');

@@ -13,8 +13,10 @@ export const enum PlayerStatus {
   Ended = 4,
 }
 
-/** load: 動画の読み込みが終わり操作できるようになった */
-/** progress: 再生位置の通知（約 0.25 秒ごと）で位置が進んだ。再生開始の通知が来ないときでも分かる */
+/**
+ * load: 動画の読み込みが終わり操作できるようになった /
+ * progress: 再生位置の通知（約 0.25 秒ごと）で位置が進んだ。再生開始の通知が来ないときでも分かる
+ */
 type PlayerEvent = 'load' | 'play' | 'pause' | 'ended' | 'seeked' | 'progress';
 
 type Handler = () => void;
@@ -31,8 +33,6 @@ export class NicoPlayer {
   private timeAt = 0;
   /** プレイヤーが実際に通知してきた再生位置 (秒) と、その受信時刻（seek() で見かけ上動かした値とは別） */
   private reported = { time: 0, at: 0 };
-  /** どこまで読み込み済みか (秒) */
-  private buffered = 0;
   private muted = false;
   private handlers: Partial<Record<PlayerEvent, Handler[]>> = {};
   private tagHandler: ((tag: string) => void) | null = null;
@@ -77,6 +77,7 @@ export class NicoPlayer {
       return;
     }
     if (!doc) return;
+    const baseUri = doc.baseURI;
     const onClick = (e: Event) => {
       const a = (e.target as Element | null)?.closest?.('a');
       const href = a?.getAttribute('href');
@@ -97,7 +98,7 @@ export class NicoPlayer {
         }
         return;
       }
-      const url = realUrl(href, doc!.baseURI);
+      const url = realUrl(href, baseUri);
       devlog(`link click: ${href} -> ${url ?? '(ignored)'}`);
       if (url) this.linkHandler?.(url);
     };
@@ -113,7 +114,6 @@ export class NicoPlayer {
     this.time = 0;
     this.timeAt = 0;
     this.duration = 0;
-    this.buffered = 0;
     this.reported = { time: 0, at: 0 };
     this.iframe.src = this.src(videoId, PLAYER_ID);
   }
@@ -142,11 +142,6 @@ export class NicoPlayer {
 
   isMuted() {
     return this.muted;
-  }
-
-  /** どこまで読み込み済みか (秒) */
-  getBuffered() {
-    return this.buffered;
   }
 
   /** @param sec 秒 */
@@ -238,7 +233,6 @@ export class NicoPlayer {
         if (typeof data.duration === 'number' && data.duration > 0) {
           this.duration = data.duration / 1000;
         }
-        if (typeof data.maximumBuffered === 'number') this.buffered = data.maximumBuffered / 1000;
         if (typeof data.muted === 'boolean') this.muted = data.muted;
         return;
     }
