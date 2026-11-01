@@ -102,7 +102,7 @@ const ROUTES: Route[] = [
     upstream: (m, c) => ({ url: `https://embed.nicovideo.jp/users/${m[1]}`, type: 'application/json', rewrite: c.rewrite.replace }),
   },
   // 視聴権限 (HLS の URL を発行する API)
-  { method: 'POST', path: /^\/v1-watch\/([^/]+)\/.+$/, upstream: (m, c) => nvapiPost(`/v1/watch/${m[1]}/access-rights/hls`, c) },
+  { method: 'POST', path: /^\/v1-watch\/([\w-]+)\/.+$/, upstream: (m, c) => nvapiPost(`/v1/watch/${m[1]}/access-rights/hls`, c) },
   { method: 'POST', path: /^\/v4-watch\/(.+)$/, upstream: (m, c) => nvapiPost(`/v4/watch/${m[1]}`, c) },
   {
     method: 'GET',

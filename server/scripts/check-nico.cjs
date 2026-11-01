@@ -16,7 +16,7 @@ const load = loadTs([
 ]);
 const { rewriter } = load('server/src/nico/nicoRewrite.ts');
 const { handleNico } = load('server/src/nico/nico.ts');
-const { issuePass } = load('server/src/pass.ts');
+const { issuePass, ConfigError } = load('server/src/pass.ts');
 
 const HOST = 'https://app123.discordsays.com';
 const PASS = 'PAYLOAD.SIGNATURE';
@@ -180,7 +180,17 @@ const ok = (text, init = {}) => new Response(text, { status: 200, ...init });
 
   await run('中継: 秘密の未登録は、502 にせず例外にする（外側が 500 にする）', async () => {
     const req = new Request('http://x/nico/p.q/nico-embed/sm9');
-    await assert.rejects(() => handleNico(req, { DISCORD_CLIENT_ID: 'a' }, '/p.q/nico-embed/sm9'), /PASS_SECRET is not set/);
+    await assert.rejects(
+      () => handleNico(req, { DISCORD_CLIENT_ID: 'a' }, '/p.q/nico-embed/sm9'),
+      (e) => e instanceof ConfigError && /PASS_SECRET is not set/.test(e.message),
+    );
+  });
+
+  await run('中継: 経路の動画 ID に、パスをたどる文字を入れられない', async () => {
+    const { matchRoute } = load('server/src/nico/nicoRoutes.ts');
+    assert.ok(matchRoute('POST', '/v1-watch/sm9/x'));
+    assert.equal(matchRoute('POST', '/v1-watch/./x'), null);
+    assert.equal(matchRoute('POST', '/v1-watch/../x'), null);
   });
 
   await run('中継: 許可外へのリダイレクトを断ったとき、警告を残す', async () => {

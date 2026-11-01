@@ -16,6 +16,8 @@ const HIDDEN_KEY = 'nico-party:side-hidden';
 /** 分割線をキーボードで動かすときの 1 回の量 (px)。Shift を押していると大きく動かす */
 const KEY_STEP = 24;
 const KEY_STEP_LARGE = 96;
+/** これだけ動かして初めて、ドラッグとして扱う (px) */
+const DRAG_START_PX = 4;
 
 /** 再生リスト欄のドラッグでのサイズ変更と表示・非表示 */
 export function setupSidePanel(root: HTMLElement): { show: () => void } {
@@ -103,8 +105,14 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
     const rect = root.getBoundingClientRect();
     const wide = wideQuery.matches;
 
+    // ドラッグを始めたら、画面に合わせて収めた印は解除する（ドラッグ中に画面の大きさが変わっても、巻き戻さない）
+    fitted = false;
+    const startX = e.clientX;
+    const startY = e.clientY;
     let moved = false;
     const onMove = (ev: PointerEvent) => {
+      // クリックのときの手の揺れでは、動かしたことにしない
+      if (!moved && Math.hypot(ev.clientX - startX, ev.clientY - startY) < DRAG_START_PX) return;
       const raw = wide ? rect.right - ev.clientX : rect.bottom - ev.clientY;
       moved = true;
       setSize(clampSize(raw));
@@ -116,7 +124,6 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
       splitter.removeEventListener('pointercancel', onUp);
       // 動かさずに離しただけなら、保存しない（画面に合わせて収めた小さい値が、保存した大きさになってしまう）
       if (!moved) return;
-      fitted = false;
       save(sizeKey(), String(parseInt(side.style.getPropertyValue('--side-size')) || ''));
     };
     splitter.addEventListener('pointermove', onMove);
@@ -127,6 +134,8 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
   // キーボードでも大きさを変えられる（矢印キーで 24px ずつ、Shift で大きく。縦並びのときは上下、横並びのときは左右。
   // Home で最小、End で最大）
   splitter.addEventListener('keydown', (e) => {
+    // ブラウザの操作（Alt+← で戻る など）を潰さない
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
     const wide = wideQuery.matches;
     const grow = wide ? 'ArrowLeft' : 'ArrowUp';
     const shrink = wide ? 'ArrowRight' : 'ArrowDown';

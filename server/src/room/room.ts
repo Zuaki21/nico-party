@@ -92,7 +92,7 @@ export class Room extends DurableObject<Env> {
     const verifiedName = request.headers.get(VERIFIED_NAME_HEADER);
     const attachment: Attachment = {
       // メンバーの ID はサーバーが決める（クライアントの申告にすると、他の人の ID を名乗れてしまう）
-      id: crypto.randomUUID().slice(0, 8),
+      id: crypto.randomUUID().slice(0, 16),
       name: verifiedName !== null ? Array.from(decodeURIComponent(verifiedName)).slice(0, 32).join('') : 'guest',
       joined: false,
       connectedAt: Date.now(),
@@ -158,7 +158,7 @@ export class Room extends DurableObject<Env> {
         if (!a.uid) a.name = GUEST_NAMES.includes(msg.name) ? msg.name : 'guest';
         // 確かめられた人は、再接続しても同じメンバーとして扱えるよう、ユーザー ID と接続元の ID から決めた ID にする
         // （どちらかが分からないと作れないので、他の人の ID は名乗れない）。ログインしていない人は、毎回新しい ID
-        if (a.uid && msg.clientId) a.id = (await sha256Hex(`${a.uid}:${msg.clientId}`)).slice(0, 8);
+        if (a.uid && msg.clientId) a.id = (await sha256Hex(`${a.uid}:${msg.clientId}`)).slice(0, 16);
         // ID を作っている間に、同じ接続から 2 通目の join が届いていないか確かめ直す
         if (this.sockets.attachment(ws).joined) return;
         a.joined = true;

@@ -559,6 +559,19 @@ test('トークン交換: 鍵が未登録なら、Discord に問い合わせる�
   assert.equal(called, false);
 });
 
+test('トークン交換: DISCORD_CLIENT_SECRET の未登録も ConfigError', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('should not be called'); };
+  try {
+    await assert.rejects(
+      () => exchangeToken(new Request('http://x/api/token', { method: 'POST', body: JSON.stringify(good) }), { DISCORD_CLIENT_ID: 'a', PASS_SECRET: 'p' }),
+      (e) => e instanceof pass.ConfigError && /DISCORD_CLIENT_SECRET/.test(e.message),
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
 test('トークン交換: 入力が正しくなければ 400、大きすぎれば 413。Discord には問い合わせない', async () => {
   for (const body of [{ room: 'r' }, { code: 'a b', room: 'r' }, { code: 'abc' }, { code: 'abc', room: 'bad room!' }, 'not json']) {
     const { res, calls } = await tokenWith({}, body);

@@ -22,6 +22,14 @@ const load = loadTs([
   'shared/protocol.ts',
   'shared/search.ts',
   'shared/video.ts',
+  'server/src/index.ts',
+  'server/src/token.ts',
+  'server/src/wsAuth.ts',
+  'server/src/instanceCheck.ts',
+  'server/src/body.ts',
+  'server/src/nico/nico.ts',
+  'server/src/nico/nicoRoutes.ts',
+  'server/src/nico/nicoRewrite.ts',
 ]);
 
 // ---- 代用品
@@ -325,6 +333,35 @@ test('追加: 待っている間に全員が退出して部屋が破棄された
   }
   assert.ok(storage.data.has('queue') || storage.data.has('state'), '追加は書き込まれる');
   assert.equal(storage.alarm, now + 60_000);
+});
+
+// ---- Worker の入口（index.ts）
+test('入口: 秘密が未登録なら、原因をログに残して 500。ログイン前の呼び出しも同じ', async () => {
+  const worker = load('server/src/index.ts').default;
+  const logged = [];
+  const realError = console.error;
+  console.error = (...a) => logged.push(a);
+  try {
+    for (const url of ['http://x/api/search?q=a', 'http://x/nico/p.q/nico-embed/sm9', 'http://x/ws/room1']) {
+      const res = await worker.fetch(new Request(url, { headers: { upgrade: 'websocket' } }), {}, {});
+      assert.equal(res.status, 500, url);
+    }
+    assert.ok(logged.length >= 3);
+  } finally {
+    console.error = realError;
+  }
+});
+
+test('入口: 通行証がなければ 401、知らない経路は 404、/ は案内ページ（frame_id があれば本体）', async () => {
+  const worker = load('server/src/index.ts').default;
+  const asset = [];
+  const env = { PASS_SECRET: 'secret', ASSETS: { fetch: async (req) => { asset.push(new URL(req.url).pathname); return new Response('ok'); } } };
+  assert.equal((await worker.fetch(new Request('http://x/api/search?q=a'), env, {})).status, 401);
+  assert.equal((await worker.fetch(new Request('http://x/ws/room1', { headers: { upgrade: 'websocket' } }), env, {})).status, 401);
+  assert.equal((await worker.fetch(new Request('http://x/nope'), env, {})).status, 404);
+  await worker.fetch(new Request('http://x/'), env, {});
+  await worker.fetch(new Request('http://x/?frame_id=1'), env, {});
+  assert.deepEqual(asset, ['/landing', '/']);
 });
 
 (async () => {
