@@ -1,0 +1,139 @@
+/* 画面の広さ・高さ・タッチ操作・PiP（compact）で変わる部分 */
+
+/* 横に広いときはキューを右側に並べる */
+@media (min-width: 900px) {
+  #app {
+    flex-direction: row;
+  }
+  .side {
+    flex-basis: 28.5714rem;
+    /* sidePanel.ts の MIN_SIDE_WIDTH と揃える */
+    min-width: 18.5714rem;
+  }
+  .splitter {
+    cursor: col-resize;
+  }
+  .splitter::after {
+    width: 0.2857rem;
+    height: 2.8571rem;
+  }
+  .queue {
+    flex: 1;
+  }
+}
+
+/* PiP など小さく表示されているときは動画だけを出す（Discord から通知される表示モードと、画面の高さの両方で判定） */
+#app.compact {
+  padding: 0;
+}
+
+#app.compact .now,
+#app.compact .splitter,
+#app.compact .side,
+#app.compact .settings {
+  display: none;
+}
+
+#app.compact .player {
+  border-radius: 0;
+}
+
+@media (max-height: 300px) {
+  #app {
+    padding: 0;
+  }
+  .now,
+  .splitter,
+  .side,
+  .settings {
+    display: none !important;
+  }
+  .player {
+    border-radius: 0;
+  }
+  .main,
+  .player {
+    flex: 1 !important;
+    aspect-ratio: auto !important;
+  }
+  .player {
+    container-type: size;
+  }
+}
+
+@media (hover: none) {
+  .actions {
+    position: static;
+    display: flex;
+    padding-left: 0;
+    background: none;
+  }
+}
+
+/*
+ * スマホなどタッチ操作の端末では、画面上端（ステータスバー・ノッチ）に動画がくっつかないよう余白を取る。
+ * Discord が渡す安全領域（--discord-safe-area-inset-*）、無ければ端末の値、どちらも無ければ最低 2rem
+ */
+@media (pointer: coarse) {
+  #app {
+    padding-top: max(2rem, var(--discord-safe-area-inset-top, env(safe-area-inset-top, 0px)));
+    padding-bottom: max(0.5714rem, var(--discord-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+    padding-left: max(0.5714rem, var(--discord-safe-area-inset-left, env(safe-area-inset-left, 0px)));
+    padding-right: max(0.5714rem, var(--discord-safe-area-inset-right, env(safe-area-inset-right, 0px)));
+  }
+}
+
+/*
+ * スマホで縦に並べているときは、動画を幅いっぱいの 16:9 に固定し、再生リストが残りの高さを使う。
+ * 大きさを変えるハンドルは出さない（キーボードが出ても動画の位置と大きさは変わらず、再生リストだけ縮む）
+ */
+@media (pointer: coarse) and (max-width: 899px) {
+  .main {
+    flex: none;
+  }
+  .player {
+    flex: none;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+  }
+  .splitter {
+    display: none;
+  }
+  /* 設定画面は設定ボタンの下に開き、再生リストの上に重ねる（動画を隠さない） */
+  .settings {
+    top: calc(100% + 0.4286rem);
+    bottom: auto;
+    max-height: 60vh;
+  }
+  .side {
+    /* ドラッグで保存された大きさ（sidePanel.ts が付ける flex-basis）より優先する */
+    flex: 1 1 auto !important;
+    margin-top: 0.5714rem;
+  }
+}
+
+/* PiP など小さく表示されているときは、16:9 に固定せず枠いっぱいに動画を出す */
+#app.compact .main,
+#app.compact .player {
+  flex: 1;
+  aspect-ratio: auto;
+}
+
+/*
+ * PiP の枠が 16:9 より縦長（スマホの正方形の PiP など）のときは、上下に黒帯が出ないよう
+ * 動画の高さを枠に合わせ、はみ出た左右を切り落とす（プレイヤーごと横に広げて中央に置く）
+ */
+#app.compact .player {
+  container-type: size;
+}
+
+@container (max-aspect-ratio: 16 / 9) {
+  .player iframe {
+    left: 50%;
+    right: auto;
+    width: auto;
+    height: 100%;
+    aspect-ratio: 16 / 9;
+    transform: translateX(-50%);
+  }
+}

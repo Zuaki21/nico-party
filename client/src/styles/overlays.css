@@ -1,0 +1,139 @@
+/* エラー表示・ホバーのカード・ローディング・位置合わせの覆い */
+
+.error {
+  position: absolute;
+  top: calc(100% + 0.2857rem);
+  left: 0;
+  right: 0;
+  z-index: 2;
+  padding: 0.5714rem 0.7143rem;
+  border-radius: 0.4286rem;
+  border: 1px solid var(--danger);
+  background: var(--panel);
+  color: var(--danger);
+  box-shadow: 0 0.2857rem 0.8571rem rgba(0, 0, 0, 0.3);
+}
+
+
+/* 残り表示時間のバー。消えるまでに右から左へ縮む */
+.error {
+  overflow: hidden;
+}
+
+.error.timing::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0.2143rem;
+  background: var(--danger);
+  transform-origin: left;
+  animation: error-timer var(--error-ms, 5s) linear forwards;
+}
+
+@keyframes error-timer {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+/* 前へ・次へのボタンに乗せたときに出す、移動先の動画のカード */
+.nav-preview {
+  position: fixed;
+  z-index: 20;
+  width: 15.7143rem;
+  max-width: calc(100vw - 1.1429rem);
+  padding: 0.5714rem;
+  border-radius: 0.5714rem;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 0.2857rem 1.1429rem rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+
+.nav-preview-label {
+  margin-bottom: 0.3571rem;
+  color: var(--muted);
+  font-size: 0.8571rem;
+}
+
+.nav-preview-thumb {
+  aspect-ratio: 16 / 9;
+  border-radius: 0.2857rem;
+  overflow: hidden;
+  background: var(--thumb-bg);
+}
+
+.nav-preview-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nav-preview-title {
+  margin-top: 0.4286rem;
+  font-size: 0.9286rem;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  /* 長い英数字だけのタイトルでもカードからはみ出さない */
+  overflow-wrap: anywhere;
+}
+
+/* 最初に部屋に入れるまで、画面全体を覆うローディング表示 */
+.loading {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.1429rem;
+  background: var(--bg);
+  color: var(--muted);
+  text-align: center;
+  padding: 1.1429rem;
+}
+
+.loading-icon {
+  width: 7.1429rem;
+  height: 7.1429rem;
+  /* 画像は白い背景つきなので、角を丸めて、明るい・暗いどちらの背景でもカードのように見せる */
+  border-radius: 1.7143rem;
+  background: #fff;
+}
+
+.spinner {
+  width: 2.2857rem;
+  height: 2.2857rem;
+  border-radius: 50%;
+  border: 0.2857rem solid var(--border);
+  border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 途中参加で位置が合うまで、プレイヤーを覆う */
+.player-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  background: #000;
+}

@@ -1,0 +1,132 @@
+/* タブ・検索結果・並び順 */
+
+/* 再生リストと検索結果のタブ。選んでいるほうだけを表示する */
+.tabs {
+  display: flex;
+  flex: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs button {
+  flex: 1;
+  padding: 0.4286rem 0.7143rem;
+  border-radius: 0.4286rem 0.4286rem 0 0;
+  border-bottom: 0.1429rem solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.tabs button.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.side[data-tab='search'] .queue-head,
+.side[data-tab='search'] #queue,
+.side[data-tab='list'] .search {
+  display: none;
+}
+
+.search {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4286rem;
+}
+
+.search-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4286rem 0.5714rem;
+  font-weight: 600;
+}
+
+.search-title {
+  /* 欄が細くて入りきらないときは、潰れずに 1 行目に回る */
+  flex: 1 1 7.1429rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 並び順の切り替え（つながったボタン） */
+.seg {
+  display: flex;
+  flex: none;
+}
+
+.seg button {
+  padding: 0.2857rem 0.7143rem;
+  font-size: 0.8571rem;
+  border-radius: 0;
+  background: var(--button-secondary);
+  color: var(--button-secondary-text);
+}
+
+.seg button:first-child {
+  border-radius: 0.4286rem 0 0 0.4286rem;
+}
+
+.seg button:last-child {
+  border-radius: 0 0.4286rem 0.4286rem 0;
+}
+
+.seg button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+#results {
+  flex: 1;
+}
+
+/* 検索結果の「＋」（キューに追加） */
+button.add {
+  flex: none;
+  width: 2.2857rem;
+  height: 2.2857rem;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.2857rem;
+  line-height: 1;
+  /* ✓・ゴミ箱・＋のどれも、ボタンの真ん中に置く */
+  display: grid;
+  place-items: center;
+}
+
+button.add:disabled {
+  background: var(--button-secondary);
+  color: var(--muted);
+  cursor: default;
+  /* 追加済みの ✓ は薄くしない */
+  opacity: 1;
+}
+
+button.more {
+  width: 100%;
+}
+
+/* 追加済みの ✓（押すと再生リストから外せる）。乗せたときに外せることが分かるよう × にする */
+button.add.done {
+  /* 追加済みの見た目は、押せなくしていたときと同じグレー */
+  background: var(--button-secondary);
+  color: var(--muted);
+}
+
+button.add .when-hover,
+button.add.done:hover .when-idle {
+  display: none;
+}
+
+button.add.done:hover .when-hover {
+  display: block;
+}
+
+button.add.done:hover {
+  /* 再生リストの削除ボタン（.actions button.remove:hover）と同じ色にする */
+  color: var(--danger);
+}

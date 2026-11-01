@@ -1,0 +1,209 @@
+/* 再生リストの項目 */
+
+.queue-head {
+  display: flex;
+  align-items: center;
+  gap: 0.2857rem;
+  font-weight: 600;
+}
+
+.queue-head .members {
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--muted);
+  font-weight: normal;
+}
+
+.queue {
+  list-style: none;
+  margin: 0;
+  padding: 0 0.2857rem;
+  /* キュー欄を細くしても横スクロールバーは出さない（行の中身が縮んで収まる） */
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 0;
+  background: var(--panel);
+  border-radius: 0.5714rem;
+  padding-top: 0.2857rem;
+  padding-bottom: 0.2857rem;
+}
+
+.queue li {
+  display: flex;
+  align-items: center;
+  gap: 0.5714rem;
+  padding: 0.2857rem;
+  border-radius: 0.4286rem;
+}
+
+.queue li + li {
+  margin-top: 0.1429rem;
+}
+
+.queue li.done {
+  opacity: 0.5;
+}
+
+.queue li.current {
+  background: var(--current-bg);
+}
+
+.queue li.dragging {
+  position: relative;
+  z-index: 1;
+  background: var(--dragging-bg);
+  box-shadow: 0 0.2857rem 0.8571rem rgba(0, 0, 0, 0.3);
+}
+
+.handle {
+  flex: 0 0 1.2em;
+  text-align: center;
+  color: var(--muted);
+  user-select: none;
+  cursor: grab;
+  touch-action: none;
+}
+
+.dragging .handle {
+  cursor: grabbing;
+}
+
+.thumb {
+  /* 欄が細いときは 3.4286rem まで縮む */
+  flex: 0 1 6.8571rem;
+  min-width: 3.4286rem;
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 0.2857rem;
+  overflow: hidden;
+  background: var(--thumb-bg);
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.thumb .badge {
+  position: absolute;
+  left: 0.1429rem;
+  top: 0.1429rem;
+  padding: 0 0.2857rem;
+  border-radius: 0.2143rem;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.7143rem;
+}
+
+/* 検索結果の再生できない動画（選べない） */
+.queue li.unplayable .thumb img {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+.queue li.unplayable .q-title,
+.queue li.unplayable .q-meta {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.thumb .unplayable-badge {
+  background: var(--danger);
+}
+
+.queue li.unplayable button.add:disabled {
+  opacity: 0.35;
+}
+
+.thumb .len {
+  position: absolute;
+  right: 0.1429rem;
+  bottom: 0.1429rem;
+  padding: 0 0.2857rem;
+  border-radius: 0.2143rem;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 0.7857rem;
+}
+
+.q-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.q-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.current .q-title {
+  font-weight: 600;
+}
+
+.q-meta {
+  margin-top: 0.1429rem;
+  color: var(--muted);
+  font-size: 0.8571rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * キューの「ここから再生」「削除」。普段は隠して動画情報を行の右端まで表示し、
+ * マウスを乗せた行でだけ右端に重ねて出す（背景をなじませて下の文字を隠す）。タッチ端末では常に表示
+ */
+.queue li[data-id] {
+  position: relative;
+}
+
+.actions {
+  position: absolute;
+  top: 0;
+  right: 0.2857rem;
+  bottom: 0;
+  display: none;
+  align-items: center;
+  gap: 0.1429rem;
+  padding-left: 2rem;
+  background: linear-gradient(to right, transparent, var(--panel) 1.7143rem);
+}
+
+.queue li.dragging .actions {
+  background: linear-gradient(to right, transparent, var(--dragging-bg) 1.7143rem);
+}
+
+.queue li[data-id]:hover .actions,
+.actions:focus-within {
+  display: flex;
+}
+
+.actions button.icon {
+  padding: 0.4286rem;
+}
+
+.actions button.play:hover {
+  color: var(--accent);
+}
+
+.actions button.remove:hover {
+  color: var(--danger);
+}
+
+/* ダブルクリックで再生できるので、文字が選択されないようにする */
+.queue li[data-id] {
+  user-select: none;
+}
+
+/* 再生中の行は背景が薄い色なので、操作ボタンの背景もそれに合わせる */
+.queue li.current .actions {
+  background: linear-gradient(to right, transparent, color-mix(in srgb, var(--panel), var(--accent) 22%) 1.7143rem);
+}

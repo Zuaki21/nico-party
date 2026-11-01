@@ -1,0 +1,139 @@
+/* ボタン・入力欄・動画の下の操作 */
+
+.bar {
+  display: flex;
+  gap: 0.4286rem;
+}
+
+input[type='text'] {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5714rem 0.7143rem;
+  border-radius: 0.4286rem;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+button {
+  padding: 0.5714rem 0.8571rem;
+  border: 0;
+  border-radius: 0.4286rem;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button.secondary {
+  background: var(--button-secondary);
+  color: var(--button-secondary-text);
+}
+
+/* 押せないボタン（前へ・次へで戻る先・進む先が無いときなど） */
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ボタン内のアイコン。文字と同じ高さ・色で描く */
+.icon-svg {
+  display: block;
+  width: 1.15em;
+  height: 1.15em;
+}
+
+/* 動画の下のボタン。前へ・次へと、表示の切り替えの 2 グループに分ける */
+.controls {
+  display: flex;
+  gap: 0.4286rem;
+  flex: none;
+}
+
+.controls + .controls {
+  margin-left: 0.4286rem;
+  padding-left: 0.8571rem;
+  border-left: 1px solid var(--border);
+}
+
+button.icon-button {
+  padding: 0.5714rem 0.7143rem;
+}
+
+/* 再生リストを表示している間は、ボタンをオンの見た目にする */
+#toggle-side[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--current-bg);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* 再生リストの見出しの横のシャッフル・リピート。控えめに置き、オンのときだけ色を付ける */
+button.mode {
+  padding: 0.2857rem 0.4286rem;
+  background: transparent;
+  color: var(--muted);
+}
+
+button.mode:hover {
+  color: var(--text);
+}
+
+button.mode[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--current-bg);
+}
+
+/* 1曲リピートのバッジ */
+#repeat {
+  position: relative;
+}
+
+#repeat[data-repeat='one']::after {
+  content: '1';
+  position: absolute;
+  top: -0.2857rem;
+  right: -0.2857rem;
+  min-width: 1.0714rem;
+  height: 1.0714rem;
+  padding: 0 0.2143rem;
+  border-radius: 0.5714rem;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.7143rem;
+  font-weight: 700;
+  line-height: 1.0714rem;
+  text-align: center;
+}
+
+button.icon {
+  padding: 0.1429rem 0.5714rem;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1429rem;
+}
+
+button.icon:hover {
+  color: var(--danger);
+}
+
+/* 検索結果を閉じる × は、左右の余白を詰める */
+#search-close {
+  padding-left: 0.4286rem;
+  padding-right: 0;
+}
+
+/* 追加できなかったときなどの案内。入力欄のすぐ下に重ねて出し、再生リストの位置は動かさない */
+#form {
+  position: relative;
+}
+
+button.link {
+  padding: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 0.9286rem;
+}
+
+button.link:hover {
+  text-decoration: underline;
+}
