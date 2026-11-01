@@ -294,6 +294,35 @@ test('量の制限: 壊れたメッセージを大量に送ると、解析する
   assert.equal(a.sent.filter((m) => m.t === 'state').length, 1, '時間がたてば、また受け付ける');
 });
 
+test('追加: 待っている間に全員が退出して部屋が破棄されたら、残るデータの破棄を予約し直す', async () => {
+  const { room, storage } = await makeRoom();
+  const a = await connect(room, 'u1');
+  await join(room, a);
+  let release;
+  const gate = new Promise((r) => (release = r));
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    await gate;
+    if (String(url).includes('getthumbinfo')) {
+      return new Response('<nicovideo_thumb_response status="ok"><thumb><title>t</title><length>1:00</length><embeddable>1</embeddable></thumb></nicovideo_thumb_response>');
+    }
+    return new Response('<html></html>');
+  };
+  try {
+    const pending = send(room, a, { t: 'enqueue', url: 'sm9' });
+    await new Promise((r) => setTimeout(r, 10));
+    a.readyState = 3;
+    await room.webSocketClose(a);
+    storage.alarm = null; // 破棄のアラームが発火して、すでに消えている想定
+    release();
+    await pending;
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  assert.ok(storage.data.has('queue') || storage.data.has('state'), '追加は書き込まれる');
+  assert.equal(storage.alarm, now + 60_000);
+});
+
 (async () => {
   let passed = 0;
   for (const [name, fn] of tests) {

@@ -155,7 +155,7 @@ export function settingsHtml(): string {
       </div>
     </div>
     <div class="setting-row">
-      <span>
+      <span class="setting-text">
         <span class="setting-label" id="presence-label" data-i18n="presence"></span>
         <span class="setting-desc" data-i18n="presenceDesc"></span>
       </span>

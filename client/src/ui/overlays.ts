@@ -47,9 +47,10 @@ export function showError(message: string) {
   el.textContent = message;
   el.hidden = false;
   el.style.setProperty('--error-ms', `${duration}ms`);
-  // 再生リスト欄を隠しているときは、エラーの表示が見えない・読み上げられない。読み上げだけは必ず届ける
+  // 再生リスト欄を隠しているときは、エラーの表示が見えず、読み上げられない。そのときだけ、読み上げ用の領域に入れる
+  // （見えているときは role="alert" で読み上げられるので、二重にしない）
   const status = document.getElementById('sr-status');
-  if (status) {
+  if (status && el.offsetParent === null) {
     status.textContent = '';
     requestAnimationFrame(() => (status.textContent = message));
   }

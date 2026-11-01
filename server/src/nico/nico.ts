@@ -73,14 +73,42 @@ async function route(req: Request, env: NicoRouteEnv, path: string): Promise<Res
   const up = await matched.route.upstream(matched.m, { req, query: new URL(req.url).search, rewrite });
   // User-Agent が無いとニコニコの CDN に 403 で弾かれるので、視聴者のものを引き継ぐ
   const ua = req.headers.get('user-agent') ?? DEFAULT_UA;
-  const res = await fetch(up.url, {
-    ...up.init,
-    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-    headers: { 'user-agent': ua, ...up.init?.headers },
-  });
-  // リダイレクトの先が、ニコニコ以外になっていないか（上流にオープンリダイレクトがあっても、外部の内容を中継しない）
-  if (!ALLOWED_HOST.test(new URL(res.url || up.url).hostname)) return new Response('Bad gateway', { status: 502 });
+  const res = await fetchUpstream(up, ua);
+  if (!res) return new Response('Bad gateway', { status: 502 });
   // 想定外に大きな応答は、全部読み込まずに断る
-  if (Number(res.headers.get('content-length') ?? 0) > RESPONSE_MAX) return new Response('Bad gateway', { status: 502 });
+  if (Number(res.headers.get('content-length') ?? 0) > RESPONSE_MAX) {
+    await res.body?.cancel().catch(() => {});
+    return new Response('Bad gateway', { status: 502 });
+  }
   return relay(res, up);
+}
+
+const REDIRECT_STATUS = [301, 302, 303, 307, 308];
+const MAX_REDIRECTS = 3;
+
+/**
+ * ニコニコへ問い合わせる。リダイレクトは、行き先がニコニコのホストだと確かめてから辿る
+ * （上流にオープンリダイレクトがあっても、外部のホストに問い合わせず、外部の内容を中継しない）。
+ * 辿れない・行き先が許可されていないときは null
+ */
+async function fetchUpstream(up: Upstream, ua: string): Promise<Response | null> {
+  let url = up.url;
+  let init = up.init;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    const res = await fetch(url, {
+      ...init,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      headers: { 'user-agent': ua, ...init?.headers },
+    });
+    const location = res.headers.get('location');
+    if (!REDIRECT_STATUS.includes(res.status) || !location) return res;
+    await res.body?.cancel().catch(() => {});
+    const next = new URL(location, url);
+    if (next.protocol !== 'https:' || !ALLOWED_HOST.test(next.hostname)) return null;
+    url = next.toString();
+    // 307・308 以外は、GET に切り替えて本文を捨てる（通常のリダイレクトの扱い）
+    if (res.status !== 307 && res.status !== 308) init = { ...init, method: 'GET', body: undefined };
+  }
+  return null;
 }

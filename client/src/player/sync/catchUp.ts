@@ -73,11 +73,17 @@ export class CatchUp {
       this.ctx.apply();
       return;
     }
+    // 位置合わせの途中で、部屋が再生に変わった（一時停止の部屋に入ったあと、誰かが再生した）なら、止めずに終える
+    if (s.playing) this.pauseAtEnd = false;
     if (this.finishing) {
-      // 止める命令が無視されても、いつまでも待たない
-      if (p.isPaused() || ++this.finishPolls > 5) {
+      // 止める命令を送り直しながら、止まったのを確かめてからミュートを戻す（再生通知が来ない環境でも、音を出さない）。
+      // 命令が無視されても、いつまでも待たない
+      this.finishPolls++;
+      if ((this.finishPolls >= 2 && p.isPaused()) || this.finishPolls > 5) {
         this.end();
         this.ctx.applyAfterCatchUp();
+      } else {
+        p.pause();
       }
       return;
     }

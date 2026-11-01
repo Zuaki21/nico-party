@@ -101,16 +101,30 @@ function setupSlider() {
     restart();
   };
   const pause = document.getElementById('slide-pause')!;
-  // マウスのときだけ（タッチでは、タップのあとに離れたことが分からず、止まったままになる）
-  root.addEventListener('pointerenter', (e) => e.pointerType === 'mouse' && hold(true));
-  root.addEventListener('pointerleave', (e) => e.pointerType === 'mouse' && hold(root.matches(':focus-within')));
-  // キーボードでフォーカスしている間だけ。止める／再開のボタンを押したあとは、押した結果を優先する
+  /** マウスが乗っている（マウスのときだけ。タッチでは、タップのあとに離れたことが分からず、止まったままになる） */
+  let mouseInside = false;
+  /** キーボードで操作している（フォーカスの表示が出るフォーカス）。止める／再開のボタンは含めず、押した結果を優先する */
+  let keyboardFocus = false;
+  const updateHold = () => hold(mouseInside || keyboardFocus);
+  root.addEventListener('pointerenter', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    mouseInside = true;
+    updateHold();
+  });
+  root.addEventListener('pointerleave', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    mouseInside = false;
+    updateHold();
+  });
   root.addEventListener('focusin', (e) => {
     const target = e.target as Element;
-    // マウスで押しただけ（キーボードのフォーカスの表示がない）なら、マウスが乗っている間の停止は、そのまま保つ
-    hold(target !== pause && (target.matches(':focus-visible') || root.matches(':hover')));
+    keyboardFocus = target !== pause && target.matches(':focus-visible');
+    updateHold();
   });
-  root.addEventListener('focusout', () => hold(root.matches(':hover')));
+  root.addEventListener('focusout', () => {
+    keyboardFocus = false;
+    updateHold();
+  });
   pause.addEventListener('click', () => {
     paused = !paused;
     pause.dataset.paused = String(paused);

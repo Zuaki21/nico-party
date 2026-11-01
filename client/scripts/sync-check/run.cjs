@@ -321,6 +321,16 @@ Object.assign(scenarios, {
     const s = state({ position: 30 }); engine.update(s); clock.advance(600);
     engine.update({ ...s, version: 2 }); clock.advance(10000);
   },
+  '一時停止の部屋に途中参加（再生開始の通知が来ない）': ({ clock, engine, state, player }) => {
+    player.noPlayEvent = true; engine.update(state({ playing: false, position: 45 })); clock.advance(8000);
+  },
+  '一時停止の部屋に途中参加して位置合わせ中に、誰かが再生する': ({ clock, engine, state }) => {
+    const s = state({ playing: false, position: 45 }); engine.update(s); clock.advance(600);
+    engine.update({ ...s, playing: true, updatedAt: clock.now, version: 2 }); clock.advance(8000);
+  },
+  '一時停止の命令が無視される一時停止の部屋への途中参加': ({ clock, engine, state, player }) => {
+    player.ignorePause = true; engine.update(state({ playing: false, position: 45 })); clock.advance(8000);
+  },
 });
 
 const out = {};

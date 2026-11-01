@@ -38,13 +38,19 @@
 }
 
 .setting-row {
-  flex-wrap: wrap;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 0.8571rem;
   padding: 0.8571rem 0;
   border-top: 1px solid var(--border);
+}
+
+/* 説明文が長くても、スイッチが次の行へ落ちないよう、左側が縮めるようにする */
+.setting-text {
+  flex: 1 1 12rem;
+  min-width: 0;
 }
 
 .setting-label {

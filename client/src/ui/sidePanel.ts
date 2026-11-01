@@ -45,6 +45,12 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
     splitter.setAttribute('aria-valuetext', `${currentSize()}px`);
   };
 
+  /** 保存した大きさが画面に対して大きすぎるときだけ、動画側を潰さない大きさに収める（保存した値は変えない） */
+  const fitToScreen = () => {
+    const size = currentSize();
+    if (size > 0 && size > clampSize(size)) setSize(clampSize(size));
+  };
+
   const applySize = () => {
     const saved = Number(load(sizeKey()));
     // 以前に今より小さい最小値で保存された大きさは、今の最小値まで広げる
@@ -58,6 +64,8 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
     toggle.title = t(hidden ? 'showList' : 'hideList');
     toggle.setAttribute('aria-expanded', String(!hidden));
     save(HIDDEN_KEY, hidden ? '1' : '');
+    // 隠している間に画面が小さくなっていたら、再表示のときに収める
+    if (!hidden) fitToScreen();
     syncAria();
   };
 
@@ -68,7 +76,7 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
   });
   // 保存した大きさは、画面が小さくなったあとでも、動画側を潰さない範囲に収める
   new ResizeObserver(() => {
-    if (!root.classList.contains('side-hidden') && currentSize() > clampSize(currentSize())) setSize(clampSize(currentSize()));
+    fitToScreen();
     syncAria();
   }).observe(root);
   setHidden(load(HIDDEN_KEY) === '1');

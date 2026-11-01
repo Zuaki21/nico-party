@@ -166,9 +166,14 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
       render('done');
       // 取得を待っている間に、利用者が別の場所へ移っていたら、フォーカスは奪わない
       const focusLost = document.activeElement === document.body || list.contains(document.activeElement);
-      if (refocus && focusLost) list.children[before]?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
+      if (refocus && focusLost) list.children[before]?.querySelector<HTMLElement>('button:not(:disabled)')?.focus({ preventScroll: true });
     } catch {
-      if (my === seq) render('error');
+      if (my === seq) {
+        render('error');
+        // 押した「もっと見る」が消えているので、作り直された再試行ボタンにフォーカスを移す
+        const focusLost = document.activeElement === document.body || list.contains(document.activeElement);
+        if (refocus && focusLost) list.querySelector<HTMLElement>('button.more')?.focus({ preventScroll: true });
+      }
     }
   };
 

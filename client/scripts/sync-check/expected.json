@@ -268,8 +268,9 @@
   "   300 player.play",
   "   500 player.seek 45.00",
   "   900 player.pause",
-  "  1100 player.mute false",
-  "  1100 cover false",
+  "  1100 player.pause",
+  "  1300 player.mute false",
+  "  1300 cover false",
   "END mutedRestored=true cover=false timersAfterDispose=0 listenersAfterDispose=0"
  ],
  "何も再生していない状態へ": [
@@ -436,8 +437,9 @@
   "   300 player.play",
   "   500 player.seek 45.00",
   "   900 player.pause",
-  "  1100 player.mute false",
-  "  1100 cover false",
+  "  1100 player.pause",
+  "  1300 player.mute false",
+  "  1300 cover false",
   "  8000 USER play",
   "  8150 send {\"t\":\"control\",\"itemId\":\"i1\",\"playing\":true,\"position\":45.5}",
   " 10000 player.seek 45.00",
@@ -618,6 +620,48 @@
   "   500 player.seek 30.50",
   "   900 player.mute false",
   "   900 cover false",
+  "END mutedRestored=true cover=false timersAfterDispose=0 listenersAfterDispose=0"
+ ],
+ "一時停止の部屋に途中参加（再生開始の通知が来ない）": [
+  "     0 player.load sm1",
+  "   300 cover true",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.seek 45.00",
+  "   900 player.pause",
+  "  1100 player.pause",
+  "  1300 player.mute false",
+  "  1300 cover false",
+  "END mutedRestored=true cover=false timersAfterDispose=0 listenersAfterDispose=0"
+ ],
+ "一時停止の部屋に途中参加して位置合わせ中に、誰かが再生する": [
+  "     0 player.load sm1",
+  "   300 cover true",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.seek 45.00",
+  "   900 player.mute false",
+  "   900 cover false",
+  "END mutedRestored=true cover=false timersAfterDispose=0 listenersAfterDispose=0"
+ ],
+ "一時停止の命令が無視される一時停止の部屋への途中参加": [
+  "     0 player.load sm1",
+  "   300 cover true",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.seek 45.00",
+  "   900 player.pause",
+  "  1100 player.pause",
+  "  1300 player.pause",
+  "  1500 player.pause",
+  "  1700 player.pause",
+  "  1900 player.pause",
+  "  2100 player.mute false",
+  "  2100 cover false",
+  "  2100 player.seek 45.00",
+  "  2100 player.pause",
+  "  8000 player.seek 45.00",
+  "  8000 player.pause",
   "END mutedRestored=true cover=false timersAfterDispose=0 listenersAfterDispose=0"
  ]
 }

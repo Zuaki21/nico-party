@@ -61,6 +61,9 @@ export class NicoPlayer {
     this.loaded = false;
     // src 属性を消すだけでは、中のページが残って再生され続ける。空のページに移して止める
     this.iframe.src = 'about:blank';
+    this.status = PlayerStatus.Loading;
+    this.muted = false;
+    this.timeAt = 0;
     this.time = 0;
     this.duration = 0;
     this.reported = { time: 0, at: 0 };

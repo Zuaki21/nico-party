@@ -13,6 +13,7 @@ const load = loadTs([
   'server/src/env.ts',
   'server/src/wsAuth.ts',
   'server/src/instanceCheck.ts',
+  'server/src/token.ts',
   'server/src/room/enqueue.ts',
   'server/src/room/roomStore.ts',
   'server/src/room/state.ts',
@@ -28,6 +29,7 @@ const { reportLoad, everyoneFailed } = load('server/src/room/loadReport.ts');
 const { MessageLimiter } = load('server/src/room/limiter.ts');
 const { authorizeRoom } = load('server/src/wsAuth.ts');
 const { checkParticipation } = load('server/src/instanceCheck.ts');
+const { exchangeToken } = load('server/src/token.ts');
 const { EnqueueQueue } = load('server/src/room/enqueue.ts');
 const { RoomStore } = load('server/src/room/roomStore.ts');
 const pass = load('server/src/pass.ts');
@@ -484,6 +486,89 @@ test('参加者の確認: 取得できなかったときは unknown（正規の�
   assert.equal(await checkWith(async () => { throw new Error('network'); }), 'unknown');
   assert.equal(await checkWith(async () => jsonRes(200, { users: 'nope' })), 'unknown');
   assert.equal(await checkWith(async () => jsonRes(200, {})), 'unknown');
+});
+
+// ---- /api/token（Discord への問い合わせは代用品にする）
+async function tokenWith(env, body, discord = {}) {
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    url = String(url);
+    calls.push(url);
+    if (url.includes('/oauth2/token')) return jsonRes(200, discord.oauth ?? { access_token: 'at' });
+    if (url.includes('/users/@me')) return jsonRes(200, discord.me ?? { id: 'u1', username: 'taro' });
+    if (url.includes('/activity-instances/')) return jsonRes(discord.instanceStatus ?? 200, discord.instance ?? { users: ['u1'] });
+    throw new Error('unexpected ' + url);
+  };
+  try {
+    const req = new Request('http://x/api/token', { method: 'POST', body: typeof body === 'string' ? body : JSON.stringify(body) });
+    const res = await exchangeToken(req, { DISCORD_CLIENT_ID: 'app1', DISCORD_CLIENT_SECRET: 'cs', PASS_SECRET: 'ps', ...env });
+    return { res, calls };
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+const good = { code: 'abc123', room: 'room1' };
+
+test('トークン交換: 参加者なら、部屋の通行証と中継の通行証が発行される', async () => {
+  const { res } = await tokenWith({ DISCORD_BOT_TOKEN: 'bot' }, good);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.deepEqual(await pass.verifyPass('ps', 'ws', body.pass), { u: 'u1', n: 'taro', r: 'room1' });
+  assert.deepEqual(await pass.verifyPass('ps', 'nico', body.nicoPass), { u: 'u1' });
+});
+
+test('トークン交換: その部屋の参加者でなければ 403。通行証は渡さない', async () => {
+  const { res } = await tokenWith({ DISCORD_BOT_TOKEN: 'bot' }, good, { instance: { users: ['someone-else'] } });
+  assert.equal(res.status, 403);
+  assert.equal((await res.json()).pass, undefined);
+});
+
+test('トークン交換: 参加者の確認ができないとき・ボットトークンが無いときは、確認せずに発行する', async () => {
+  assert.equal((await tokenWith({ DISCORD_BOT_TOKEN: 'bot' }, good, { instanceStatus: 404, instance: {} })).res.status, 200);
+  const { res, calls } = await tokenWith({}, good);
+  assert.equal(res.status, 200);
+  assert.ok(!calls.some((u) => u.includes('/activity-instances/')), 'ボットトークンが無ければ問い合わせない');
+});
+
+test('トークン交換: 鍵が未登録なら、Discord に問い合わせる前に例外', async () => {
+  const realFetch = globalThis.fetch;
+  let called = false;
+  globalThis.fetch = async () => { called = true; return jsonRes(200, {}); };
+  try {
+    await assert.rejects(() => exchangeToken(new Request('http://x/api/token', { method: 'POST', body: JSON.stringify(good) }), { DISCORD_CLIENT_ID: 'a', DISCORD_CLIENT_SECRET: 'c' }), /PASS_SECRET/);
+    await assert.rejects(() => exchangeToken(new Request('http://x/api/token', { method: 'POST', body: JSON.stringify(good) }), { DISCORD_CLIENT_ID: 'a', PASS_SECRET: 'p' }), /DISCORD_CLIENT_SECRET/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  assert.equal(called, false);
+});
+
+test('トークン交換: 入力が正しくなければ 400、大きすぎれば 413。Discord には問い合わせない', async () => {
+  for (const body of [{ room: 'r' }, { code: 'a b', room: 'r' }, { code: 'abc' }, { code: 'abc', room: 'bad room!' }, 'not json']) {
+    const { res, calls } = await tokenWith({}, body);
+    assert.equal(res.status, 400, JSON.stringify(body));
+    assert.equal(calls.length, 0);
+  }
+  assert.equal((await tokenWith({}, JSON.stringify({ code: 'a'.repeat(3000), room: 'r' }))).res.status, 413);
+});
+
+test('トークン交換: Discord に認可コードを断られたら 400', async () => {
+  const { res } = await tokenWith({}, good, { oauth: { error: 'invalid_grant' } });
+  assert.equal(res.status, 400);
+});
+
+test('トークン交換: ボットトークンが無いという警告は、1 回だけ出す', async () => {
+  const warns = [];
+  const realWarn = console.warn;
+  console.warn = (m) => warns.push(m);
+  try {
+    await tokenWith({}, good);
+    await tokenWith({}, good);
+  } finally {
+    console.warn = realWarn;
+  }
+  assert.ok(warns.length <= 1);
 });
 
 (async () => {
