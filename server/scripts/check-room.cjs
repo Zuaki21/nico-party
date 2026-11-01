@@ -357,10 +357,11 @@ test('入口: /api/token は POST だけが交換に届く。GET は 404', async
   const realError = console.error;
   console.error = () => {};
   try {
-    const post = await worker.fetch(new Request('http://x/api/token', { method: 'POST', body: '{}' }), {}, {});
-    assert.equal(post.status, 500, '秘密が未登録なので、交換まで届いて ConfigError');
-    const get = await worker.fetch(new Request('http://x/api/token'), { PASS_SECRET: 's' }, {});
-    assert.equal(get.status, 404);
+    const env = { PASS_SECRET: 's', DISCORD_CLIENT_SECRET: 'x', DISCORD_CLIENT_ID: 'a' };
+    const post = await worker.fetch(new Request('http://x/api/token', { method: 'POST', body: '{}' }), env, {});
+    assert.equal(post.status, 400, '交換まで届いて、入力の検証で断られる（Discord へは出ない）');
+    assert.equal((await worker.fetch(new Request('http://x/api/token'), env, {})).status, 404);
+    assert.equal((await worker.fetch(new Request('http://x/api/token', { method: 'PUT', body: '{}' }), env, {})).status, 404);
   } finally {
     console.error = realError;
   }
@@ -371,7 +372,7 @@ test('入室: メンバーの ID は 16 桁。同じユーザーと接続元な�
   const a = await connect(room, 'u1');
   await join(room, a, 'client-same0001-1');
   const first = a.sent.find((m) => m.t === 'welcome').id;
-  assert.equal(first.length, 16);
+  assert.match(first, /^[0-9a-f]{16}$/);
   const b = await connect(room, 'u1');
   await join(room, b, 'client-same0001-1');
   assert.equal(b.sent.find((m) => m.t === 'welcome').id, first);

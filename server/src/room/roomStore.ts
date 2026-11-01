@@ -4,7 +4,6 @@ import { initialState } from './state';
 
 export type LoadFailed = { itemId: string; ids: string[] };
 
-
 const STATE_KEY = 'state';
 const QUEUE_KEY = 'queue';
 const HISTORY_KEY = 'history';

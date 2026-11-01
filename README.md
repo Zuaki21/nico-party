@@ -70,11 +70,11 @@ Discord の中でしか確かめられない動きを、手元で確かめるた
 ```sh
 cd client && npm run check:sync              # 同期エンジンの挙動が、記録と変わっていないか
 cd client && npm run check:sync -- --update  # 意図して挙動を変えたときに、記録を作り直す
-cd server && npm run check                   # 型・再生の状態遷移・中継の書き換えルール
+cd server && npm run check                   # 型・再生の状態遷移・中継・部屋・通行証など
 ```
 
 - `check:sync`（`client/src/player/sync`）: 偽のプレイヤー・偽の時計で、途中参加・開始待ち・ユーザー操作・動画の切り替え・
-  読み込み失敗・時計のずれ・プレイヤーの癖（再生通知が来ない・シークが効かない）など 36 の場面を流して、プレイヤーとサーバーへの呼び出しを
+  読み込み失敗・時計のずれ・プレイヤーの癖（再生通知が来ない・シークが効かない）など 47 の場面を流して、プレイヤーとサーバーへの呼び出しを
   時刻つきで記録と比べる。どの場面も、終わったあとにミュートが元に戻り、覆いが外れ、タイマーが残らないことも確かめる
 - `server/scripts/check-playback.cjs`: 次へ・前へ・ジャンプ・リピート・シャッフル・削除・追加などの状態遷移（`server/src/room/playback.ts`）。
   時刻・ID・乱数を固定して確かめる
@@ -89,7 +89,7 @@ cd server && npm run check                   # 型・再生の状態遷移・中
 反映のたびに `client/package.json` の `version` を進める。設定画面の左下に「ver x.x.x」と出るので、反映できたかはそれで確認できる。
 
 ```sh
-cd client && npx vite build
+(cd client && npx vite build)
 # 初回は、先に秘密を登録する（登録前は、ログイン・検索・部屋がすべて 500 になる）
 cd server
 npx wrangler secret put DISCORD_CLIENT_SECRET   # 初回のみ
