@@ -102,20 +102,20 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
     splitter.setPointerCapture(e.pointerId);
     // ドラッグ中にポインタが iframe に入るとイベントを取られるので無効にしておく
     root.classList.add('resizing');
-    const rect = root.getBoundingClientRect();
     const wide = wideQuery.matches;
 
-    // ドラッグを始めたら、画面に合わせて収めた印は解除する（ドラッグ中に画面の大きさが変わっても、巻き戻さない）
-    fitted = false;
     const startX = e.clientX;
     const startY = e.clientY;
+    // 掴んだ時点の大きさからの差で決める（アプリの余白や分割線の幅の分、ポインタとずれて跳ばないように）
+    const startSize = currentSize();
     let moved = false;
     const onMove = (ev: PointerEvent) => {
       // クリックのときの手の揺れでは、動かしたことにしない
       if (!moved && Math.hypot(ev.clientX - startX, ev.clientY - startY) < DRAG_START_PX) return;
-      const raw = wide ? rect.right - ev.clientX : rect.bottom - ev.clientY;
+      // 動かし始めたら、画面に合わせて収めた印は解除する（動かさずに離しただけなら、収めた状態のままにする）
       moved = true;
-      setSize(clampSize(raw));
+      fitted = false;
+      setSize(clampSize(startSize + (wide ? startX - ev.clientX : startY - ev.clientY)));
     };
     const onUp = () => {
       root.classList.remove('resizing');

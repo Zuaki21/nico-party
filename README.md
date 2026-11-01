@@ -90,13 +90,15 @@ cd server && npm run check                   # 型・再生の状態遷移・中
 
 ```sh
 cd client && npx vite build
-cd server && npx wrangler deploy
+# 初回は、先に秘密を登録する（登録前は、ログイン・検索・部屋がすべて 500 になる）
+cd server
 npx wrangler secret put DISCORD_CLIENT_SECRET   # 初回のみ
 npx wrangler secret put PASS_SECRET             # 初回のみ（通行証の署名の鍵。長いランダムな文字列。変えると発行済みの通行証が全部無効になる）
 npx wrangler secret put DISCORD_BOT_TOKEN       # 任意（Developer Portal の Bot のページで発行。部屋の参加者の確認に使う）
+npx wrangler deploy
 ```
 
-デプロイ後、URL Mapping の `/` を `<name>.<subdomain>.workers.dev` にする。
+デプロイ後、Developer Portal の URL Mapping の `/` を `nico-party.zuaki.dev`（`server/wrangler.toml` の `routes` のドメイン。workers.dev は使わない）にする。
 
 ## セキュリティ上の前提
 

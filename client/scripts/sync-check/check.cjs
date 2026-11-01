@@ -42,8 +42,12 @@ fs.writeFileSync(path.join(out, 'clock.js'), clockJs);
   fresh.provisional(7000, 1000);
   assert.equal(fresh.offset, 6000, '一度も測れていなければ、仮の値を使う');
 }
-const actual = JSON.parse(execFileSync(process.execPath, [path.join(__dirname, 'run.cjs'), path.join(out, 'engine.js')], { encoding: 'utf8', maxBuffer: 1 << 26 }));
-fs.rmSync(out, { recursive: true, force: true });
+let actual;
+try {
+  actual = JSON.parse(execFileSync(process.execPath, [path.join(__dirname, 'run.cjs'), path.join(out, 'engine.js')], { encoding: 'utf8', maxBuffer: 1 << 26 }));
+} finally {
+  fs.rmSync(out, { recursive: true, force: true });
+}
 
 // 記録との比較とは別に、どの場面も、終わったあとに元の状態へ戻っていること（ミュートが元に戻る・覆いが外れる・
 // エンジンのタイマーとイベントの購読が残らない）を確かめる。これが崩れると、音が出続ける・画面が隠れたまま・タイマーの漏れになる

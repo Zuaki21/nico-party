@@ -42,7 +42,8 @@ export function createPresence(sdk: DiscordSDK, serverNow: () => number, initial
     const position = state.playing
       ? Math.max(0, state.position + (serverNow() - state.updatedAt) / 1000)
       : state.position;
-    const start = Date.now() - position * 1000;
+    // 一時停止中は経過時間のバーを出さない。時刻の基準も変えない（変えると、内容が同じでも送り直してしまう）
+    const start = state.playing ? Date.now() - position * 1000 : 0;
     const activity: Activity = {
       details: cur.title.slice(0, 128),
       state: t(state.playing ? 'presenceWatching' : 'presencePaused', { n: members }),

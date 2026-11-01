@@ -2,7 +2,7 @@ import { DiscordSDK } from '@discord/embedded-app-sdk';
 import type { ClientMsg, Member, PlaybackState, ServerMsg } from '../../shared/protocol';
 import { describeError, devlog, watchErrors } from './core/devlog';
 import { inDiscord } from './core/env';
-import { serverErrorText, t } from './core/i18n';
+import { onLangChange, serverErrorText, t } from './core/i18n';
 import { searchNico } from './net/api';
 import { authenticate, NotInActivityError, openExternal, watchLayout } from './net/discord';
 import { createPresence } from './net/presence';
@@ -62,6 +62,11 @@ const engine = new SyncEngine(
   setPlayerCover,
   serverNow,
 );
+
+// プレイヤーは別オリジンの iframe で中が読み上げられないので、枠に名前を付ける
+const nameFrame = () => (player.iframe.title = t('playerTitle'));
+nameFrame();
+onLangChange(nameFrame);
 
 setupViewport();
 attachPlayerDocHooks(player.iframe, { onTag: ui.searchFor, onLink: (url) => openExternal(session.sdk, url) });

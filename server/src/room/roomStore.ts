@@ -4,8 +4,6 @@ import { initialState } from './state';
 
 export type LoadFailed = { itemId: string; ids: string[] };
 
-/** 1 回の書き込みで保存する内容（状態遷移の結果 = Change。変わったものだけ） */
-export type Commit = Change;
 
 const STATE_KEY = 'state';
 const QUEUE_KEY = 'queue';
@@ -66,7 +64,7 @@ export class RoomStore {
    * メモリへの反映は呼んだ時点で済む。written は storage への書き込みの完了
    * （WebSocket で送ったメッセージは、書き込みが終わるまで相手に届かないので、written を待たずに配信してよい）
    */
-  commit(c: Commit): { state?: PlaybackState; written: Promise<void> } {
+  commit(c: Change): { state?: PlaybackState; written: Promise<void> } {
     const entries: Record<string, unknown> = {};
     const d = this.data;
     let state: PlaybackState | undefined;

@@ -134,16 +134,22 @@ button.add.done {
   color: var(--muted);
 }
 
-button.add .when-hover,
-button.add.done:hover .when-idle {
+button.add .when-hover {
   display: none;
 }
 
-button.add.done:hover .when-hover {
-  display: block;
-}
+/* 乗せると外せる表示になるのは、ホバーのある端末だけ（タッチでは、タップのあとも :hover が残るので、追加した直後に外すアイコンに見えてしまう） */
+@media (hover: hover) {
+  button.add.done:hover .when-hover {
+    display: block;
+  }
 
-button.add.done:hover {
-  /* 再生リストの削除ボタン（.actions button.remove:hover）と同じ色にする */
-  color: var(--danger);
+  button.add.done:hover .when-idle {
+    display: none;
+  }
+
+  button.add.done:hover {
+    /* 再生リストの削除ボタン（.actions button.remove:hover）と同じ色にする */
+    color: var(--danger);
+  }
 }

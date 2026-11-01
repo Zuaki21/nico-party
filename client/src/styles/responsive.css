@@ -39,7 +39,8 @@
 }
 
 @media (hover: none) {
-  .actions {
+  .actions,
+  .queue li[data-id] .actions {
     position: static;
     opacity: 1;
     pointer-events: auto;

@@ -352,6 +352,34 @@ test('入口: 秘密が未登録なら、原因をログに残して 500。ロ�
   }
 });
 
+test('入口: /api/token は POST だけが交換に届く。GET は 404', async () => {
+  const worker = load('server/src/index.ts').default;
+  const realError = console.error;
+  console.error = () => {};
+  try {
+    const post = await worker.fetch(new Request('http://x/api/token', { method: 'POST', body: '{}' }), {}, {});
+    assert.equal(post.status, 500, '秘密が未登録なので、交換まで届いて ConfigError');
+    const get = await worker.fetch(new Request('http://x/api/token'), { PASS_SECRET: 's' }, {});
+    assert.equal(get.status, 404);
+  } finally {
+    console.error = realError;
+  }
+});
+
+test('入室: メンバーの ID は 16 桁。同じユーザーと接続元なら再接続しても同じ', async () => {
+  const { room } = await makeRoom();
+  const a = await connect(room, 'u1');
+  await join(room, a, 'client-same0001-1');
+  const first = a.sent.find((m) => m.t === 'welcome').id;
+  assert.equal(first.length, 16);
+  const b = await connect(room, 'u1');
+  await join(room, b, 'client-same0001-1');
+  assert.equal(b.sent.find((m) => m.t === 'welcome').id, first);
+  const c = await connect(room, 'u1');
+  await join(room, c, 'client-other001-1');
+  assert.notEqual(c.sent.find((m) => m.t === 'welcome').id, first);
+});
+
 test('入口: 通行証がなければ 401、知らない経路は 404、/ は案内ページ（frame_id があれば本体）', async () => {
   const worker = load('server/src/index.ts').default;
   const asset = [];

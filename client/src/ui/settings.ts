@@ -80,6 +80,10 @@ export function setupSettings(h: Pick<UiHandlers, 'openLink' | 'setPresence'>): 
     const target = e.target as Node;
     if (!dialog.contains(target) && !button.contains(target)) setOpen(false);
   });
+  // 動画（iframe）の中の操作は、親のイベントに来ない。フォーカスが動画に移ったら閉じる
+  window.addEventListener('blur', () => {
+    if (!dialog.hidden && document.activeElement?.tagName === 'IFRAME') setOpen(false);
+  });
   document.addEventListener('keydown', (e) => {
     // 並べ替えのドラッグ中の Esc は、ドラッグの取り消し（設定は閉じない）
     if (e.key === 'Escape' && !dialog.hidden && !document.getElementById('app')?.classList.contains('reordering')) setOpen(false);

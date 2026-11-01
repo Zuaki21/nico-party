@@ -37,7 +37,8 @@
   border: 0;
 }
 
-.player iframe:not([src]) {
+.player iframe:not([src]),
+.player iframe[src='about:blank'] {
   display: none;
 }
 

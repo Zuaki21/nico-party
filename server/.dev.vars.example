@@ -1,7 +1,8 @@
+# 下の値は、どれも必ず入れる（空のままだと /ws・/api・/nico がすべて 500 になる）
 DISCORD_CLIENT_ID=
 DISCORD_CLIENT_SECRET=
-# 通行証の署名の鍵（長いランダムな文字列。無いと /ws・/api・/nico がすべて 500 になる）
-PASS_SECRET=
+# 通行証の署名の鍵。ローカルならこのままでよい（本番では長いランダムな文字列を wrangler secret put で登録する）
+PASS_SECRET=dev-only-change-me
 # 任意: 部屋の参加者の確認に使うボットトークン（無ければ確認を飛ばす）
 # DISCORD_BOT_TOKEN=
 # ローカル確認用: 通行証のない WebSocket 接続（通常のブラウザで開いたとき）を受け付ける。本番では設定しない
