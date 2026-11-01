@@ -40,4 +40,23 @@ function makeRunner() {
   };
 }
 
-module.exports = { loadTs, makeRunner };
+/** 'cloudflare:workers'（Workers の中でしか読み込めない）を、最小の代用品に差し替える。Room クラスを手元で動かすため */
+function stubCloudflareWorkers() {
+  const Module = require('module');
+  const original = Module._load;
+  Module._load = function (request, ...rest) {
+    if (request === 'cloudflare:workers') {
+      return {
+        DurableObject: class {
+          constructor(ctx, env) {
+            this.ctx = ctx;
+            this.env = env;
+          }
+        },
+      };
+    }
+    return original.call(this, request, ...rest);
+  };
+}
+
+module.exports = { loadTs, makeRunner, stubCloudflareWorkers };

@@ -9,7 +9,8 @@
     "check:playback": "node scripts/check-playback.cjs",
     "check:nico": "node scripts/check-nico.cjs",
     "check:misc": "node scripts/check-misc.cjs",
-    "check": "npm run typecheck && npm run check:playback && npm run check:nico && npm run check:misc"
+    "check:room": "node scripts/check-room.cjs",
+    "check": "npm run typecheck && npm run check:playback && npm run check:nico && npm run check:misc && npm run check:room"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261025.1",

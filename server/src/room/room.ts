@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { HEARTBEAT, type ClientMsg, type QueueItem } from '../../../shared/protocol';
+import { CLOSE_EVICTED, HEARTBEAT, type ClientMsg, type QueueItem } from '../../../shared/protocol';
 import { parseVideoId } from '../../../shared/video';
 import { VERIFIED_NAME_HEADER, VERIFIED_UID_HEADER, type Env } from '../env';
 import { fetchEmbedError, fetchVideoInfo, UpstreamError } from '../nico/nicoApi';
@@ -25,7 +25,8 @@ import {
   type Snapshot,
 } from './playback';
 import { RoomStore } from './roomStore';
-import { MessageLimiter, send, sendError, Sockets, type Attachment } from './sockets';
+import { MessageLimiter } from './limiter';
+import { send, sendError, Sockets, type Attachment } from './sockets';
 import { parseClientMsg } from './validate';
 
 /**
@@ -87,11 +88,13 @@ export class Room extends DurableObject<Env> {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server);
+    // 入室しないまま居座る接続を、時間がたったら切る（すでにアラームがあれば、そのときに一緒に掃除する）
+    if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + JOIN_TIMEOUT_MS + 1000);
     const verifiedName = request.headers.get(VERIFIED_NAME_HEADER);
     const attachment: Attachment = {
       // メンバーの ID はサーバーが決める（クライアントの申告にすると、他の人の ID を名乗れてしまう）
       id: crypto.randomUUID().slice(0, 8),
-      name: verifiedName !== null ? decodeURIComponent(verifiedName).slice(0, 32) : 'guest',
+      name: verifiedName !== null ? Array.from(decodeURIComponent(verifiedName)).slice(0, 32).join('') : 'guest',
       joined: false,
       connectedAt: Date.now(),
       ...(verifiedName !== null && uid !== null ? { uid } : {}),
@@ -100,19 +103,22 @@ export class Room extends DurableObject<Env> {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  /** 新しい接続を受ける前に、入室しないまま居座っている接続と、同じユーザーの古い接続を切る */
+  /**
+   * 入室しないまま居座っている接続を切る。uid があれば、同じユーザーの古い接続も、上限に収まるまで切る
+   * （1 人が部屋の枠を使い切らないように。切られたクライアントは、繋ぎ直さない）
+   */
   private closeStale(uid: string | null) {
     const now = Date.now();
-    const mine: { ws: WebSocket; connectedAt: number }[] = [];
+    const mine: { ws: WebSocket; connectedAt: number; joined: boolean }[] = [];
     for (const ws of this.sockets.open()) {
       const a = this.sockets.attachment(ws);
       if (!a.joined && now - a.connectedAt > JOIN_TIMEOUT_MS) ws.close(1008, 'join timeout');
-      else if (uid !== null && a.uid === uid) mine.push({ ws, connectedAt: a.connectedAt });
+      else if (uid !== null && a.uid === uid) mine.push({ ws, connectedAt: a.connectedAt, joined: a.joined });
     }
     // これから 1 本増えるので、上限より 1 本少なくなるまで、古いものから切る
-    mine.sort((x, y) => x.connectedAt - y.connectedAt);
+    mine.sort((x, y) => Number(x.joined) - Number(y.joined) || x.connectedAt - y.connectedAt);
     for (const { ws } of mine.slice(0, Math.max(0, mine.length - (MAX_CONNECTIONS_PER_USER - 1)))) {
-      ws.close(1008, 'too many connections');
+      ws.close(CLOSE_EVICTED, 'too many connections');
     }
   }
 
@@ -134,7 +140,9 @@ export class Room extends DurableObject<Env> {
     }
     // join より前に届いた部屋の操作は受け付けない
     if (msg.t !== 'join' && !a.joined) return;
-    if (!this.limiter.take(limitKey) || !this.roomLimiter.take('room')) return;
+    if (!this.limiter.take(limitKey)) return;
+    // 部屋全体の制限に断られたときは、その人の分は数えない（ほかの人の連投で、自分の枠が減らないように）
+    if (!this.roomLimiter.take('room')) return this.limiter.refund(limitKey);
     const by: Actor = { id: a.id, name: a.name };
 
     switch (msg.t) {
@@ -226,8 +234,15 @@ export class Room extends DurableObject<Env> {
     await this.onLeave(ws);
   }
 
+  /**
+   * アラームは 2 つの用途がある。入室しない接続の掃除と、全員が退出してからの部屋の破棄。
+   * 掃除のあとで、入室済みの人も入室待ちの接続もいなければ、部屋を破棄する。入室待ちが残っていれば、もう一度掃除する
+   */
   async alarm(): Promise<void> {
-    if (this.sockets.open().length === 0) await this.store.deleteAll();
+    this.closeStale(null);
+    const open = this.sockets.open();
+    if (open.length === 0) await this.store.deleteAll();
+    else if (open.length > this.sockets.joined().length) await this.ctx.storage.setAlarm(Date.now() + JOIN_TIMEOUT_MS + 1000);
   }
 
   /** 動画を 1 本、再生リストに追加する（enqueue の列から 1 件ずつ呼ばれる） */
@@ -260,14 +275,16 @@ export class Room extends DurableObject<Env> {
     } catch {
       // 既に閉じている
     }
-    if (this.sockets.open(ws).length === 0) {
+    const leaver = this.sockets.attachment(ws);
+    // 入室していなかった接続（入室待ちのまま切れた・掃除された）は、部屋の人に関係しない
+    if (!leaver.joined) return;
+    if (this.sockets.joined(ws).length === 0) {
       // 全員退出したら、少し待ってから部屋を破棄する（すぐ再接続してきたら残す）
       await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
       return;
     }
     this.sockets.broadcastMembers(ws);
     // まだ報告していなかった人が抜けて、残りが全員「読み込めなかった」になったかもしれない
-    const leaver = this.sockets.attachment(ws);
     await this.skipIfNobodyLoaded({ id: leaver.id, name: leaver.name }, ws);
   }
 

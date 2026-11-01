@@ -4,9 +4,10 @@ import { proxied } from '../core/env';
 
 /**
  * Discord にログインしてもらい、表示名を取得する。
+ * @param interactive false なら、確認画面は出さない（許可済みでなければ失敗する。開きっぱなしの間の取り直し用）
  * @returns 表示名と、サーバーが発行した通行証（WebSocket 用・ニコニコの中継と検索用。取得できなかったときは undefined）
  */
-export async function authenticate(sdk: DiscordSDK): Promise<{ name: string; pass?: string; nicoPass?: string }> {
+export async function authenticate(sdk: DiscordSDK, interactive = true): Promise<{ name: string; pass?: string; nicoPass?: string }> {
   const authorize = (prompt?: 'none') =>
     sdk.commands.authorize({
       client_id: import.meta.env.VITE_DISCORD_CLIENT_ID,
@@ -17,7 +18,7 @@ export async function authenticate(sdk: DiscordSDK): Promise<{ name: string; pas
       scope: ['identify', 'rpc.activities.write'],
     });
   // 許可済みなら確認画面なしで通る。未許可・権限が増えた人は失敗するので、確認画面を出して取り直す
-  const { code } = await authorize('none').catch(() => authorize());
+  const { code } = await (interactive ? authorize('none').catch(() => authorize()) : authorize('none'));
   const res = await fetch(proxied('/api/token'), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

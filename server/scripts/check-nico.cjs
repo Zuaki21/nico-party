@@ -14,7 +14,7 @@ const load = loadTs([
   'server/src/pass.ts',
   'shared/search.ts',
 ]);
-const { rewriter } = load('server/src/nico/nico.ts');
+const { rewriter } = load('server/src/nico/nicoRewrite.ts');
 
 const HOST = 'https://app123.discordsays.com';
 const PASS = 'PAYLOAD.SIGNATURE';

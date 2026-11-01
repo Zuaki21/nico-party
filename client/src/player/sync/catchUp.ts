@@ -1,6 +1,7 @@
 import { APPLY_THRESHOLD } from './constants';
 import type { CatchUpContext } from './context';
-import { MuteScope } from './muteScope';
+
+const MUTE_OWNER = 'catchUp';
 
 /** 位置が合うのを待つ上限。これを過ぎたら、合っていなくても通常の同期に任せる */
 const CATCHUP_MAX_MS = 8000;
@@ -20,16 +21,13 @@ export class CatchUp {
   private catchingUp = false;
   private startedAt = 0;
   private seekAt = 0;
-  private mute: MuteScope;
   private timer: number | undefined;
 
   constructor(
     private ctx: CatchUpContext,
     /** 位置が合うまでの間、プレイヤーを隠す・隠すのをやめる */
     private onCatchUp: (on: boolean) => void,
-  ) {
-    this.mute = new MuteScope(ctx.player);
-  }
+  ) {}
 
   get active() {
     return this.catchingUp;
@@ -43,20 +41,21 @@ export class CatchUp {
     this.seekAt = 0;
     this.onCatchUp(true);
     this.ctx.suppress.extend(CATCHUP_MAX_MS + 2000);
-    this.mute.on();
+    this.ctx.mute.on(MUTE_OWNER);
     p.play();
     this.timer = window.setInterval(() => this.step(), CATCHUP_POLL_MS);
   }
 
   /** 待っている途中でやめる（動画が切り替わったとき） */
   cancel() {
-    if (this.catchingUp) this.end();
+    // 動画が変わるので、無視する時間は新しい動画の同期に任せる（ここで取り直すと、直前に延ばした分を縮めてしまう）
+    if (this.catchingUp) this.end(false);
   }
 
   private step() {
+    if (!this.catchingUp) return;
     const s = this.ctx.loadedState();
     const p = this.ctx.player;
-    if (!this.catchingUp) return;
     // 動画が変わった・止まった・読み込み直しなど、待つ前提が崩れたときは、やめて通常の同期に任せる
     if (!s || !s.playing || !p.ready()) {
       this.end();
@@ -67,20 +66,19 @@ export class CatchUp {
     const target = this.ctx.expected(s);
     const reported = p.getReported();
     const started = !p.isPaused() || reported.time > 0;
-    if (!timedOut && started) {
+    if (!timedOut) {
+      // 再生がまだ始まっていない（動画データを読み込み中）
+      if (!started) return;
       // プレイヤー自身が通知してきた位置で、位置が合っているかを見る（seek() 直後の見かけの値は使わない）
       const reportedAfterSeek = this.seekAt > 0 && reported.at > this.seekAt;
-      if (reportedAfterSeek && Math.abs(reported.time - target) <= APPLY_THRESHOLD) {
-        // 位置が合った
-      } else {
+      const aligned = reportedAfterSeek && Math.abs(reported.time - target) <= APPLY_THRESHOLD;
+      if (!aligned) {
         if (performance.now() - this.seekAt > CATCHUP_RESEEK_MS) {
           this.seekAt = performance.now();
           p.seek(target);
         }
         return;
       }
-    } else if (!timedOut) {
-      return;
     }
     this.end();
     // タイムアウトで位置が合っていないままのときは、ここでシークが入る。読み込み直後と同じく長めに無視する
@@ -88,12 +86,13 @@ export class CatchUp {
     this.ctx.applyAfterCatchUp();
   }
 
-  private end() {
+  /** @param resetSuppress true なら、始めるときに長く取った無視の時間を通常に戻す */
+  private end(resetSuppress = true) {
     clearInterval(this.timer);
     this.catchingUp = false;
     // 位置が合ったので、始めるときに長く取った無視の時間を通常に戻す（残すと、合流してしばらくシークバーの操作が部屋に送られない）
-    this.ctx.suppress.reset();
-    this.mute.off();
+    if (resetSuppress) this.ctx.suppress.reset();
+    this.ctx.mute.off(MUTE_OWNER);
     this.onCatchUp(false);
   }
 }

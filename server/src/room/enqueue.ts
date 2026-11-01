@@ -11,20 +11,20 @@ export class EnqueueQueue {
   private waiting = 0;
   private waitingBy = new Map<string, number>();
 
-  /** @returns 列に入れたら、その処理が終わるまでの Promise。溜まりすぎで断ったら null */
-  submit(memberId: string, job: () => Promise<void>): Promise<void> | null {
-    const mine = this.waitingBy.get(memberId) ?? 0;
+  /** @param key 数える単位（ログインした人はユーザーごと） @returns 列に入れたら、その処理が終わるまでの Promise。溜まりすぎで断ったら null */
+  submit(key: string, job: () => Promise<void>): Promise<void> | null {
+    const mine = this.waitingBy.get(key) ?? 0;
     if (this.waiting >= WAITING_LIMIT || mine >= WAITING_PER_MEMBER) return null;
     this.waiting++;
-    this.waitingBy.set(memberId, mine + 1);
+    this.waitingBy.set(key, mine + 1);
     this.chain = this.chain
       .then(job)
       .catch((e) => console.error('enqueue job failed', e))
       .finally(() => {
         this.waiting--;
-        const left = (this.waitingBy.get(memberId) ?? 1) - 1;
-        if (left > 0) this.waitingBy.set(memberId, left);
-        else this.waitingBy.delete(memberId);
+        const left = (this.waitingBy.get(key) ?? 1) - 1;
+        if (left > 0) this.waitingBy.set(key, left);
+        else this.waitingBy.delete(key);
       });
     return this.chain;
   }

@@ -160,8 +160,15 @@ a {
 
 .slider:hover .slide-pause,
 .slide-pause:focus-visible,
-.slide-pause[aria-pressed='true'] {
+.slide-pause[data-paused='true'] {
   opacity: 1;
+}
+
+/* ホバーのない端末（タッチ）では、常に見えるようにする */
+@media (hover: none) {
+  .slide-pause {
+    opacity: 0.85;
+  }
 }
 
 .slide-dots {
@@ -175,6 +182,7 @@ a {
 }
 
 .slide-dots button {
+  position: relative;
   width: 9px;
   height: 9px;
   padding: 0;
@@ -183,6 +191,13 @@ a {
   background: rgba(255, 255, 255, 0.6);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
   cursor: pointer;
+}
+
+/* 見た目は小さいまま、押せる範囲を 24px 角に広げる */
+.slide-dots button::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
 }
 
 .slide-dots button.active {

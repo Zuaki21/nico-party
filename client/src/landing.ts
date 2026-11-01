@@ -100,14 +100,19 @@ function setupSlider() {
     held = on;
     restart();
   };
-  root.addEventListener('mouseenter', () => hold(true));
-  root.addEventListener('mouseleave', () => hold(root.matches(':focus-within')));
-  root.addEventListener('focusin', () => hold(true));
-  root.addEventListener('focusout', (e) => hold(root.contains(e.relatedTarget as Node | null) || root.matches(':hover')));
   const pause = document.getElementById('slide-pause')!;
+  // マウスのときだけ（タッチでは、タップのあとに離れたことが分からず、止まったままになる）
+  root.addEventListener('pointerenter', (e) => e.pointerType === 'mouse' && hold(true));
+  root.addEventListener('pointerleave', (e) => e.pointerType === 'mouse' && hold(root.matches(':focus-within:has(:focus-visible)')));
+  // キーボードでフォーカスしている間だけ。止める／再開のボタンを押したあとは、押した結果を優先する
+  root.addEventListener('focusin', (e) => {
+    const target = e.target as Element;
+    hold(target !== pause && target.matches(':focus-visible'));
+  });
+  root.addEventListener('focusout', () => hold(root.matches(':hover')));
   pause.addEventListener('click', () => {
     paused = !paused;
-    pause.setAttribute('aria-pressed', String(paused));
+    pause.dataset.paused = String(paused);
     pause.textContent = paused ? '自動切り替えを再開' : '自動切り替えを止める';
     restart();
   });

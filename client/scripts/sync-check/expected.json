@@ -574,5 +574,38 @@
   "   900 player.mute false",
   "   900 cover false",
   "END mutedRestored=true cover=false timersAfterDispose=0 listenersAfterDispose=0"
+ ],
+ "保護中に読み込みが終わり、そこへ別の状態の再送が届く（位置合わせを失わない）": [
+  "     0 player.load sm1",
+  "   100 USER seek 5",
+  "  1650 cover true",
+  "  1650 player.mute true",
+  "  1650 player.play",
+  "  1850 player.seek 31.85",
+  "  2050 player.mute false",
+  "  2050 cover false",
+  "END mutedRestored=true cover=false timersAfterDispose=0 listenersAfterDispose=0"
+ ],
+ "dispose のあとにプレイヤーのイベントが出ても、何もしない": [
+  "     0 player.load sm1",
+  "   300 cover true",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.seek 30.50",
+  "   900 player.mute false",
+  "   900 cover false",
+  "  5000 USER seek 40",
+  "  5000 USER pause",
+  "END mutedRestored=true cover=false timersAfterDispose=0 listenersAfterDispose=0"
+ ],
+ "位置合わせ中に、別の状態の再送が届く": [
+  "     0 player.load sm1",
+  "   300 cover true",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.seek 30.50",
+  "   900 player.mute false",
+  "   900 cover false",
+  "END mutedRestored=true cover=false timersAfterDispose=0 listenersAfterDispose=0"
  ]
 }

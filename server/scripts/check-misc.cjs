@@ -8,6 +8,10 @@ const load = loadTs([
   'server/src/room/validate.ts',
   'server/src/room/loadReport.ts',
   'server/src/room/sockets.ts',
+  'server/src/room/limiter.ts',
+  'server/src/room/playback.ts',
+  'server/src/env.ts',
+  'server/src/wsAuth.ts',
   'server/src/room/enqueue.ts',
   'server/src/room/roomStore.ts',
   'server/src/room/state.ts',
@@ -20,7 +24,8 @@ const load = loadTs([
 ]);
 const { parseClientMsg } = load('server/src/room/validate.ts');
 const { reportLoad, everyoneFailed } = load('server/src/room/loadReport.ts');
-const { MessageLimiter } = load('server/src/room/sockets.ts');
+const { MessageLimiter } = load('server/src/room/limiter.ts');
+const { authorizeRoom } = load('server/src/wsAuth.ts');
 const { EnqueueQueue } = load('server/src/room/enqueue.ts');
 const { RoomStore } = load('server/src/room/roomStore.ts');
 const pass = load('server/src/pass.ts');
@@ -385,6 +390,62 @@ test('動画 ID: URL・ID・余計な文字', () => {
   assert.equal(parseVideoId('so12345678901'), null);
   assert.equal(parseVideoId('hello'), null);
   assert.equal(parseVideoId(''), null);
+});
+
+// ---- 部屋への接続の認可（index.ts の WebSocket の入口）
+const wsReq = (url, headers = {}) => new Request(url, { headers: { upgrade: 'websocket', ...headers } });
+const ENV = { PASS_SECRET: 'secret' };
+
+test('認可: 部屋の通行証があれば通り、確かめた名前とユーザー ID が部屋に渡る', async () => {
+  const p = await pass.issuePass('secret', 'ws', { u: 'u1', n: '太郎', r: 'roomA' });
+  const out = await authorizeRoom(wsReq(`http://x/ws/roomA?pass=${encodeURIComponent(p)}`), ENV, 'roomA');
+  assert.ok(out instanceof Request);
+  assert.equal(decodeURIComponent(out.headers.get('x-nico-party-verified-name')), '太郎');
+  assert.equal(out.headers.get('x-nico-party-verified-uid'), 'u1');
+});
+
+test('認可: 通行証なし・別の部屋・別の scope・名前なし・壊れたものは 401', async () => {
+  const wsOther = await pass.issuePass('secret', 'ws', { u: 'u1', n: 'x', r: 'roomB' });
+  const nico = await pass.issuePass('secret', 'nico', { u: 'u1' });
+  const noName = await pass.issuePass('secret', 'ws', { u: 'u1', r: 'roomA' });
+  for (const p of [null, wsOther, nico, noName, 'broken.pass']) {
+    const url = `http://x/ws/roomA${p ? '?pass=' + encodeURIComponent(p) : ''}`;
+    const out = await authorizeRoom(wsReq(url), ENV, 'roomA');
+    assert.ok(out instanceof Response && out.status === 401, String(p));
+  }
+});
+
+test('認可: 外から来た確認済みのヘッダーは信用しない（通行証がなければ素通りさせない）', async () => {
+  const forged = { 'x-nico-party-verified-name': 'admin', 'x-nico-party-verified-uid': 'root' };
+  const out = await authorizeRoom(wsReq('http://x/ws/roomA', forged), ENV, 'roomA');
+  assert.ok(out instanceof Response && out.status === 401);
+  const p = await pass.issuePass('secret', 'ws', { u: 'u1', n: 'ほんもの', r: 'roomA' });
+  const ok = await authorizeRoom(wsReq(`http://x/ws/roomA?pass=${encodeURIComponent(p)}`, forged), ENV, 'roomA');
+  assert.equal(ok.headers.get('x-nico-party-verified-uid'), 'u1');
+});
+
+test('認可: 通行証なしの接続は、ALLOW_ANON_WS と接続元がローカルのときだけ通る', async () => {
+  const anon = (env, ip) => authorizeRoom(wsReq('http://x/ws/roomA', ip ? { 'cf-connecting-ip': ip } : {}), env, 'roomA');
+  const on = { ...ENV, ALLOW_ANON_WS: 'true' };
+  assert.ok((await anon(on, '127.0.0.1')) instanceof Request);
+  assert.ok((await anon(on, '::1')) instanceof Request);
+  assert.equal((await anon(on, '203.0.113.5')).status, 401, '本番の接続元では、フラグがあっても通さない');
+  assert.equal((await anon(on, null)).status, 401);
+  assert.equal((await anon({ ...ENV, ALLOW_ANON_WS: 'false' }, '127.0.0.1')).status, 401);
+  assert.equal((await anon(ENV, '127.0.0.1')).status, 401);
+});
+
+test('認可: 鍵が未登録なら例外（鍵なしで通さない）', async () => {
+  await assert.rejects(() => authorizeRoom(wsReq('http://x/ws/roomA'), {}, 'roomA'), /PASS_SECRET/);
+});
+
+test('メッセージの量の制限: 他の制限に断られたときは、数えた分を戻せる', () => {
+  const l = new MessageLimiter(1, 2);
+  assert.equal(l.take('a', 0), true);
+  l.refund('a');
+  assert.equal(l.take('a', 0), true);
+  assert.equal(l.take('a', 0), true);
+  assert.equal(l.take('a', 0), false);
 });
 
 (async () => {

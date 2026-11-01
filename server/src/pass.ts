@@ -39,12 +39,11 @@ const fromBase64Url = (s: string) =>
 /** 中継の 1 回ごとに鍵を作り直さないよう、取り込んだ鍵は覚えておく */
 const keys = new Map<string, Promise<CryptoKey>>();
 
-function hmacKey(secret: string, usage: 'sign' | 'verify'): Promise<CryptoKey> {
-  const id = `${usage}:${secret}`;
-  let key = keys.get(id);
+function hmacKey(secret: string): Promise<CryptoKey> {
+  let key = keys.get(secret);
   if (!key) {
-    key = crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [usage]);
-    keys.set(id, key);
+    key = crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+    keys.set(secret, key);
   }
   return key;
 }
@@ -59,7 +58,7 @@ export async function sha256Hex(text: string): Promise<string> {
 export async function issuePass(secret: string, scope: PassScope, claims: PassClaims): Promise<string> {
   const body = { ...claims, s: scope, exp: Date.now() + PASS_TTL_MS };
   const payload = toBase64Url(encoder.encode(JSON.stringify(body)));
-  const sig = await crypto.subtle.sign('HMAC', await hmacKey(secret, 'sign'), encoder.encode(payload));
+  const sig = await crypto.subtle.sign('HMAC', await hmacKey(secret), encoder.encode(payload));
   return `${payload}.${toBase64Url(new Uint8Array(sig))}`;
 }
 
@@ -75,7 +74,7 @@ export async function verifyPass(
   try {
     const ok = await crypto.subtle.verify(
       'HMAC',
-      await hmacKey(secret, 'verify'),
+      await hmacKey(secret),
       fromBase64Url(sig),
       encoder.encode(payload),
     );

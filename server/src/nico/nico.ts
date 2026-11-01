@@ -14,8 +14,6 @@ import { DEFAULT_UA } from './nicoApi';
 import { rewriter } from './nicoRewrite';
 import { matchRoute, type Upstream } from './nicoRoutes';
 
-export { rewriter };
-
 /** ニコニコへの問い合わせを待つ上限（応答しない相手で、リクエストが溜まり続けないように） */
 const UPSTREAM_TIMEOUT_MS = 15_000;
 

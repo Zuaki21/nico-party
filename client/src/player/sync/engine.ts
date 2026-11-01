@@ -14,11 +14,15 @@ import {
 } from './constants';
 import type { LoadedState, SyncContext } from './context';
 import { InteractionTracker } from './interaction';
+import { MuteScope } from './muteScope';
 import { StartGate } from './startGate';
 
 import { SuppressWindow } from './suppress';
 
 type ApplyMode = 'normal' | 'afterLoad' | 'afterCatchUp';
+/** 保留している同期が複数あるときは、強い方（読み込み直後 > 位置合わせの直後 > 通常）を残す */
+const MODE_RANK: Record<ApplyMode, number> = { normal: 0, afterCatchUp: 1, afterLoad: 2 };
+const strongerMode = (a: ApplyMode, b: ApplyMode): ApplyMode => (MODE_RANK[a] >= MODE_RANK[b] ? a : b);
 
 /**
  * 部屋の再生状態と自分のプレイヤーを一致させる。
@@ -48,8 +52,12 @@ export class SyncEngine {
   private nextSentUntil = 0;
   /** ユーザーの操作の保護が終わったら、保留した同期をやり直すためのタイマー */
   private holdRetryTimer: number | undefined;
+  /** 保留している同期の種類（保護の間に別の同期が来ても、読み込み直後の同期を通常のものに置き換えない） */
+  private pendingMode: ApplyMode = 'normal';
+  private disposed = false;
 
   private suppress = new SuppressWindow();
+  private mute: MuteScope;
   private local: InteractionTracker;
   private gate: StartGate;
   private catchUp: CatchUp;
@@ -64,11 +72,13 @@ export class SyncEngine {
     /** 今のサーバー時刻 (ms)。ローカルの時計に、ping/pong で測ったずれを足したもの */
     private serverNow: () => number,
   ) {
+    this.mute = new MuteScope(player);
     const ctx: SyncContext = {
       player,
       loadedState: () => this.loadedState(),
       expected: (s) => this.expected(s),
       suppress: this.suppress,
+      mute: this.mute,
       apply: () => this.apply(APPLY_THRESHOLD),
       applyAfterCatchUp: () => this.apply(APPLY_THRESHOLD, 'afterCatchUp'),
     };
@@ -76,34 +86,40 @@ export class SyncEngine {
     this.gate = new StartGate(ctx);
     this.catchUp = new CatchUp(ctx, onCatchUp);
 
+    // dispose のあとにプレイヤーのイベントが来ても、何もしない（プレイヤーの購読は外せない）
+    const on = (event: Parameters<NicoPlayer['on']>[0], fn: () => void) =>
+      player.on(event, () => {
+        if (!this.disposed) fn();
+      });
     const onLocal = () => {
       // 操作を検知した時点（送信を待つ間も）から、部屋の状態で巻き戻されないようにする
       if (this.isUserInput()) this.local.hold();
       clearTimeout(this.localTimer);
       this.localTimer = window.setTimeout(() => this.onLocalChange(), LOCAL_DEBOUNCE_MS);
     };
-    player.on('play', onLocal);
+    on('play', onLocal);
     // 先読みのための再生が始まったら、すぐ 0 秒に戻して止める（音が出続けないように）
-    player.on('play', () => {
+    on('play', () => {
       if (this.gate.active) this.apply(APPLY_THRESHOLD);
     });
     // 再生開始の通知が来ないことや、止める命令が無視されることがあるので、
     // 開始時刻より前に再生位置が進んでいたら、その都度 0 秒に戻して止める
-    player.on('progress', () => this.gate.holdBeforeStart());
-    player.on('pause', onLocal);
-    player.on('seeked', onLocal);
-    player.on('load', () => {
+    on('progress', () => this.gate.holdBeforeStart());
+    on('pause', onLocal);
+    on('seeked', onLocal);
+    on('load', () => {
       clearTimeout(this.loadTimer);
       // 読み込めなかったと伝えた後で読み込めたら取り消す
       if (this.reportedFailFor === this.loadedItemId) this.resendLoadReport();
       this.apply(APPLY_THRESHOLD, 'afterLoad');
     });
-    player.on('ended', () => this.requestNext());
+    on('ended', () => this.requestAutoNext());
     this.tickTimer = window.setInterval(() => this.onTick(), 1000);
   }
 
   /** タイマーを止める（使い終わったとき。テストで、タイマーが残らないことを確かめるのにも使う） */
   dispose() {
+    this.disposed = true;
     clearInterval(this.tickTimer);
     clearTimeout(this.localTimer);
     clearTimeout(this.loadTimer);
@@ -122,6 +138,7 @@ export class SyncEngine {
       // 前の動画への操作の保護や送信待ちは、新しい動画に持ち越さない（最初の同期が遅れるため）
       clearTimeout(this.localTimer);
       clearTimeout(this.holdRetryTimer);
+      this.pendingMode = 'normal';
       this.local.releaseHold();
       this.nextSentUntil = 0;
       this.catchUp.cancel();
@@ -187,17 +204,22 @@ export class SyncEngine {
    * - afterLoad: 読み込み完了の直後。途中参加なら位置合わせ（CatchUp）をする
    * - afterCatchUp: 位置合わせが終わった直後。再生が始まらなくても、位置合わせを繰り返さない
    */
-  private apply(threshold: number, mode: ApplyMode = 'normal') {
+  private apply(threshold: number, requested: ApplyMode = 'normal') {
     const p = this.player;
     // 途中参加で位置が合うのを待っている間は、そちらで合わせる（CatchUp）
     if (this.catchUp.active) return;
+    // 保留していた同期があれば、その種類を引き継ぐ（読み込み直後の同期が、保護の間に来た別の同期で失われないように）
+    const mode = strongerMode(requested, this.pendingMode);
     // ユーザーが操作した直後。その操作が部屋に反映されるまで巻き戻さない（this.state は更新済みなので、後の定期補正で合う）
     if (this.local.isHolding()) {
       // 保護が終わったら、保留した他の人の操作を反映する
+      this.pendingMode = mode;
       clearTimeout(this.holdRetryTimer);
-      this.holdRetryTimer = window.setTimeout(() => this.apply(APPLY_THRESHOLD, mode), this.local.holdRemainingMs() + 50);
+      this.holdRetryTimer = window.setTimeout(() => this.apply(APPLY_THRESHOLD), this.local.holdRemainingMs() + 50);
       return;
     }
+    this.pendingMode = 'normal';
+    clearTimeout(this.holdRetryTimer);
     const s = this.loadedState();
     if (!s || !p.ready()) return;
 
@@ -262,7 +284,7 @@ export class SyncEngine {
   }
 
   /** 動画が最後まで再生されたので次へ進める（1曲リピートならサーバーが同じ動画を繰り返す） */
-  private requestNext() {
+  private requestAutoNext() {
     // 動画を読み込み直している最中に、前の動画の終了通知が遅れて届いても、次の動画の終了と取り違えない
     if (!this.player.ready()) return;
     if (!this.loadedState()) return;
@@ -281,7 +303,7 @@ export class SyncEngine {
     // 途中参加などで誰のプレイヤーも終了イベントを出さないまま終端を過ぎた
     const duration = p.getDuration();
     if (s.playing && duration > 0 && this.expected(s) > duration + STUCK_MARGIN) {
-      this.requestNext();
+      this.requestAutoNext();
       return;
     }
 

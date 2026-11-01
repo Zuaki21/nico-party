@@ -24,6 +24,7 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
    * ただし、押した直後はサーバーから再生リストが届くまで少し間があるので、その間だけ押した結果を優先する
    */
   const pending = new Map<string, { added: boolean; until: number }>();
+  /** 押した結果を優先する時間 (ms) */
   const PENDING_MS = 3000;
   const isAdded = (videoId: string) => {
     const p = pending.get(videoId);
@@ -106,7 +107,7 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
       add.innerHTML = done ? `<span class="when-idle">✓</span><span class="when-hover">${TRASH_ICON}</span>` : '＋';
       add.title = t(done ? 'removeAdded' : 'addToList');
       // 結果が並ぶので、どの動画への操作かが分かる名前にする（見た目の「＋」「✓」は名前にしない）
-      add.setAttribute('aria-label', `${add.title}: ${r.title}`);
+      add.setAttribute('aria-label', t(done ? 'removeAddedItem' : 'addItem', { title: r.title }));
       add.classList.toggle('done', done);
     };
     const refresh = () => mark(isAdded(r.videoId));
@@ -118,7 +119,7 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
       li.title = reason;
       add.disabled = true;
       add.title = reason;
-      add.setAttribute('aria-label', `${reason}: ${r.title}`);
+      add.setAttribute('aria-label', t('itemReason', { title: r.title, reason }));
       const badge = document.createElement('span');
       badge.className = 'badge unplayable-badge';
       badge.textContent = t('unplayableBadge');
@@ -143,6 +144,9 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
 
   const fetchPage = async (offset: number) => {
     const my = ++seq;
+    // 「もっと見る」を押したあとは、取得中にボタンが作り直される。フォーカスは、新しく足された結果に移す
+    const refocus = offset > 0 && tail.some((el) => el.contains(document.activeElement));
+    const before = items.length;
     if (offset === 0) {
       items = [];
       // 最初の検索では案内の文や前の検索の結果を消す
@@ -156,6 +160,7 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
       total = res.total;
       items = offset === 0 ? res.items : [...items, ...res.items.slice(0, SEARCH_PAGE_SIZE)];
       render('done');
+      if (refocus) list.children[before]?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
     } catch {
       if (my === seq) render('error');
     }

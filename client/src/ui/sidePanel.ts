@@ -37,9 +37,12 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
   /** 分割線の現在値を、支援技術に伝える */
   const syncAria = () => {
     splitter.setAttribute('aria-orientation', wideQuery.matches ? 'vertical' : 'horizontal');
-    splitter.setAttribute('aria-valuemin', String(Math.round(minSide())));
-    splitter.setAttribute('aria-valuemax', String(Math.round(totalSize() - MIN_MAIN)));
+    const min = Math.round(minSide());
+    splitter.setAttribute('aria-valuemin', String(min));
+    // 狭い画面では、動画側に残す分を引くと最小を下回ることがある
+    splitter.setAttribute('aria-valuemax', String(Math.max(min, Math.round(totalSize() - MIN_MAIN))));
     splitter.setAttribute('aria-valuenow', String(currentSize()));
+    splitter.setAttribute('aria-valuetext', `${currentSize()}px`);
   };
 
   const applySize = () => {

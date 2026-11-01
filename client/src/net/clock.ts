@@ -4,6 +4,8 @@
  */
 export class ClockSync {
   private samples: { rtt: number; offset: number }[] = [];
+  /** 往復時間を測ったサンプルから、offset を決めたことがある（再接続しても残る） */
+  private measured = false;
 
   /** サーバー時刻 − ローカル時刻 (ms) */
   offset = 0;
@@ -14,6 +16,7 @@ export class ClockSync {
     this.samples.push({ rtt, offset: serverTime + rtt / 2 - now });
     if (this.samples.length > 8) this.samples.shift();
     this.offset = this.samples.reduce((a, b) => (b.rtt < a.rtt ? b : a)).offset;
+    this.measured = true;
   }
 
   /**
@@ -21,7 +24,8 @@ export class ClockSync {
    * 片道遅延を引けないので、samples には入れない（入れると rtt 0 として常に採用され、本物のサンプルが負ける）
    */
   provisional(serverTime: number, now = Date.now()) {
-    if (this.samples.length === 0) this.offset = serverTime - now;
+    // 一度でも測れていれば、その値のほうが正確（片道遅延を引いていない値で上書きしない）
+    if (this.samples.length === 0 && !this.measured) this.offset = serverTime - now;
   }
 
   /**

@@ -31,6 +31,10 @@
   min-height: 0;
 }
 
+.panel-list > .queue {
+  flex: 1;
+}
+
 .side[data-tab='search'] .panel-list,
 .side[data-tab='list'] .search {
   display: none;

@@ -308,6 +308,19 @@ Object.assign(scenarios, {
   '読み込み完了の通知が二度来る': ({ clock, engine, state, player }) => {
     engine.update(state({ position: 30 })); clock.advance(5000); player.reload(); clock.advance(8000);
   },
+  '保護中に読み込みが終わり、そこへ別の状態の再送が届く（位置合わせを失わない）': ({ clock, engine, state, player, iframe }) => {
+    const s = state({ position: 30 }); engine.update(s); clock.advance(100);
+    iframe.fire('pointerenter'); player.userSeek(5); clock.advance(600);
+    engine.update({ ...s, version: 2 }); clock.advance(10000);
+  },
+  'dispose のあとにプレイヤーのイベントが出ても、何もしない': ({ clock, engine, state, player }) => {
+    engine.update(state({ position: 30 })); clock.advance(5000);
+    engine.dispose(); player.userSeek(40); player.userPause(); player.finish(); clock.advance(3000);
+  },
+  '位置合わせ中に、別の状態の再送が届く': ({ clock, engine, state }) => {
+    const s = state({ position: 30 }); engine.update(s); clock.advance(600);
+    engine.update({ ...s, version: 2 }); clock.advance(10000);
+  },
 });
 
 const out = {};

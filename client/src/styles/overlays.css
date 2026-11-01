@@ -27,7 +27,7 @@
   height: 0.2143rem;
   background: var(--danger);
   transform-origin: left;
-  animation: error-timer var(--error-ms, 5s) linear forwards;
+  animation: error-timer var(--error-ms, 3s) linear forwards;
 }
 
 @keyframes error-timer {

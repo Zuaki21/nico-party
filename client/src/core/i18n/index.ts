@@ -70,7 +70,8 @@ export function serverErrorText(code: ErrorCode, params: Record<string, string> 
     case 'not_embeddable':
       return t('err_not_embeddable', { title: params.title });
     default:
-      return code;
+      // サーバーだけが新しくなって、この画面が知らないコードが届いたとき
+      return t('err_unknown', { code });
   }
 }
 

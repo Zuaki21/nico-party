@@ -1,14 +1,11 @@
 import type { PlaybackState, QueueItem } from '../../../shared/protocol';
+import type { Change } from './playback';
 import { initialState } from './state';
 
 export type LoadFailed = { itemId: string; ids: string[] };
 
-/** 1 回の書き込みで保存する内容（指定したものだけ） */
-export interface Commit {
-  state?: PlaybackState;
-  queue?: QueueItem[];
-  history?: QueueItem[];
-}
+/** 1 回の書き込みで保存する内容（状態遷移の結果 = Change。変わったものだけ） */
+export type Commit = Change;
 
 const STATE_KEY = 'state';
 const QUEUE_KEY = 'queue';
@@ -26,6 +23,10 @@ const LOAD_FAILED_KEY = 'loadFailed';
  * 書き込みは commit に集めて、1 回の storage.put にまとめる（途中で退避されても、半端な状態が残らない）。
  * メモリは書き込みと同時に更新する（storage への書き込みはメモリ上で即座に反映され、失敗したら部屋ごと作り直される）。
  * 呼び出し側が受け取ったものを書き換えても、メモリの中身が勝手に変わらないよう、コピーを返す
+ * （state は浅いコピー。current など中のオブジェクトは共有しているので、状態遷移の関数は中身を書き換えず、新しく作ること）。
+ *
+ * 前提: Durable Object の出力ゲートが、storage への書き込みが終わるまで、送ったメッセージを相手に届けない。
+ * そのため commit のあと、written を待たずに配信してよい。storage.put に allowUnconfirmed を付けないこと
  */
 export class RoomStore {
   private constructor(

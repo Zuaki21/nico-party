@@ -80,6 +80,8 @@ function applyMembers(members: Member[]) {
   session.presence?.setMembers(members.length);
 }
 
+/** 通行証を取り直す間隔（有効期限 24 時間より十分に短く） */
+const PASS_REFRESH_MS = 6 * 60 * 60 * 1000;
 /** 部屋に入るまでこれ以上かかったら、時間がかかっていると伝える */
 const SLOW_CONNECT_MS = 10_000;
 let slowTimer: number | undefined;
@@ -112,7 +114,15 @@ function onMessage(msg: ServerMsg) {
 
 function connect(roomId: string, name: string, pass?: string) {
   slowTimer = window.setTimeout(slowLoading, SLOW_CONNECT_MS);
-  session.conn = new RoomConnection({ roomId, name, clientId, pass, onMessage, onWaiting: ui.renderConnecting });
+  session.conn = new RoomConnection({
+    roomId,
+    name,
+    clientId,
+    pass,
+    onMessage,
+    onWaiting: ui.renderConnecting,
+    onEvicted: () => showError(t('connectionReplaced')),
+  });
   session.conn.start();
 }
 
@@ -145,6 +155,25 @@ async function main() {
   }
   devlog(`ready as ${name} (instance ${discord.instanceId})`);
   connect(discord.instanceId, name, pass);
+  scheduleRefresh(discord);
+}
+
+/**
+ * 通行証には有効期限（24 時間）があるので、開きっぱなしの間に取り直す。
+ * 再接続のときに使う通行証と、次に読み込む動画の中継の通行証が新しくなる（読み込み済みの動画は、そのまま再生できる）
+ */
+function scheduleRefresh(discord: DiscordSDK) {
+  window.setInterval(async () => {
+    try {
+      const fresh = await authenticate(discord, false);
+      if (!fresh.pass || !fresh.nicoPass) return;
+      session.nicoPass = fresh.nicoPass;
+      session.conn?.setPass(fresh.pass);
+      devlog('passes refreshed');
+    } catch (e) {
+      devlog(`refresh failed: ${describeError(e)}`);
+    }
+  }, PASS_REFRESH_MS);
 }
 
 main().catch((e) => {

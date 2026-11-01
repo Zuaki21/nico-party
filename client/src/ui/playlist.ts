@@ -10,6 +10,13 @@ import type { UiHandlers } from './ui';
 /** 並べ替えの結果を読み上げる領域（ui.ts が置く） */
 const STATUS_ID = 'sr-status';
 
+/** 読み上げだけする。同じ文言が続いても読み上げられるよう、いったん空にしてから入れる */
+function announce(message: string) {
+  const el = $(STATUS_ID);
+  el.textContent = '';
+  requestAnimationFrame(() => (el.textContent = message));
+}
+
 const REPEAT_LABEL = { off: 'repeatOff', all: 'repeatAll', one: 'repeatOne' } as const;
 const NEXT_REPEAT: Record<RepeatMode, RepeatMode> = { off: 'all', all: 'one', one: 'off' };
 
@@ -48,7 +55,7 @@ export function setupPlaylist(h: Pick<UiHandlers, 'remove' | 'jump' | 'skip' | '
   renderMode();
   reordering = setupReorder(h.move, renderList, (id, index, total) => {
     const q = [...lists.history, ...(lists.current ? [lists.current] : []), ...lists.queue].find((x) => x.id === id);
-    if (q) $(STATUS_ID).textContent = t('movedTo', { title: q.title, n: String(index + 1), total: String(total) });
+    if (q) announce(t('movedTo', { title: q.title, n: String(index + 1), total: String(total) }));
   });
   refreshNavPreview = setupNavPreview(navPreview);
 }
@@ -120,7 +127,7 @@ function renderList() {
 }
 
 /** 再生リストの中でフォーカスされている操作（どの動画の、どのボタンか） */
-type FocusedControl = { id: string; selector: string };
+type FocusedControl = { id: string; selector: string; index: number };
 const CONTROL_SELECTORS = ['.handle', '[data-play]', '[data-remove]'];
 
 function focusedControl(ol: HTMLElement): FocusedControl | null {
@@ -128,15 +135,21 @@ function focusedControl(ol: HTMLElement): FocusedControl | null {
   if (!(el instanceof HTMLElement) || !ol.contains(el)) return null;
   const id = el.closest<HTMLElement>('li[data-id]')?.dataset.id;
   const selector = CONTROL_SELECTORS.find((s) => el.matches(s));
-  return id && selector ? { id, selector } : null;
+  const index = [...ol.querySelectorAll('li[data-id]')].findIndex((x) => (x as HTMLElement).dataset.id === id);
+  return id && selector ? { id, selector, index } : null;
 }
 
 function restoreFocus(ol: HTMLElement, focused: FocusedControl | null) {
   if (!focused) return;
-  const li = [...ol.querySelectorAll<HTMLElement>('li[data-id]')].find((x) => x.dataset.id === focused.id);
+  const items = [...ol.querySelectorAll<HTMLElement>('li[data-id]')];
+  const li = items.find((x) => x.dataset.id === focused.id);
   // 同じボタンが無くなっていたら（再生中になって「ここから再生」が消えたなど）、同じ動画のつまみに
-  const target = li?.querySelector<HTMLElement>(focused.selector) ?? li?.querySelector<HTMLElement>('.handle');
+  let target = li?.querySelector<HTMLElement>(focused.selector) ?? li?.querySelector<HTMLElement>('.handle');
+  // 動画が消えたとき（削除など）は、同じ位置に来た動画に移る。空になったら入力欄に
+  target ??= items[Math.min(focused.index, items.length - 1)]?.querySelector<HTMLElement>('.handle') ?? document.getElementById('url');
+  // キーボードで動かした先が画面の外にならないよう、見える位置まで動かす
   target?.focus({ preventScroll: true });
+  target?.scrollIntoView({ block: 'nearest' });
 }
 
 type ItemKind = 'done' | 'current' | 'next';
@@ -155,6 +168,7 @@ function itemEl(q: QueueItem, kind: ItemKind) {
   // キーボードでも、フォーカスして上下の矢印キーで並べ替えられる（setupReorder の keydown）
   handle.title = t('dragToReorder');
   handle.setAttribute('aria-label', t('reorderItem', { title: q.title }));
+  handle.setAttribute('aria-describedby', 'reorder-hint');
 
   const thumb = thumbEl(q.thumbnail, q.length);
   if (kind === 'current') {
@@ -177,18 +191,20 @@ function itemEl(q: QueueItem, kind: ItemKind) {
   actions.className = 'actions';
   if (kind !== 'current') {
     const play = document.createElement('button');
+    play.type = 'button';
     play.className = 'icon play';
     play.dataset.play = q.id;
     play.title = t('playFromHere');
-    play.setAttribute('aria-label', `${t('playFromHere')}: ${q.title}`);
+    play.setAttribute('aria-label', t('playItem', { title: q.title }));
     play.innerHTML = PLAY_ICON;
     actions.append(play);
   }
   const del = document.createElement('button');
+  del.type = 'button';
   del.className = 'icon remove';
   del.dataset.remove = q.id;
   del.title = t('removeFromList');
-  del.setAttribute('aria-label', `${t('removeFromList')}: ${q.title}`);
+  del.setAttribute('aria-label', t('removeItem', { title: q.title }));
   del.innerHTML = TRASH_ICON;
   actions.append(del);
   li.append(actions);

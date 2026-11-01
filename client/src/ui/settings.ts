@@ -159,7 +159,7 @@ export function settingsHtml(): string {
         <span class="setting-label" id="presence-label" data-i18n="presence"></span>
         <span class="setting-desc" data-i18n="presenceDesc"></span>
       </span>
-      <input type="checkbox" class="switch" id="presence-toggle" aria-labelledby="presence-label" />
+      <input type="checkbox" role="switch" class="switch" id="presence-toggle" aria-labelledby="presence-label" />
     </div>
     <div class="settings-links">
       <span class="version">ver ${APP_VERSION}</span>

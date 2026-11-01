@@ -22,15 +22,13 @@
 .queue {
   list-style: none;
   margin: 0;
-  padding: 0 0.2857rem;
+  padding: 0.2857rem;
   /* キュー欄を細くしても横スクロールバーは出さない（行の中身が縮んで収まる） */
   overflow-x: hidden;
   overflow-y: auto;
   min-height: 0;
   background: var(--panel);
   border-radius: 0.5714rem;
-  padding-top: 0.2857rem;
-  padding-bottom: 0.2857rem;
 }
 
 .queue li {
@@ -168,6 +166,8 @@
  */
 .queue li[data-id] {
   position: relative;
+  /* ダブルクリックで再生できるので、文字が選択されないようにする */
+  user-select: none;
 }
 
 .actions {
@@ -205,11 +205,6 @@
 
 .actions button.remove:hover {
   color: var(--danger);
-}
-
-/* ダブルクリックで再生できるので、文字が選択されないようにする */
-.queue li[data-id] {
-  user-select: none;
 }
 
 /* 再生中の行は背景が薄い色なので、操作ボタンの背景もそれに合わせる */

@@ -17,6 +17,31 @@ for (const f of fs.readdirSync(src).filter((f) => f.endsWith('.ts'))) {
   }).outputText;
   fs.writeFileSync(path.join(out, f.replace(/\.ts$/, '.js')), js);
 }
+// 時計のずれの推定 (src/net/clock.ts) の単体テスト
+const clockJs = ts.transpileModule(fs.readFileSync(path.resolve(__dirname, '../../src/net/clock.ts'), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+fs.writeFileSync(path.join(out, 'clock.js'), clockJs);
+{
+  const assert = require('node:assert/strict');
+  const { ClockSync } = require(path.join(out, 'clock.js'));
+  const c = new ClockSync();
+  c.provisional(1_000_500, 1_000_000);
+  assert.equal(c.offset, 500, '往復を測れる前は、welcome の時刻から仮の値を作る');
+  c.sample(1_000_000, 1_000_550, 1_000_100); // rtt 100 → offset = 1_000_550 + 50 - 1_000_100 = 500
+  c.sample(2_000_000, 2_000_540, 2_000_020); // rtt 20 → offset = 2_000_540 + 10 - 2_000_020 = 530（往復が短いほうを採る）
+  assert.equal(c.offset, 530);
+  c.reset();
+  assert.equal(c.offset, 530, '再接続の直後も、直前の値を保つ（端末の時計に跳ばない）');
+  c.provisional(3_000_900, 3_000_000);
+  assert.equal(c.offset, 530, '一度測れた値は、往復を測れない仮の値で上書きしない');
+  c.sample(4_000_000, 4_000_520, 4_000_040);
+  assert.equal(c.offset, 4_000_520 + 20 - 4_000_040, '再接続後に測り直した値に置き換わる');
+  const fresh = new ClockSync();
+  fresh.reset();
+  fresh.provisional(7000, 1000);
+  assert.equal(fresh.offset, 6000, '一度も測れていなければ、仮の値を使う');
+}
 const actual = JSON.parse(execFileSync(process.execPath, [path.join(__dirname, 'run.cjs'), path.join(out, 'engine.js')], { encoding: 'utf8', maxBuffer: 1 << 26 }));
 fs.rmSync(out, { recursive: true, force: true });
 

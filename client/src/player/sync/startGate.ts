@@ -1,5 +1,6 @@
 import type { StartGateContext, LoadedState } from './context';
-import { MuteScope } from './muteScope';
+
+const MUTE_OWNER = 'startGate';
 
 /** 開始時刻を待つ間、一時停止を送り直す間隔 */
 const HOLD_INTERVAL_MS = 300;
@@ -19,17 +20,13 @@ export class StartGate {
   private preloading = false;
   /** 先読みが済んだキュー項目 */
   private preloadedFor: string | null = null;
-  /** 先読みのためのミュート（終わったら元に戻す） */
-  private mute: MuteScope;
   private preloadStartedAt = 0;
   /** 開始時刻まで 0 秒で止めておくためのタイマー */
   private holdTimer: number | undefined;
   /** 再生開始時刻ちょうどに再生を始めるためのタイマー */
   private startTimer: number | undefined;
 
-  constructor(private ctx: StartGateContext) {
-    this.mute = new MuteScope(ctx.player);
-  }
+  constructor(private ctx: StartGateContext) {}
 
   /** 先読みのための再生中か（このあいだの再生・停止はユーザーの操作ではない） */
   get active() {
@@ -55,7 +52,7 @@ export class StartGate {
 
   /** 動画が切り替わった。先読みの途中なら、ミュートを元に戻して、待っていた状態を捨てる */
   reset() {
-    if (this.preloading) this.mute.off();
+    if (this.preloading) this.ctx.mute.off(MUTE_OWNER);
     this.stopHold();
     clearTimeout(this.startTimer);
     this.preloading = false;
@@ -99,7 +96,7 @@ export class StartGate {
     this.preloading = true;
     this.preloadStartedAt = Date.now();
     this.ctx.suppress.extend();
-    this.mute.on();
+    this.ctx.mute.on(MUTE_OWNER);
     p.play();
     this.startHold();
   }
@@ -123,6 +120,6 @@ export class StartGate {
       p.pause();
       p.seek(0);
     }
-    this.mute.off();
+    this.ctx.mute.off(MUTE_OWNER);
   }
 }

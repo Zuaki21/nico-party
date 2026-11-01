@@ -79,6 +79,7 @@ cd server && npm run check                   # 型・再生の状態遷移・中
 - `server/scripts/check-playback.cjs`: 次へ・前へ・ジャンプ・リピート・シャッフル・削除・追加などの状態遷移（`server/src/room/playback.ts`）。
   時刻・ID・乱数を固定して確かめる
 - `server/scripts/check-nico.cjs`: 中継の書き換えルール。書き換えた URL に、必ず通行証が入ることを確かめる
+- `server/scripts/check-room.cjs`: Room クラス（接続数の上限と追い出し・入室しない接続の掃除・アラーム・入室と退出・配信の順序・量の制限）。`cloudflare:workers` と保存先と WebSocket を代用品にして動かす
 - `server/scripts/check-misc.cjs`: メッセージの検証・通行証・読み込み失敗の記録・量の制限・保存先・本文の読み取り上限・中継の経路・並べ替え
 
 ローカルで WebSocket に通行証なしで入るには、`server/.dev.vars` に `ALLOW_ANON_WS=true` を書く（本番では設定しない）。
@@ -95,6 +96,12 @@ npx wrangler secret put PASS_SECRET             # 初回のみ（通行証の署
 ```
 
 デプロイ後、URL Mapping の `/` を `<name>.<subdomain>.workers.dev` にする。
+
+## セキュリティ上の前提
+
+- 部屋の通行証は、クライアントが申告した部屋（Activity の instanceId）に対して発行される。Discord でログインできれば、instanceId を知っている部屋には入れる。instanceId は Discord が発行する推測しにくい ID だが、漏れた場合は防げない
+- デプロイ前に、本番の vars / secret に `ALLOW_ANON_WS` が入っていないことを確かめる（入っていても、接続元がローカルでなければ無効）
+- 通行証の有効期間は 24 時間。クライアントは 6 時間ごとに取り直す
 
 ## 制限
 

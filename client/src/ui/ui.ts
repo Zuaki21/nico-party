@@ -64,12 +64,12 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
       <div class="now">
         <div class="now-title" id="now-title"></div>
         <div class="controls">
-          <button id="prev" class="secondary icon-button" data-i18n-label="prev" disabled>${PREV_ICON}</button>
-          <button id="skip" class="secondary icon-button" data-i18n-label="next" disabled>${NEXT_ICON}</button>
+          <button type="button" id="prev" class="secondary icon-button" data-i18n-label="prev" disabled>${PREV_ICON}</button>
+          <button type="button" id="skip" class="secondary icon-button" data-i18n-label="next" disabled>${NEXT_ICON}</button>
         </div>
         <div class="controls">
-          <button id="open-settings" class="secondary icon-button" data-i18n-title="settings" aria-haspopup="dialog" aria-expanded="false" aria-controls="settings">${SETTINGS_ICON}</button>
-          <button id="toggle-side" class="secondary icon-button" data-i18n-label="tabList" aria-expanded="true" aria-controls="side">${LIST_ICON}</button>
+          <button type="button" id="open-settings" class="secondary icon-button" data-i18n-title="settings" aria-haspopup="dialog" aria-expanded="false" aria-controls="settings">${SETTINGS_ICON}</button>
+          <button type="button" id="toggle-side" class="secondary icon-button" data-i18n-label="tabList" aria-expanded="true" aria-controls="side">${LIST_ICON}</button>
         </div>
       </div>
       ${settingsHtml()}
@@ -87,15 +87,15 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
       </div>
       <div class="panel-list" id="panel-list" role="tabpanel" aria-labelledby="tab-list">
         <div class="queue-head">
-          <button id="shuffle" class="mode" aria-pressed="false">${SHUFFLE_ICON}</button>
-          <button id="repeat" class="mode">${REPEAT_ICON}</button>
+          <button type="button" id="shuffle" class="mode" aria-pressed="false">${SHUFFLE_ICON}</button>
+          <button type="button" id="repeat" class="mode">${REPEAT_ICON}</button>
           <span class="muted members" id="members"></span>
         </div>
         <ol class="queue" id="queue"><li class="muted" data-i18n="connecting"></li></ol>
       </div>
       <div class="search" id="search" role="tabpanel" aria-labelledby="tab-search">
         <div class="search-head">
-          <span class="search-title" id="search-title"></span>
+          <span class="search-title" id="search-title" role="status"></span>
           <div class="seg" id="search-sort" role="group" data-i18n-title="sortTitle" data-i18n-label="sortTitle">
             <button type="button" data-sort="popular" data-i18n="sortPopular"></button>
             <button type="button" data-sort="new" data-i18n="sortNew"></button>
@@ -107,6 +107,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
     </aside>
     <!-- 並べ替えの結果など、画面には出さずに読み上げだけする -->
     <div class="sr-only" id="sr-status" role="status"></div>
+    <span class="sr-only" id="reorder-hint" data-i18n="dragToReorder"></span>
     <div class="loading" id="loading" role="status">
       <img class="loading-icon" src="/img/icon-256.png" alt="" />
       <div class="spinner" aria-hidden="true"></div>

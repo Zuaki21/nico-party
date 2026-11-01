@@ -1,4 +1,4 @@
-import { HEARTBEAT, type ClientMsg, type ServerMsg } from '../../../shared/protocol';
+import { CLOSE_EVICTED, HEARTBEAT, type ClientMsg, type ServerMsg } from '../../../shared/protocol';
 import { ClockSync } from './clock';
 import { proxied } from '../core/env';
 
@@ -28,6 +28,8 @@ export interface RoomConnectionOptions {
   onMessage: (msg: ServerMsg) => void;
   /** 部屋に入っていない間に溜まっている操作の数が変わった（切断中・接続中の表示用） */
   onWaiting: (waiting: number) => void;
+  /** 同じユーザーの別の接続が増えて、この接続が切られた（画面に戻るなどするまで、自動では繋ぎ直さない） */
+  onEvicted?: () => void;
 }
 
 /**
@@ -147,7 +149,24 @@ export class RoomConnection {
       }
     };
 
-    sock.onclose = () => this.drop(sock);
+    sock.onclose = (e) => (e.code === CLOSE_EVICTED ? this.evicted(sock) : this.drop(sock));
+  }
+
+  /** 次に繋ぎ直すときに使う通行証に差し替える（有効期限が切れる前に取り直したもの） */
+  setPass(pass: string) {
+    this.opts.pass = pass;
+  }
+
+  /** 追い出された。タイマーでは繋ぎ直さない（画面に戻る・ネットワークが戻るなどの、利用者の動きがあれば繋ぐ） */
+  private evicted(sock: WebSocket) {
+    if (this.ws !== sock) return;
+    sock.onclose = null;
+    sock.onmessage = null;
+    this.clearTimers();
+    this.ws = null;
+    this.joined = false;
+    this.opts.onWaiting(this.livePending().length);
+    this.opts.onEvicted?.();
   }
 
   /** 接続が切れた（または死んでいる）ので片付けて、少し待ってから繋ぎ直す */
