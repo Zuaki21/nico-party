@@ -339,7 +339,8 @@ export class SyncEngine {
   private endCatchUp() {
     clearInterval(this.catchTimer);
     this.catchingUp = false;
-    this.suppress();
+    // 位置が合ったので、始めるときに長く取った無視の時間を通常に戻す（残すと、合流してしばらくシークバーの操作が部屋に送られない）
+    this.suppressUntil = Date.now() + SUPPRESS_MS;
     this.player.mute(this.catchMutedBefore);
     this.onCatchUp(false);
   }
