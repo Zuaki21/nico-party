@@ -13,7 +13,12 @@ export function devlog(text: string) {
 
 /** catch した値をログ用の文字列にする（Discord SDK のエラーは Error ではなくオブジェクトで届く） */
 export function describeError(e: unknown) {
-  return e instanceof Error ? e.message : JSON.stringify(e);
+  if (e instanceof Error) return e.message;
+  try {
+    return JSON.stringify(e) ?? String(e);
+  } catch {
+    return String(e);
+  }
 }
 
 /** ページと埋め込みプレイヤー (同一オリジンで配信している場合) のエラーを拾う */

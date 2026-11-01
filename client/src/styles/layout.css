@@ -13,6 +13,8 @@
   min-height: 0;
   /* 無いと中身（タイトルやボタン）の幅より縮まず、キュー欄が画面外にはみ出す */
   min-width: 0;
+  /* 設定画面（絶対配置）の基準 */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.4286rem;
@@ -124,7 +126,3 @@
   display: none;
 }
 
-/* 設定画面。動画の右下、設定ボタンのすぐ上に吹き出しのように開く */
-.main {
-  position: relative;
-}

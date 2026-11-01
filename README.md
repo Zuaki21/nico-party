@@ -63,16 +63,24 @@ cloudflared tunnel --protocol http2 --url http://127.0.0.1:5173
 - 開発中は Activity 内のログが `client/dev.log` に書き出される
 - 通常のブラウザで `http://127.0.0.1:5173` を開くと、全タブ共通の部屋で同期だけを確認できる
 
-## 同期エンジンの確認
+## 確認用のコマンド
 
-`client/src/player/sync` を変更したときは、動画の同期の挙動が変わっていないかを、偽のプレイヤー・偽の時計で確かめられる。
+Discord の中でしか確かめられない動きを、手元で確かめるためのもの。変更したら、デプロイの前に実行する。
 
 ```sh
-cd client && npm run check:sync              # 記録 (scripts/sync-check/expected.json) と比べる
+cd client && npm run check:sync              # 同期エンジンの挙動が、記録と変わっていないか
 cd client && npm run check:sync -- --update  # 意図して挙動を変えたときに、記録を作り直す
+cd server && npm run check                   # 型・再生の状態遷移・中継の書き換えルール
 ```
 
-途中参加・開始待ち・ユーザー操作・動画の切り替え・読み込み失敗など、21 の場面を流して、プレイヤーとサーバーへの呼び出しを時刻つきで比べる。
+- `check:sync`（`client/src/player/sync`）: 偽のプレイヤー・偽の時計で、途中参加・開始待ち・ユーザー操作・動画の切り替え・
+  読み込み失敗・時計のずれ・プレイヤーの癖（再生通知が来ない・シークが効かない）など 36 の場面を流して、プレイヤーとサーバーへの呼び出しを
+  時刻つきで記録と比べる。どの場面も、終わったあとにミュートが元に戻り、覆いが外れ、タイマーが残らないことも確かめる
+- `server/scripts/check-playback.cjs`: 次へ・前へ・ジャンプ・リピート・シャッフル・削除・追加などの状態遷移（`server/src/room/playback.ts`）。
+  時刻・ID・乱数を固定して確かめる
+- `server/scripts/check-nico.cjs`: 中継の書き換えルール。書き換えた URL に、必ず通行証が入ることを確かめる
+
+ローカルで WebSocket に通行証なしで入るには、`server/.dev.vars` に `ALLOW_ANON_WS=true` を書く（本番では設定しない）。
 
 ## デプロイ
 

@@ -6,7 +6,8 @@
   "   300 player.play",
   "   500 player.seek 30.50",
   "   900 player.mute false",
-  "   900 cover false"
+  "   900 cover false",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "途中参加 + 途中で状態の再送": [
   "     0 player.load sm1",
@@ -15,7 +16,8 @@
   "   300 player.play",
   "   500 player.seek 30.50",
   "   900 player.mute false",
-  "   900 cover false"
+  "   900 cover false",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "開始待ち（切り替え直後）": [
   "     0 player.load sm1",
@@ -32,11 +34,13 @@
   "  2100 player.pause",
   "  2400 player.pause",
   "  2700 player.pause",
-  "  3000 player.play"
+  "  3000 player.play",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "参加直後は先頭（ずれが小さい）": [
   "     0 player.load sm1",
-  "   300 player.play"
+  "   300 player.play",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "参加後に、ユーザーがシーク": [
   "     0 player.load sm1",
@@ -48,7 +52,8 @@
   "   900 cover false",
   " 10000 USER seek 70",
   " 10150 send {\"t\":\"control\",\"itemId\":\"i1\",\"playing\":true,\"position\":70.15}",
-  " 12000 player.seek 42.00"
+  " 12000 player.seek 42.00",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "参加直後（位置合わせ中）に、ユーザーがシーク": [
   "     0 player.load sm1",
@@ -59,7 +64,8 @@
   "   900 player.mute false",
   "   900 cover false",
   "  1200 USER seek 70",
-  "  2000 player.seek 32.00"
+  "  2000 player.seek 32.00",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "ユーザーが一時停止": [
   "     0 player.load sm1",
@@ -72,7 +78,8 @@
   " 10000 USER pause",
   " 10150 send {\"t\":\"control\",\"itemId\":\"i1\",\"playing\":false,\"position\":39.9}",
   " 12000 player.seek 42.00",
-  " 12000 player.play"
+  " 12000 player.play",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "プレイヤーの外では、同期の変化を送らない": [
   "     0 player.load sm1",
@@ -83,7 +90,8 @@
   "   900 player.mute false",
   "   900 cover false",
   " 10000 USER seek 70",
-  " 12000 player.seek 42.00"
+  " 12000 player.seek 42.00",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "フォーカスがあるときのキーボード操作": [
   "     0 player.load sm1",
@@ -98,7 +106,8 @@
   " 12000 player.seek 42.00",
   " 18000 USER seek 80",
   " 18150 send {\"t\":\"control\",\"itemId\":\"i1\",\"playing\":true,\"position\":80.15}",
-  " 20000 player.seek 50.00"
+  " 20000 player.seek 50.00",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "他の人が一時停止": [
   "     0 player.load sm1",
@@ -109,7 +118,8 @@
   "   900 player.mute false",
   "   900 cover false",
   " 10000 player.seek 41.00",
-  " 10000 player.pause"
+  " 10000 player.pause",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "他の人がシーク": [
   "     0 player.load sm1",
@@ -119,7 +129,8 @@
   "   500 player.seek 30.50",
   "   900 player.mute false",
   "   900 cover false",
-  " 10000 player.seek 90.00"
+  " 10000 player.seek 90.00",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "操作の保護中に、他の人の状態が届く": [
   "     0 player.load sm1",
@@ -131,7 +142,8 @@
   "   900 cover false",
   " 10000 USER seek 70",
   " 10150 send {\"t\":\"control\",\"itemId\":\"i1\",\"playing\":true,\"position\":70.15}",
-  " 11700 player.seek 21.50"
+  " 11700 player.seek 21.50",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "位置合わせ中に動画が切り替わる": [
   "     0 player.load sm1",
@@ -155,7 +167,8 @@
   "  3000 player.pause",
   "  3300 player.pause",
   "  3600 player.pause",
-  "  3900 player.play"
+  "  3900 player.play",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "開始待ち中に動画が切り替わる": [
   "     0 player.load sm1",
@@ -182,7 +195,8 @@
   "  3600 player.pause",
   "  3900 player.pause",
   "  4200 player.pause",
-  "  4500 player.play"
+  "  4500 player.play",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "同じ動画をもう一度（リピート）": [
   "     0 player.load sm1",
@@ -202,7 +216,8 @@
   "  8100 player.pause",
   "  8400 player.pause",
   "  8700 player.pause",
-  "  9000 player.play"
+  "  9000 player.play",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "動画の終了で次へ": [
   "     0 player.load sm1",
@@ -214,7 +229,8 @@
   "   900 cover false",
   " 10000 send {\"t\":\"next\",\"itemId\":\"i1\",\"auto\":true}",
   " 12000 player.seek 112.00",
-  " 12000 player.play"
+  " 12000 player.play",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "終端を過ぎた状態で参加（終了通知が来ない）": [
   "     0 player.load sm1",
@@ -222,13 +238,15 @@
   "  1000 send {\"t\":\"next\",\"itemId\":\"i1\",\"auto\":true}",
   "  5000 send {\"t\":\"next\",\"itemId\":\"i1\",\"auto\":true}",
   "  9000 send {\"t\":\"next\",\"itemId\":\"i1\",\"auto\":true}",
-  " 13000 send {\"t\":\"next\",\"itemId\":\"i1\",\"auto\":true}"
+  " 13000 send {\"t\":\"next\",\"itemId\":\"i1\",\"auto\":true}",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "読み込めない動画": [
   "     0 player.load sm1",
   " 20000 onLoadFailed",
   " 20000 send {\"t\":\"loadFailed\",\"itemId\":\"i1\"}",
-  " 25000 send {\"t\":\"loadFailed\",\"itemId\":\"i1\"}"
+  " 25000 send {\"t\":\"loadFailed\",\"itemId\":\"i1\"}",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "開始待ち中に他の人が一時停止": [
   "     0 player.load sm1",
@@ -240,11 +258,13 @@
   "   600 player.pause",
   "   900 player.pause",
   "  1200 player.pause",
-  "  1500 player.pause"
+  "  1500 player.pause",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "参加時に一時停止中の部屋": [
   "     0 player.load sm1",
-  "   300 player.seek 45.00"
+  "   300 player.seek 45.00",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ],
  "何も再生していない状態へ": [
   "     0 player.load sm1",
@@ -254,6 +274,214 @@
   "   500 player.seek 30.50",
   "   900 player.mute false",
   "   900 cover false",
-  "  8000 player.unload"
+  "  8000 player.unload",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
+ ],
+ "サーバーの時計が進んでいる（+5 秒）": [
+  "     0 player.load sm1",
+  "   300 cover true",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.seek 30.50",
+  "   900 player.mute false",
+  "   900 cover false",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
+ ],
+ "サーバーの時計が遅れている（-3 秒）": [
+  "     0 player.load sm1",
+  "   300 cover true",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.seek 30.50",
+  "   900 player.mute false",
+  "   900 cover false",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
+ ],
+ "途中で時計のずれが補正される": [
+  "     0 player.load sm1",
+  "   300 cover true",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.seek 30.50",
+  "   900 player.mute false",
+  "   900 cover false",
+  "  6000 player.seek 38.50",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
+ ],
+ "音を消していた人の途中参加（ミュートが元に戻る）": [
+  "     0 player.load sm1",
+  "   300 cover true",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.seek 30.50",
+  "   900 player.mute true",
+  "   900 cover false",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
+ ],
+ "音を消していた人の開始待ち（ミュートが元に戻る）": [
+  "     0 player.load sm1",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   380 player.pause",
+  "   380 player.seek 0.00",
+  "   380 player.mute true",
+  "   600 player.pause",
+  "   900 player.pause",
+  "  1200 player.pause",
+  "  1500 player.pause",
+  "  1800 player.pause",
+  "  2100 player.pause",
+  "  2400 player.pause",
+  "  2700 player.pause",
+  "  3000 player.play",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
+ ],
+ "位置合わせがタイムアウトする（シークが効かない）": [
+  "     0 player.load sm1",
+  "   300 cover true",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.seek 30.50",
+  "  2100 player.seek 32.10",
+  "  3700 player.seek 33.70",
+  "  5300 player.seek 35.30",
+  "  6900 player.seek 36.90",
+  "  8500 player.mute false",
+  "  8500 cover false",
+  "  8500 player.seek 38.50",
+  " 14000 player.seek 44.00",
+  " 16000 player.seek 46.00",
+  " 18000 player.seek 48.00",
+  " 20000 player.seek 50.00",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
+ ],
+ "再生開始の通知が来ない（開始待ち）": [
+  "     0 player.load sm1",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.pause",
+  "   500 player.seek 0.00",
+  "   500 player.mute false",
+  "   600 player.pause",
+  "   600 player.seek 0.00",
+  "   900 player.pause",
+  "  1200 player.pause",
+  "  1500 player.pause",
+  "  1800 player.pause",
+  "  2100 player.pause",
+  "  2400 player.pause",
+  "  2700 player.pause",
+  "  3000 player.play",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
+ ],
+ "再生開始の通知が来ない（途中参加）": [
+  "     0 player.load sm1",
+  "   300 cover true",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.seek 30.50",
+  "   900 player.mute false",
+  "   900 cover false",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
+ ],
+ "終了通知の送り直し（次へ進まないとき）": [
+  "     0 player.load sm1",
+  "   300 cover true",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.seek 100.50",
+  "   900 player.mute false",
+  "   900 cover false",
+  " 10000 send {\"t\":\"next\",\"itemId\":\"i1\",\"auto\":true}",
+  " 12000 player.seek 112.00",
+  " 12000 player.play",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
+ ],
+ "遅れて読み込めた（loadOk で取り消す）": [
+  "     0 player.load sm1",
+  " 20000 onLoadFailed",
+  " 20000 send {\"t\":\"loadFailed\",\"itemId\":\"i1\"}",
+  " 21000 send {\"t\":\"loadOk\",\"itemId\":\"i1\"}",
+  " 21000 cover true",
+  " 21000 player.mute true",
+  " 21000 player.play",
+  " 21200 player.seek 21.20",
+  " 21600 player.mute false",
+  " 21600 cover false",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
+ ],
+ "ポインターが外れたら、保護が解ける": [
+  "     0 player.load sm1",
+  "   300 cover true",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.seek 30.50",
+  "   900 player.mute false",
+  "   900 cover false",
+  " 10000 USER seek 70",
+  " 10150 send {\"t\":\"control\",\"itemId\":\"i1\",\"playing\":true,\"position\":70.15}",
+  " 12000 player.seek 42.00",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
+ ],
+ "ユーザーが再生ボタンで再生（一時停止中の部屋）": [
+  "     0 player.load sm1",
+  "   300 player.seek 45.00",
+  "  8000 USER play",
+  "  8150 send {\"t\":\"control\",\"itemId\":\"i1\",\"playing\":true,\"position\":0.15}",
+  " 10000 player.seek 45.00",
+  " 10000 player.pause",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
+ ],
+ "再生中にずれが広がる（定期補正）": [
+  "     0 player.load sm1",
+  "   300 cover true",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.seek 30.50",
+  "   900 player.mute false",
+  "   900 cover false",
+  " 12000 player.seek 42.00",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
+ ],
+ "開始待ち中のユーザー操作は送らない": [
+  "     0 player.load sm1",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   380 player.pause",
+  "   380 player.seek 0.00",
+  "   380 player.mute false",
+  "   600 player.pause",
+  "   900 player.pause",
+  "  1200 player.pause",
+  "  1200 USER pause",
+  "  1200 USER seek 10",
+  "  1500 player.pause",
+  "  1500 player.seek 0.00",
+  "  1800 player.pause",
+  "  2100 player.pause",
+  "  2400 player.pause",
+  "  2700 player.pause",
+  "  3000 player.play",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
+ ],
+ "読み込み中に前の動画の終了通知が届く": [
+  "     0 player.load sm1",
+  "   300 player.play",
+  "  5000 player.load sm2",
+  "  5300 player.mute true",
+  "  5300 player.play",
+  "  5380 player.pause",
+  "  5380 player.seek 0.00",
+  "  5380 player.mute false",
+  "  5600 player.pause",
+  "  5900 player.pause",
+  "  6200 player.pause",
+  "  6500 player.pause",
+  "  6800 player.pause",
+  "  7100 player.pause",
+  "  7400 player.pause",
+  "  7700 player.pause",
+  "  8000 player.play",
+  "END mutedRestored=true cover=false timersAfterDispose=0"
  ]
 }

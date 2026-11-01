@@ -116,12 +116,6 @@ button.icon:hover {
   color: var(--danger);
 }
 
-/* 検索結果を閉じる × は、左右の余白を詰める */
-#search-close {
-  padding-left: 0.4286rem;
-  padding-right: 0;
-}
-
 /* 追加できなかったときなどの案内。入力欄のすぐ下に重ねて出し、再生リストの位置は動かさない */
 #form {
   position: relative;

@@ -47,3 +47,12 @@ export function watchLayout(sdk: DiscordSDK, setCompact: (compact: boolean) => v
     })
     .catch((e) => devlog(`layout subscribe failed: ${describeError(e)}`));
 }
+
+/**
+ * 外部のページを開く。Discord 内では iframe から外のページへ移れないので、Discord の「外部リンクを開く」を使う
+ * （Discord の外で開いたときは sdk が null で、普通に新しいタブで開く）
+ */
+export function openExternal(sdk: DiscordSDK | null, url: string) {
+  if (sdk) sdk.commands.openExternalLink({ url }).catch(() => {});
+  else window.open(url, '_blank', 'noopener');
+}

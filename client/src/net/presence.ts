@@ -1,7 +1,7 @@
 import type { DiscordSDK } from '@discord/embedded-app-sdk';
 import type { PlaybackState } from '../../../shared/protocol';
-import { describeError, devlog } from './devlog';
-import { getLang, onLangChange, t } from './i18n';
+import { describeError, devlog } from '../core/devlog';
+import { getLang, onLangChange, t } from '../core/i18n';
 
 /** Discord への送信をまとめる時間（送信回数の制限に引っかからないように） */
 const DEBOUNCE_MS = 1000;

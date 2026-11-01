@@ -2,7 +2,7 @@ import { SEARCH_MAX_OFFSET, SEARCH_PAGE_SIZE, type SearchItem, type SearchSort }
 import { $, bodyEl, countsMeta, markSeg, noteEl, onSeg, thumbEl } from './dom';
 import { formatDate, getLang, t, unplayableReason } from '../core/i18n';
 import { TRASH_ICON } from './icons';
-import { findAddedItem, isInPlaylist, onPlaylistChange } from './playlist';
+import { findAddedItem, isInPlaylist, onPlaylistChange } from './playlistStore';
 import type { UiHandlers } from './ui';
 
 type SearchView = 'loading' | 'done' | 'error';

@@ -20,6 +20,16 @@ for (const f of fs.readdirSync(src).filter((f) => f.endsWith('.ts'))) {
 const actual = JSON.parse(execFileSync(process.execPath, [path.join(__dirname, 'run.cjs'), path.join(out, 'engine.js')], { encoding: 'utf8', maxBuffer: 1 << 26 }));
 fs.rmSync(out, { recursive: true, force: true });
 
+// 記録との比較とは別に、どの場面も、終わったあとに元の状態へ戻っていること（ミュートが元に戻る・覆いが外れる・
+// エンジンのタイマーが残らない）を確かめる。これが崩れると、音が出続ける・画面が隠れたまま・タイマーの漏れになる
+let broken = 0;
+for (const [name, lines] of Object.entries(actual)) {
+  const end = lines[lines.length - 1];
+  if (end !== 'END mutedRestored=true cover=false timersAfterDispose=0' || lines.some((l) => l.startsWith('EXCEPTION'))) {
+    broken++;
+    console.log('終了後の状態が崩れている:', name, '=>', end);
+  }
+}
 const expectedPath = path.join(__dirname, 'expected.json');
 if (process.argv.includes('--update')) {
   fs.writeFileSync(expectedPath, JSON.stringify(actual, null, 1) + '\n');
@@ -37,5 +47,5 @@ for (const name of new Set([...Object.keys(expected), ...Object.keys(actual)])) 
     if (a[i] !== b[i]) { console.log('  記録:', a[i]); console.log('  今  :', b[i]); break; }
   }
 }
-console.log(bad === 0 ? `OK: ${Object.keys(expected).length} 場面すべて一致` : `${bad} 場面で差異`);
-process.exit(bad === 0 ? 0 : 1);
+console.log(bad === 0 && broken === 0 ? `OK: ${Object.keys(expected).length} 場面すべて一致（終了後の状態も元どおり）` : `${bad} 場面で差異、${broken} 場面で終了後の状態が崩れている`);
+process.exit(bad === 0 && broken === 0 ? 0 : 1);

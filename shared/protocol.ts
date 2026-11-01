@@ -87,7 +87,7 @@ export type ServerMsg =
   /** queue: これから再生する動画 / history: 再生し終えた動画（古い順） */
   | { t: 'queue'; queue: QueueItem[]; history: QueueItem[] }
   | { t: 'members'; members: Member[] }
-  /** 文言は各自の画面で、選んでいる言語で組み立てる（client/src/core/i18n.ts の err_*） */
+  /** 文言は各自の画面で、選んでいる言語で組み立てる（client/src/core/i18n/ の err_*） */
   | { t: 'error'; code: ErrorCode; params?: Record<string, string> }
   | { t: 'pong'; clientTime: number; serverTime: number };
 

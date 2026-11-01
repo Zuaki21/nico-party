@@ -7,6 +7,9 @@ import { t } from '../core/i18n';
 export type NavPreview = { item: QueueItem } | { text: string } | null;
 export type NavKind = 'prev' | 'next';
 
+/** 前へ・次へのボタンの id（ui.ts のテンプレートと同じ） */
+const BUTTON_ID = { prev: 'prev', next: 'skip' } as const;
+
 /** ボタンとカードの間 (px) と、画面の端に残す余白 (px) */
 const GAP = 8;
 const MARGIN = 8;
@@ -27,7 +30,7 @@ export function setupNavPreview(source: (kind: NavKind) => NavPreview): () => vo
 
   const render = () => {
     if (!active) return;
-    const button = $(active === 'prev' ? 'prev' : 'skip');
+    const button = $(BUTTON_ID[active]);
     const preview = (button as HTMLButtonElement).disabled ? null : source(active);
     if (!preview) {
       card.hidden = true;
@@ -65,7 +68,7 @@ export function setupNavPreview(source: (kind: NavKind) => NavPreview): () => vo
   };
 
   for (const kind of ['prev', 'next'] as const) {
-    const button = $(kind === 'prev' ? 'prev' : 'skip');
+    const button = $(BUTTON_ID[kind]);
     // マウスを乗せたときだけ（タッチ操作では出さない）。キーボードで選んだときも出す
     button.addEventListener('pointerenter', (e) => {
       if (e.pointerType === 'touch') return;

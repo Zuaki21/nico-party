@@ -12,7 +12,7 @@ import {
   STUCK_MARGIN,
   SUPPRESS_MS,
 } from './constants';
-import type { SyncContext } from './context';
+import type { LoadedState, SyncContext } from './context';
 import { InteractionTracker } from './interaction';
 import { StartGate } from './startGate';
 import { SuppressWindow } from './suppress';
@@ -30,8 +30,6 @@ import { SuppressWindow } from './suppress';
  */
 export class SyncEngine {
   private state: PlaybackState | null = null;
-  /** サーバー時刻 − ローカル時刻 (ms) */
-  private clockOffset = 0;
   /** プレイヤーに読み込んでいるキュー項目 */
   private loadedItemId: string | null = null;
   /** プレイヤーに読み込んでいる動画 ID（1曲リピートなどで同じ動画なら読み込み直さない） */
@@ -42,6 +40,7 @@ export class SyncEngine {
   /** 読み込めなかったとサーバーに伝えたキュー項目（再接続したら送り直し、遅れて読み込めたら取り消す） */
   private reportedFailFor: string | null = null;
   private ticks = 0;
+  private tickTimer: number | undefined;
   /** 読み込み完了の直後で、最初の同期をしている */
   private justLoaded = false;
   /** この時刻までは、自動送りの要求を送り直さない */
@@ -61,11 +60,12 @@ export class SyncEngine {
     private onLoadFailed: () => void,
     /** 途中参加で位置が合うまでの間、プレイヤーを隠す・隠すのをやめる */
     onCatchUp: (on: boolean) => void,
+    /** 今のサーバー時刻 (ms)。ローカルの時計に、ping/pong で測ったずれを足したもの */
+    private serverNow: () => number,
   ) {
     const ctx: SyncContext = {
       player,
-      state: () => this.state,
-      loadedItemId: () => this.loadedItemId,
+      loadedState: () => this.loadedState(),
       expected: (s) => this.expected(s),
       suppress: this.suppress,
       apply: () => this.apply(APPLY_THRESHOLD),
@@ -98,11 +98,17 @@ export class SyncEngine {
       this.applyAfterLoad();
     });
     player.on('ended', () => this.requestNext(true));
-    window.setInterval(() => this.onTick(), 1000);
+    this.tickTimer = window.setInterval(() => this.onTick(), 1000);
   }
 
-  setClockOffset(offset: number) {
-    this.clockOffset = offset;
+  /** タイマーを止める（使い終わったとき。テストで、タイマーが残らないことを確かめるのにも使う） */
+  dispose() {
+    clearInterval(this.tickTimer);
+    clearTimeout(this.localTimer);
+    clearTimeout(this.loadTimer);
+    clearTimeout(this.holdRetryTimer);
+    this.gate.reset();
+    this.catchUp.cancel();
   }
 
   update(state: PlaybackState) {
@@ -154,8 +160,10 @@ export class SyncEngine {
     this.send({ t: this.player.ready() ? 'loadOk' : 'loadFailed', itemId });
   }
 
-  private serverNow() {
-    return Date.now() + this.clockOffset;
+  /** 部屋の状態。いまのキュー項目が、プレイヤーに読み込み済みのものでなければ null */
+  private loadedState(): LoadedState | null {
+    const s = this.state;
+    return s?.current && s.current.id === this.loadedItemId ? (s as LoadedState) : null;
   }
 
   /** 今この瞬間の部屋の再生位置 */
@@ -182,7 +190,6 @@ export class SyncEngine {
 
   /** 部屋の状態に自分のプレイヤーを合わせる */
   private apply(threshold: number) {
-    const s = this.state;
     const p = this.player;
     // 途中参加で位置が合うのを待っている間は、そちらで合わせる（CatchUp）
     if (this.catchUp.active) return;
@@ -193,7 +200,8 @@ export class SyncEngine {
       this.holdRetryTimer = window.setTimeout(() => this.apply(APPLY_THRESHOLD), this.local.holdRemainingMs() + 50);
       return;
     }
-    if (!s?.current || s.current.id !== this.loadedItemId || !p.ready()) return;
+    const s = this.loadedState();
+    if (!s || !p.ready()) return;
 
     const target = this.expected(s);
     // 動画の切り替え直後で、まだ開始時刻になっていない。先読みして待つ（StartGate）
@@ -230,9 +238,9 @@ export class SyncEngine {
 
   /** ユーザーがプレイヤーを操作した */
   private onLocalChange() {
-    const s = this.state;
+    const s = this.loadedState();
     const p = this.player;
-    if (!s?.current || s.current.id !== this.loadedItemId) return;
+    if (!s) return;
     // 先読みのための再生・停止や、途中参加の位置合わせは、ユーザーの操作ではない
     if (this.gate.active || this.catchUp.active) return;
     // プレイヤーを触っていないのに起きた変化は、同期や読み込みの副作用
@@ -259,7 +267,7 @@ export class SyncEngine {
   private requestNext(auto: boolean) {
     // 動画を読み込み直している最中に、前の動画の終了通知が遅れて届いても、次の動画の終了と取り違えない
     if (auto && !this.player.ready()) return;
-    if (!this.state?.current || this.state.current.id !== this.loadedItemId) return;
+    if (!this.loadedState()) return;
     // 終わっているのに進まない確認が毎秒呼ばれても、数秒に1回しか送らない
     if (auto) {
       if (Date.now() < this.nextSentUntil) return;

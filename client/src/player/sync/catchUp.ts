@@ -1,5 +1,11 @@
-import type { SyncContext } from './context';
-import { APPLY_THRESHOLD, CATCHUP_MAX_MS, CATCHUP_POLL_MS, CATCHUP_RESEEK_MS } from './constants';
+import { APPLY_THRESHOLD } from './constants';
+import type { CatchUpContext } from './context';
+
+/** 位置が合うのを待つ上限。これを過ぎたら、合っていなくても通常の同期に任せる */
+const CATCHUP_MAX_MS = 8000;
+/** 位置が合うまで、この間隔でシークを送り直す */
+const CATCHUP_RESEEK_MS = 1500;
+const CATCHUP_POLL_MS = 200;
 
 /**
  * 途中参加のとき、位置が合うまでの間、ミュートして画面を隠して待つ。
@@ -17,7 +23,7 @@ export class CatchUp {
   private timer: number | undefined;
 
   constructor(
-    private ctx: SyncContext,
+    private ctx: CatchUpContext,
     /** 位置が合うまでの間、プレイヤーを隠す・隠すのをやめる */
     private onCatchUp: (on: boolean) => void,
   ) {}
@@ -27,6 +33,7 @@ export class CatchUp {
   }
 
   begin() {
+    if (this.catchingUp) return;
     const p = this.ctx.player;
     this.catchingUp = true;
     this.startedAt = Date.now();
@@ -45,11 +52,11 @@ export class CatchUp {
   }
 
   private step() {
-    const s = this.ctx.state();
+    const s = this.ctx.loadedState();
     const p = this.ctx.player;
     if (!this.catchingUp) return;
     // 動画が変わった・止まった・読み込み直しなど、待つ前提が崩れたときは、やめて通常の同期に任せる
-    if (!s?.current || s.current.id !== this.ctx.loadedItemId() || !s.playing || !p.ready()) {
+    if (!s || !s.playing || !p.ready()) {
       this.end();
       this.ctx.apply();
       return;

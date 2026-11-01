@@ -1,0 +1,12 @@
+import type { SearchResult, SearchSort } from '../../../shared/search';
+import { proxied } from '../core/env';
+
+/** キーワード検索（サーバー経由でニコニコのスナップショット検索 API を呼ぶ）。通行証が要る */
+export async function searchNico(pass: string | undefined, q: string, sort: SearchSort, offset: number): Promise<SearchResult> {
+  const params = new URLSearchParams({ q, sort, offset: String(offset) });
+  const res = await fetch(proxied(`/api/search?${params}`), {
+    headers: pass ? { 'x-nico-pass': pass } : {},
+  });
+  if (!res.ok) throw new Error(`search failed: ${res.status}`);
+  return (await res.json()) as SearchResult;
+}

@@ -1,29 +1,45 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import type { ClientMsg, Member, PlaybackState, ServerMsg } from '../../shared/protocol';
-import type { SearchResult } from '../../shared/search';
-import { authenticate, watchLayout } from './net/discord';
 import { describeError, devlog, watchErrors } from './core/devlog';
-import { inDiscord, proxied } from './core/env';
+import { inDiscord } from './core/env';
 import { getLang, serverErrorText, t } from './core/i18n';
+import { searchNico } from './net/api';
+import { authenticate, openExternal, watchLayout } from './net/discord';
+import { createPresence } from './net/presence';
+import { RoomConnection } from './net/roomConnection';
+import { nicoEmbedUrl } from './player/embedUrl';
 import { NicoPlayer } from './player/nicoPlayer';
 import { attachPlayerDocHooks } from './player/playerDocHooks';
-import { renderQueue } from './ui/playlist';
-import { RoomConnection } from './net/roomConnection';
-import { createPresence } from './core/presence';
-import { isPresenceEnabled } from './ui/settings';
-import { setupViewport } from './ui/viewport';
 import { SyncEngine } from './player/sync';
 import { failLoading, hideLoading, setCompact, setPlayerCover, showError, slowLoading } from './ui/overlays';
+import { renderQueue } from './ui/playlist';
+import { isPresenceEnabled } from './ui/settings';
 import { mountUi } from './ui/ui';
+import { setupViewport } from './ui/viewport';
 
-/** Discord 内では iframe から外のページへ移れないので、Discord の「外部リンクを開く」を使う */
-function openExternal(url: string) {
-  if (sdk) sdk.commands.openExternalLink({ url }).catch(() => {});
-  else window.open(url, '_blank', 'noopener');
+/**
+ * 起動の流れ（接続・Discord のログイン・画面・プレイヤー・同期）を結びつける。
+ * 起動の途中で決まるもの（Discord の SDK・通行証・部屋との接続・Discord への表示）は、session にまとめる
+ */
+const session: {
+  /** Discord の SDK（Discord の外で開いたときは null） */
+  sdk: DiscordSDK | null;
+  /** サーバーが発行した、ニコニコの中継と検索を使うための通行証（Discord にログインできたときだけ） */
+  nicoPass?: string;
+  conn: RoomConnection | null;
+  /** 見ている動画を Discord のアクティビティに表示する（ログインできたときだけ） */
+  presence: ReturnType<typeof createPresence> | null;
+} = { sdk: null, conn: null, presence: null };
+
+/** 再接続しても同じメンバーとして扱ってもらうための ID（ページを開き直すと変わる） */
+const clientId = crypto.randomUUID();
+/** 今のサーバー時刻 (ms)。同期エンジンと Discord への表示が、同じ時計を使う */
+const serverNow = () => Date.now() + (session.conn?.clock.offset ?? 0);
+
+/** ユーザー操作（追加・削除・スキップ）。部屋に入れていなければ、動画の追加以外は受け付けない */
+function request(msg: ClientMsg) {
+  if (!session.conn?.request(msg)) showError(t('notConnected'));
 }
-
-/** サーバーが発行した、ニコニコの中継と検索を使うための通行証（Discord にログインできたときだけ） */
-let nicoPass: string | undefined;
 
 const ui = mountUi(document.querySelector<HTMLElement>('#app')!, {
   enqueue: (url) => request({ t: 'enqueue', url }),
@@ -33,69 +49,46 @@ const ui = mountUi(document.querySelector<HTMLElement>('#app')!, {
   move: (id, index) => request({ t: 'move', id, index }),
   jump: (id) => request({ t: 'jump', id }),
   mode: (m) => request({ t: 'mode', ...m }),
-  openLink: (url) => openExternal(url),
-  setPresence: (enabled) => presence?.setEnabled(enabled),
-  search: async (q, sort, offset) => {
-    const params = new URLSearchParams({ q, sort, offset: String(offset) });
-    const res = await fetch(proxied(`/api/search?${params}`), {
-      headers: nicoPass ? { 'x-nico-pass': nicoPass } : {},
-    });
-    if (!res.ok) throw new Error(`search failed: ${res.status}`);
-    return (await res.json()) as SearchResult;
-  },
+  openLink: (url) => openExternal(session.sdk, url),
+  setPresence: (enabled) => session.presence?.setEnabled(enabled),
+  search: (q, sort, offset) => searchNico(session.nicoPass, q, sort, offset),
 });
 
-const player = new NicoPlayer(ui.player, (videoId, playerId) => {
-  const params = new URLSearchParams({
-    jsapi: '1',
-    playerId,
-    noRelatedVideo: '1',
-    noShare: '1',
-    persistence: '1',
-  });
-  // Discord 内（中継経由）では、プレイヤーはこれを元に postMessage の宛先オリジンを決める（無いと 'null//null' になる）。
-  // ローカル確認用の直接埋め込みでは逆に付けるとニコニコに 403 で拒否される
-  if (inDiscord) params.set('referer', location.href);
-  // Discord 内では埋め込み HTML を自前サーバーで書き換えて配信する (server/src/nico/nico.ts)
-  return inDiscord
-    ? `/.proxy/nico/${nicoPass ?? 'none'}/nico-embed/${videoId}?${params}`
-    : `https://embed.nicovideo.jp/watch/${videoId}?${params}`;
-});
+const player = new NicoPlayer(ui.player, (videoId, playerId) => nicoEmbedUrl(videoId, playerId, session.nicoPass));
+const engine = new SyncEngine(
+  player,
+  (msg) => session.conn?.send(msg),
+  () => showError(t('loadFailed')),
+  setPlayerCover,
+  serverNow,
+);
 
 setupViewport();
-
-attachPlayerDocHooks(player.iframe, { onTag: ui.searchFor, onLink: openExternal });
+attachPlayerDocHooks(player.iframe, { onTag: ui.searchFor, onLink: (url) => openExternal(session.sdk, url) });
 watchErrors(player.iframe);
 for (const ev of ['load', 'play', 'pause', 'ended'] as const) player.on(ev, () => devlog(`player ${ev}`));
-
-/** 再接続しても同じメンバーとして扱ってもらうための ID（ページを開き直すと変わる） */
-const clientId = crypto.randomUUID();
-let conn: RoomConnection | null = null;
-const engine = new SyncEngine(player, (msg) => conn?.send(msg), () => showError(t('loadFailed')), setPlayerCover);
-
-/** ユーザー操作（追加・削除・スキップ）。部屋に入れていなければ、動画の追加以外は受け付けない */
-function request(msg: ClientMsg) {
-  if (!conn?.request(msg)) showError(t('notConnected'));
-}
 
 /** 部屋の再生状態を、画面・プレイヤー・Discord の表示に反映する */
 function applyState(state: PlaybackState) {
   ui.renderState(state);
   engine.update(state);
-  presence?.setState(state);
+  session.presence?.setState(state);
 }
 
 function applyMembers(members: Member[]) {
   ui.renderMembers(members);
-  presence?.setMembers(members.length);
+  session.presence?.setMembers(members.length);
 }
+
+let slowTimer: number | undefined;
+/** 部屋に入るまでこれ以上かかったら、時間がかかっていると伝える */
+const SLOW_CONNECT_MS = 10_000;
 
 function onMessage(msg: ServerMsg) {
   switch (msg.t) {
     case 'welcome':
       clearTimeout(slowTimer);
       hideLoading();
-      engine.setClockOffset(conn!.clock.offset);
       renderQueue(msg.queue, msg.history);
       applyMembers(msg.members);
       applyState(msg.state);
@@ -115,26 +108,16 @@ function onMessage(msg: ServerMsg) {
       showError(serverErrorText(msg.code, msg.params));
       return;
     case 'pong':
-      engine.setClockOffset(conn!.clock.offset);
+      // 時計のずれの推定は、RoomConnection が更新済み。同期エンジンは serverNow() で毎回それを使う
       return;
   }
 }
 
-let slowTimer: number | undefined;
-
-/** 部屋に入るまでこれ以上かかったら、時間がかかっていると伝える */
-const SLOW_CONNECT_MS = 10_000;
-
 function connect(roomId: string, name: string, pass?: string) {
   slowTimer = window.setTimeout(slowLoading, SLOW_CONNECT_MS);
-  conn = new RoomConnection({ roomId, name, clientId, pass, onMessage, onWaiting: ui.renderConnecting });
-  conn.start();
+  session.conn = new RoomConnection({ roomId, name, clientId, pass, onMessage, onWaiting: ui.renderConnecting });
+  session.conn.start();
 }
-
-/** 見ている動画を Discord のアクティビティに表示する（ログインできたときだけ） */
-let presence: ReturnType<typeof createPresence> | null = null;
-/** Discord の SDK（Discord の外で開いたときは null） */
-let sdk: DiscordSDK | null = null;
 
 async function main() {
   if (!inDiscord) {
@@ -143,20 +126,19 @@ async function main() {
     return;
   }
   const discord = new DiscordSDK(import.meta.env.VITE_DISCORD_CLIENT_ID);
-  sdk = discord;
+  session.sdk = discord;
   await discord.ready();
   let name = getLang() === 'ja' ? 'ゲスト' : 'Guest';
   let pass: string | undefined;
   try {
-    ({ name, pass, nicoPass } = await authenticate(discord));
-    presence = createPresence(discord, () => Date.now() + (conn?.clock.offset ?? 0), isPresenceEnabled());
+    ({ name, pass, nicoPass: session.nicoPass } = await authenticate(discord));
+    session.presence = createPresence(discord, serverNow, isPresenceEnabled());
   } catch (e) {
-    // 名前が取れなくても視聴はできるようにする
     devlog(`authenticate failed: ${describeError(e)}`);
   }
   watchLayout(discord, setCompact);
   // 通行証がないと、部屋に入れず、動画の読み込みも検索もできない。ローディングのまま止まらないよう、理由を出す
-  if (!pass || !nicoPass) {
+  if (!pass || !session.nicoPass) {
     failLoading(t('loginRequired'));
     return;
   }
@@ -166,5 +148,5 @@ async function main() {
 
 main().catch((e) => {
   devlog(`main failed: ${describeError(e)}`);
-  failLoading(t('startFailed', { msg: e instanceof Error ? e.message : String(e) }));
+  failLoading(t('startFailed', { msg: describeError(e) }));
 });

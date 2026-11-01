@@ -11,6 +11,8 @@ const HEARTBEAT_INTERVAL_MS = 30_000;
 const SILENCE_LIMIT_MS = HEARTBEAT_INTERVAL_MS * 2 + 5_000;
 const WATCHDOG_INTERVAL_MS = 10_000;
 const RECONNECT_MAX_MS = 10_000;
+/** 接続を始めてから、つながる（OPEN になる）までに待つ上限。途中で止まったまま onclose も来ないときのため */
+const CONNECT_TIMEOUT_MS = 15_000;
 /** 接続前に溜めておく操作（動画の追加）の上限と有効期限 */
 const PENDING_LIMIT = 5;
 const PENDING_TTL_MS = 30_000;
@@ -42,6 +44,7 @@ export class RoomConnection {
   private reconnectTimer: number | undefined;
   private heartbeatTimer: number | undefined;
   private watchdogTimer: number | undefined;
+  private connectTimer: number | undefined;
   private pingTimers: number[] = [];
 
   constructor(private opts: RoomConnectionOptions) {
@@ -100,8 +103,13 @@ export class RoomConnection {
     const query = this.opts.pass ? `?pass=${encodeURIComponent(this.opts.pass)}` : '';
     const sock = new WebSocket(`${scheme}://${location.host}${proxied(`/ws/${roomId}`)}${query}`);
     this.ws = sock;
+    // つながらないまま止まったら、あきらめて繋ぎ直す（そうしないと、this.ws が残って、画面に戻っても繋ぎ直されない）
+    this.connectTimer = window.setTimeout(() => {
+      if (sock.readyState !== WebSocket.OPEN) this.drop(sock);
+    }, CONNECT_TIMEOUT_MS);
 
     sock.onopen = () => {
+      clearTimeout(this.connectTimer);
       this.retry = 0;
       this.lastReceivedAt = Date.now();
       this.clock.reset();
@@ -168,6 +176,7 @@ export class RoomConnection {
   }
 
   private clearTimers() {
+    clearTimeout(this.connectTimer);
     clearInterval(this.heartbeatTimer);
     clearInterval(this.watchdogTimer);
     for (const t of this.pingTimers) clearTimeout(t);

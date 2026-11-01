@@ -1,6 +1,9 @@
-import type { PlaybackState } from '../../../../shared/protocol';
-import type { SyncContext } from './context';
-import { HOLD_INTERVAL_MS, PRELOAD_PLAY_MS } from './constants';
+import type { StartGateContext, LoadedState } from './context';
+
+/** 開始時刻を待つ間、一時停止を送り直す間隔 */
+const HOLD_INTERVAL_MS = 300;
+/** 先読みのための再生を、再生開始の通知が無くても止めるまでの時間 */
+const PRELOAD_PLAY_MS = 400;
 
 /**
  * 動画の切り替え直後、再生開始の時刻（サーバーが少し先に決める）まで待つ間の動き。
@@ -23,7 +26,7 @@ export class StartGate {
   /** 再生開始時刻ちょうどに再生を始めるためのタイマー */
   private startTimer: number | undefined;
 
-  constructor(private ctx: SyncContext) {}
+  constructor(private ctx: StartGateContext) {}
 
   /** 先読みのための再生中か（このあいだの再生・停止はユーザーの操作ではない） */
   get active() {
@@ -34,10 +37,10 @@ export class StartGate {
    * 開始時刻より前なら、先読みして待つ（開始時刻に合わせて、同期をやり直すタイマーも張る）。
    * @returns 待つことにしたなら true（呼び出し側は、これ以上同期しない）
    */
-  waitIfBeforeStart(s: PlaybackState, target: number): boolean {
+  waitIfBeforeStart(s: LoadedState, target: number): boolean {
     clearTimeout(this.startTimer);
     if (s.playing && target < 0) {
-      this.preload(s.current!.id);
+      this.preload(s.current.id);
       this.startTimer = window.setTimeout(() => this.ctx.apply(), -target * 1000);
       return true;
     }
@@ -62,9 +65,9 @@ export class StartGate {
    * 通知を待たずに HOLD_INTERVAL_MS ごとに一時停止を送り続ける（止まっていれば何も起きない）
    */
   holdBeforeStart() {
-    const s = this.ctx.state();
+    const s = this.ctx.loadedState();
     const p = this.ctx.player;
-    if (!s?.current || s.current.id !== this.ctx.loadedItemId() || !s.playing || this.ctx.expected(s) >= 0) {
+    if (!s || !s.playing || this.ctx.expected(s) >= 0) {
       this.stopHold();
       return;
     }
