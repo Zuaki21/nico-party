@@ -30,7 +30,7 @@ const NICO_HEADERS = {
  * 中継のパスは /nico/<通行証>/... の形にする。書き換えで作る中継の URL にも、必ず同じ通行証を入れる
  * （通行証のない呼び出しは受け付けないため。通行証は英数字と - _ . だけなので、置換文字列の中でそのまま使える）
  */
-function rewriter(host: string, pass: string) {
+export function rewriter(host: string, pass: string) {
   const nico = `nico/${pass}`;
   const replace = (src: string) =>
     src
@@ -66,18 +66,45 @@ function pick(req: Request, names: string[]): Record<string, string> {
 }
 
 const NVAPI_HEADERS = [
-  'user-agent',
   'x-access-right-key',
   'x-frontend-id',
   'x-frontend-version',
   'x-request-with',
 ];
 
-const text = (body: string, type: string) =>
-  new Response(body, { headers: { 'content-type': `${type}; charset=utf-8` } });
+/**
+ * ニコニコからの応答を、本文だけ書き換えて返す。上流のステータス（404・500 など）はそのまま伝える
+ * （伝えないと、エラーの応答がプレイヤーには成功として届いてしまう）
+ */
+async function relay(res: Response, type: string, rewrite: (body: string) => string = (b) => b): Promise<Response> {
+  return new Response(rewrite(await res.text()), {
+    status: res.status,
+    headers: { 'content-type': `${type}; charset=utf-8` },
+  });
+}
 
-/** /nico/* を処理する。path は `/nico` を除いた残り */
-export async function handleNico(req: Request, env: Pick<Env, 'DISCORD_CLIENT_ID' | 'DISCORD_CLIENT_SECRET'>, path: string): Promise<Response> {
+type NicoRouteEnv = Pick<Env, 'DISCORD_CLIENT_ID' | 'DISCORD_CLIENT_SECRET'>;
+
+/** POST の本文の上限（プレイヤーが送るのは小さな JSON） */
+const BODY_MAX = 65_536;
+
+async function readBody(req: Request): Promise<string> {
+  if (Number(req.headers.get('content-length') ?? 0) > BODY_MAX) throw new Error('body too large');
+  return req.text();
+}
+
+/** /nico/* を処理する。path は `/nico` を除いた残り。上流に繋がらない・時間がかかりすぎるときは 502・504 を返す */
+export async function handleNico(req: Request, env: NicoRouteEnv, path: string): Promise<Response> {
+  try {
+    return await route(req, env, path);
+  } catch (e) {
+    if (e instanceof Error && e.message === 'body too large') return new Response('Payload too large', { status: 413 });
+    const timedOut = e instanceof Error && e.name === 'TimeoutError';
+    return new Response(timedOut ? 'Gateway timeout' : 'Bad gateway', { status: timedOut ? 504 : 502 });
+  }
+}
+
+async function route(req: Request, env: NicoRouteEnv, path: string): Promise<Response> {
   // 中継先の URL に連結するので、パスをたどって別の場所へ行ける文字（.. や %）は受け付けない
   if (!/^[\w\-./]*$/.test(path) || path.split('/').includes('..')) {
     return new Response('Not found', { status: 404 });
@@ -106,34 +133,34 @@ export async function handleNico(req: Request, env: Pick<Env, 'DISCORD_CLIENT_ID
 
   // 埋め込みプレイヤーの HTML
   if (req.method === 'GET' && (m = path.match(/^\/nico-embed\/([a-z]{2}\d+)$/))) {
-    const html = await nf(`https://embed.nicovideo.jp/watch/${m[1]}${query}`, {
+    const res = await nf(`https://embed.nicovideo.jp/watch/${m[1]}${query}`, {
       headers: { 'accept-language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7' },
-    }).then((r) => r.text());
-    return text(replace(html), 'text/html');
+    });
+    return relay(res, 'text/html', replace);
   }
 
   // プレイヤーの JS
   if (req.method === 'GET' && (m = path.match(/^\/watch\/(.+)$/))) {
-    const js = await nf(`https://assets.embed.res.nimg.jp/js/${m[1]}.js`).then((r) => r.text());
-    return text(replaceJs(js), 'application/javascript');
+    const res = await nf(`https://assets.embed.res.nimg.jp/js/${m[1]}.js`);
+    return relay(res, 'application/javascript', replaceJs);
   }
 
   if (req.method === 'POST' && (m = path.match(/^\/stella\/v1\/watch\/(.+)$/))) {
     const res = await nf(`https://stella.nicovideo.jp/v1/watch/${m[1]}`, {
       method: 'POST',
       headers: {
-        ...pick(req, ['cookie', 'user-agent', 'x-frontend-id']),
+        ...pick(req, ['cookie', 'x-frontend-id']),
         ...NICO_HEADERS,
         'content-type': 'application/json',
       },
-      body: await req.text(),
+      body: await readBody(req),
     });
-    return text(await res.text(), 'application/json');
+    return relay(res, 'application/json');
   }
 
   if (req.method === 'GET' && (m = path.match(/^\/users\/(.+)$/))) {
-    const body = await nf(`https://embed.nicovideo.jp/users/${m[1]}`).then((r) => r.text());
-    return text(replace(body), 'application/json');
+    const res = await nf(`https://embed.nicovideo.jp/users/${m[1]}`);
+    return relay(res, 'application/json', replace);
   }
 
   /** nvapi への POST を中継する（actionTrackId だけ引き継ぐ） */
@@ -144,10 +171,10 @@ export async function handleNico(req: Request, env: Pick<Env, 'DISCORD_CLIENT_ID
       {
         method: 'POST',
         headers: { ...pick(req, NVAPI_HEADERS), ...NICO_HEADERS, 'content-type': 'application/json' },
-        body: await req.text(),
+        body: await readBody(req),
       },
     );
-    return text(replace(await res.text()), 'application/json');
+    return relay(res, 'application/json', replace);
   };
 
   // 視聴権限 (HLS の URL を発行する API)
@@ -163,21 +190,18 @@ export async function handleNico(req: Request, env: Pick<Env, 'DISCORD_CLIENT_ID
     const res = await nf(`https://www.nicovideo.jp/api/watch/${m[1]}${query}`, {
       headers: NICO_HEADERS,
     });
-    return text(replace(await res.text()), 'application/json');
+    return relay(res, 'application/json', replace);
   }
 
   // HLS のプレイリスト（中のセグメント URL を Discord プロキシ経由に書き換える）
   if (req.method === 'GET' && (m = path.match(/^\/delivery-domand-nicovideo-jp\/(.+)$/))) {
     const res = await nf(`https://delivery.domand.nicovideo.jp/${m[1]}${query}`);
-    return new Response(replace(await res.text()), {
-      status: res.status,
-      headers: { 'content-type': 'application/vnd.apple.mpegurl' },
-    });
+    return relay(res, 'application/vnd.apple.mpegurl', replace);
   }
 
   if (req.method === 'GET' && path === '/nvapi-recommend') {
     const res = await nf(`https://nvapi.nicovideo.jp/v1/recommend${query}`);
-    return text(replace(await res.text()), 'application/json');
+    return relay(res, 'application/json', replace);
   }
 
   return new Response('Not found', { status: 404 });

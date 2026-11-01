@@ -6,7 +6,9 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "check:playback": "node scripts/check-playback.cjs"
+    "check:playback": "node scripts/check-playback.cjs",
+    "check:nico": "node scripts/check-nico.cjs",
+    "check": "npm run typecheck && npm run check:playback && npm run check:nico"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261025.1",
