@@ -15,13 +15,13 @@ export interface SyncContext {
   suppress: SuppressWindow;
   /** 部屋の状態に自分のプレイヤーを合わせ直す（通常のしきい値） */
   apply(): void;
-  /** 読み込み直後と同じ扱い（長めに操作を無視する）で、合わせ直す */
-  applyAfterLoad(): void;
+  /** 位置合わせが終わった（タイムアウトを含む）あとの同期。長めに操作を無視するが、位置合わせは繰り返さない */
+  applyAfterCatchUp(): void;
 }
 
 /** 各部品が使う分だけに絞った型 */
 export type StartGateContext = Pick<SyncContext, 'player' | 'loadedState' | 'expected' | 'suppress' | 'apply'>;
 export type CatchUpContext = Pick<
   SyncContext,
-  'player' | 'loadedState' | 'expected' | 'suppress' | 'apply' | 'applyAfterLoad'
+  'player' | 'loadedState' | 'expected' | 'suppress' | 'apply' | 'applyAfterCatchUp'
 >;

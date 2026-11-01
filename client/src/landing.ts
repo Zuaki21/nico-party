@@ -28,8 +28,16 @@ function setupSlider() {
   /** 背景タブなどで transitionend が来なかったときの保険 */
   let fallback: number | undefined;
 
+  // 画像ごとに「n / 全体」の名前を付ける（読み上げで、いま何枚目かが分かるように）
+  originals.forEach((el, i) => {
+    el.setAttribute('role', 'group');
+    el.setAttribute('aria-roledescription', 'スライド');
+    el.setAttribute('aria-label', `${i + 1} / ${count}`);
+  });
+
   const dots = Array.from({ length: count }, (_, i) => {
     const b = document.createElement('button');
+    b.type = 'button';
     b.setAttribute('aria-label', `${i + 1}枚目の画像`);
     b.addEventListener('click', () => go(i + 1));
     dotsEl.append(b);
@@ -40,7 +48,11 @@ function setupSlider() {
     track.style.transition = animate ? '' : 'none';
     track.style.transform = `translateX(-${pos * 100}%)`;
     const real = (pos - 1 + count) % count;
-    dots.forEach((d, j) => d.classList.toggle('active', j === real));
+    dots.forEach((d, j) => {
+      d.classList.toggle('active', j === real);
+      if (j === real) d.setAttribute('aria-current', 'true');
+      else d.removeAttribute('aria-current');
+    });
   };
 
   /** 複製の位置にいたら本物の位置へ瞬間移動する */
@@ -66,16 +78,40 @@ function setupSlider() {
   };
   track.addEventListener('transitionend', normalize);
 
+  /** 「動きを減らす」設定のときは、自動で切り替えない */
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  /** 利用者が止めた（止めるボタン） */
+  let paused = false;
+  /** マウスを乗せている、またはフォーカスが中にある間は、一時的に止める */
+  let held = false;
+  const autoPlays = () => !paused && !held && !reducedMotion.matches;
+
   const restart = () => {
     clearInterval(timer);
-    timer = window.setInterval(() => go(pos + 1), AUTO_MS);
+    // 自動で切り替わっている間は、切り替わるたびに読み上げない。止まっている間は、手動の切り替えを読み上げる
+    track.setAttribute('aria-live', autoPlays() ? 'off' : 'polite');
+    if (autoPlays()) timer = window.setInterval(() => go(pos + 1), AUTO_MS);
   };
 
   document.getElementById('slide-prev')!.addEventListener('click', () => go(pos - 1));
   document.getElementById('slide-next')!.addEventListener('click', () => go(pos + 1));
-  // マウスを乗せている間は自動切り替えを止める
-  root.addEventListener('mouseenter', () => clearInterval(timer));
-  root.addEventListener('mouseleave', restart);
+  // マウスを乗せている間、キーボードでフォーカスしている間は自動切り替えを止める
+  const hold = (on: boolean) => {
+    held = on;
+    restart();
+  };
+  root.addEventListener('mouseenter', () => hold(true));
+  root.addEventListener('mouseleave', () => hold(root.matches(':focus-within')));
+  root.addEventListener('focusin', () => hold(true));
+  root.addEventListener('focusout', (e) => hold(root.contains(e.relatedTarget as Node | null) || root.matches(':hover')));
+  const pause = document.getElementById('slide-pause')!;
+  pause.addEventListener('click', () => {
+    paused = !paused;
+    pause.setAttribute('aria-pressed', String(paused));
+    pause.textContent = paused ? '自動切り替えを再開' : '自動切り替えを止める';
+    restart();
+  });
+  reducedMotion.addEventListener('change', restart);
 
   let startX: number | null = null;
   root.addEventListener('pointerdown', (e) => {

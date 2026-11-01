@@ -30,7 +30,18 @@ export interface VideoInfo {
 /** ニコニコへの問い合わせを待つ上限（応答しない相手で、リクエストが溜まり続けないように） */
 const FETCH_TIMEOUT_MS = 8000;
 
-/** キュー表示用の動画情報を取得する。存在しない・削除された動画なら null */
+/** ニコニコに問い合わせられなかった（通信の失敗・タイムアウト・想定外の応答）。動画が無いこととは区別する */
+export class UpstreamError extends Error {}
+
+/** 保存して全員に配信するので、ニコニコから来た文字列の長さには上限をかける */
+const TITLE_MAX = 200;
+const NAME_MAX = 100;
+const URL_MAX = 500;
+
+/**
+ * キュー表示用の動画情報を取得する。存在しない・削除された動画なら null。
+ * ニコニコに問い合わせられなかったときは UpstreamError
+ */
 export async function fetchVideoInfo(videoId: string): Promise<VideoInfo | null> {
   let xml: string;
   try {
@@ -39,9 +50,10 @@ export async function fetchVideoInfo(videoId: string): Promise<VideoInfo | null>
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     }).then((r) => r.text());
   } catch {
-    return null;
+    throw new UpstreamError('getthumbinfo failed');
   }
-  if (!xml.includes('status="ok"')) return null;
+  if (xml.includes('status="fail"')) return null;
+  if (!xml.includes('status="ok"')) throw new UpstreamError('getthumbinfo unexpected response');
   const tag = (name: string) => {
     const v = xml.match(new RegExp(`<${name}>([^<]*)</${name}>`))?.[1];
     return v === undefined ? undefined : decodeXml(v);
@@ -52,9 +64,9 @@ export async function fetchVideoInfo(videoId: string): Promise<VideoInfo | null>
   };
   const [min, sec] = (tag('length') ?? '').split(':').map(Number);
   return {
-    title: tag('title') ?? videoId,
-    thumbnail: tag('thumbnail_url'),
-    author: tag('user_nickname') ?? tag('ch_name'),
+    title: (tag('title') ?? videoId).slice(0, TITLE_MAX),
+    thumbnail: tag('thumbnail_url')?.slice(0, URL_MAX),
+    author: (tag('user_nickname') ?? tag('ch_name'))?.slice(0, NAME_MAX),
     views: num('view_counter'),
     comments: num('comment_num'),
     length: Number.isFinite(min) && Number.isFinite(sec) ? min * 60 + sec : undefined,

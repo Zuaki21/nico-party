@@ -2,23 +2,19 @@
 // 書き換えで作る中継の URL に、必ず通行証が入っていること（無いと 401 になって再生できなくなる）と、
 // 元の URL の形ごとの書き換え結果を確かめる。   cd server && npm run check:nico
 const assert = require('node:assert/strict');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const ts = require('typescript');
+const { loadTs } = require('./_load.cjs');
 
-const root = path.resolve(__dirname, '../..');
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'nico-'));
-for (const rel of ['server/src/nico/nico.ts', 'server/src/nico/nicoApi.ts', 'server/src/pass.ts', 'shared/search.ts']) {
-  const js = ts.transpileModule(fs.readFileSync(path.join(root, rel), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  }).outputText;
-  const out = path.join(tmp, rel.replace(/\.ts$/, '.js'));
-  fs.mkdirSync(path.dirname(out), { recursive: true });
-  fs.writeFileSync(out, js);
-}
-process.on('exit', () => fs.rmSync(tmp, { recursive: true, force: true }));
-const { rewriter } = require(path.join(tmp, 'server/src/nico/nico.js'));
+const load = loadTs([
+  'server/src/nico/nico.ts',
+  'server/src/nico/nicoRewrite.ts',
+  'server/src/nico/nicoRoutes.ts',
+  'server/src/nico/nicoApi.ts',
+  'server/src/body.ts',
+  'server/src/env.ts',
+  'server/src/pass.ts',
+  'shared/search.ts',
+]);
+const { rewriter } = load('server/src/nico/nico.ts');
 
 const HOST = 'https://app123.discordsays.com';
 const PASS = 'PAYLOAD.SIGNATURE';

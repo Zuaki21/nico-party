@@ -47,7 +47,7 @@ function applyTheme(choice: ThemeChoice) {
  * 設定画面（テーマ・UI サイズ・言語・Discord への表示・リンク）。設定は各自の画面だけに効き、次回も引き継ぐ。
  * 保存されているテーマと UI サイズもここで当てる
  */
-export function setupSettings(h: Pick<UiHandlers, 'openLink' | 'setPresence'>) {
+export function setupSettings(h: Pick<UiHandlers, 'openLink' | 'setPresence'>): { close: () => void } {
   const dialog = $('settings');
   applyScale(Number(load(SCALE_KEY)) || 1);
   const saved = load(THEME_KEY);
@@ -66,7 +66,7 @@ export function setupSettings(h: Pick<UiHandlers, 'openLink' | 'setPresence'>) {
   const setOpen = (open: boolean) => {
     if (open) renderSettings();
     dialog.hidden = !open;
-    button.setAttribute('aria-pressed', String(open));
+    button.setAttribute('aria-expanded', String(open));
     // キーボードで操作している人のために、開いたら中へ、閉じたら開いたボタンへフォーカスを移す
     if (open) $('settings-close').focus({ preventScroll: true });
     else if (dialog.contains(document.activeElement)) button.focus({ preventScroll: true });
@@ -81,7 +81,8 @@ export function setupSettings(h: Pick<UiHandlers, 'openLink' | 'setPresence'>) {
     if (!dialog.contains(target) && !button.contains(target)) setOpen(false);
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !dialog.hidden) setOpen(false);
+    // 並べ替えのドラッグ中の Esc は、ドラッグの取り消し（設定は閉じない）
+    if (e.key === 'Escape' && !dialog.hidden && !document.getElementById('app')?.classList.contains('reordering')) setOpen(false);
   });
 
   onSeg('theme-seg', 'theme', (next) => {
@@ -112,6 +113,7 @@ export function setupSettings(h: Pick<UiHandlers, 'openLink' | 'setPresence'>) {
     const url = (e.target as HTMLElement).closest<HTMLElement>('[data-url]')?.dataset.url;
     if (url) h.openLink(url);
   });
+  return { close: () => setOpen(false) };
 }
 
 /** 設定画面から開くページ */
@@ -126,7 +128,7 @@ export function settingsHtml(): string {
         <h2 id="settings-title" data-i18n="settingsTitle"></h2>
         <p class="setting-note" data-i18n="settingsNote"></p>
       </div>
-      <button type="button" class="icon" id="settings-close" data-i18n-title="close">×</button>
+      <button type="button" class="icon" id="settings-close" data-i18n-title="close" data-i18n-label="close"><span aria-hidden="true">×</span></button>
     </div>
     <div class="setting-row">
       <span class="setting-label" id="theme-label" data-i18n="theme"></span>

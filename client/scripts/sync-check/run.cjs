@@ -33,6 +33,7 @@ function makeEnv(scenarioName, run) {
   const iframe = {
     listeners: {},
     addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); },
+    removeEventListener(type, fn) { this.listeners[type] = (this.listeners[type] ?? []).filter((f) => f !== fn); },
     fire(type) { for (const fn of this.listeners[type] ?? []) fn({ type }); },
   };
   const winListeners = {};
@@ -40,6 +41,7 @@ function makeEnv(scenarioName, run) {
     setTimeout: (f, ms) => clock.setTimeout(f, ms),
     setInterval: (f, ms) => clock.setInterval(f, ms),
     addEventListener: (type, fn) => { (winListeners[type] ??= []).push(fn); },
+    removeEventListener: (type, fn) => { winListeners[type] = (winListeners[type] ?? []).filter((f) => f !== fn); },
   };
   globalThis.document = { activeElement: null };
   globalThis.setTimeout = (f, ms) => clock.setTimeout(f, ms);
@@ -60,8 +62,13 @@ function makeEnv(scenarioName, run) {
     noPlayEvent: false,
     /** seek の命令を無視する */
     ignoreSeek: false,
+    /** play / pause の命令を無視する（自動再生のブロックなど） */
+    ignorePlay: false,
+    ignorePause: false,
     loaded: false, status: 'loading', pos: 0, playingSince: 0, dataReady: false,
     time: 0, timeAt: 0, reported: { time: 0, at: 0 }, muted: false, duration: 0,
+    /** 読み込み完了の通知（load）を、もう一度出す */
+    reload() { this.emit('load'); },
     on(type, fn) { (this.handlers[type] ??= []).push(fn); },
     emit(type) { for (const fn of this.handlers[type] ?? []) fn(); },
     truePos() { return this.pos + (this.status === 'playing' ? (clock.now - this.playingSince) / 1000 : 0); },
@@ -76,6 +83,7 @@ function makeEnv(scenarioName, run) {
     ready() { return this.loaded; },
     play() {
       L('player.play');
+      if (this.ignorePlay) return;
       internalTimeout(() => {
         if (this.status === 'playing') return;
         this.pos = this.truePos(); this.time = this.pos; this.timeAt = this.perf();
@@ -86,6 +94,7 @@ function makeEnv(scenarioName, run) {
     },
     pause() {
       L('player.pause');
+      if (this.ignorePause) return;
       internalTimeout(() => {
         if (this.status !== 'playing') return;
         this.pos = this.truePos(); this.time = this.pos; this.timeAt = this.perf();
@@ -150,7 +159,8 @@ function makeEnv(scenarioName, run) {
   const mutedRestored = player.muted === initialMuted;
   engine.dispose();
   const leftover = clock.timers.filter((t) => !t.internal && t.every !== 250).length; // 250ms は偽のプレイヤーの位置通知
-  log.push(`END mutedRestored=${mutedRestored} cover=${cover} timersAfterDispose=${leftover}`);
+  const listenersLeft = Object.values(winListeners).flat().length + Object.values(iframe.listeners).flat().length;
+  log.push(`END mutedRestored=${mutedRestored} cover=${cover} timersAfterDispose=${leftover} listenersAfterDispose=${listenersLeft}`);
   return log;
 }
 
@@ -284,6 +294,19 @@ Object.assign(scenarios, {
   '読み込み中に前の動画の終了通知が届く': ({ clock, engine, state, player, item }) => {
     engine.update(state({ position: 0, updatedAt: clock.now })); clock.advance(5000);
     engine.update(state({ current: item('i2', 'sm2'), position: 0, updatedAt: clock.now + 3000 })); player.finish(); clock.advance(8000);
+  },
+  '再生の命令が無視される（自動再生ブロック。位置合わせを繰り返さない）': ({ clock, engine, state, player }) => {
+    player.ignorePlay = true; engine.update(state({ position: 30 })); clock.advance(30000);
+  },
+  '一時停止の命令が無視される（開始待ち）': ({ clock, engine, state, player }) => {
+    player.ignorePause = true; engine.update(state({ position: 0, updatedAt: clock.now + 3000 })); clock.advance(10000);
+  },
+  '読み込み完了の直前にユーザーがシーク（保護中に読み込みが終わる）': ({ clock, engine, state, player, iframe }) => {
+    engine.update(state({ position: 30 })); clock.advance(100);
+    iframe.fire('pointerenter'); player.userSeek(5); clock.advance(10000);
+  },
+  '読み込み完了の通知が二度来る': ({ clock, engine, state, player }) => {
+    engine.update(state({ position: 30 })); clock.advance(5000); player.reload(); clock.advance(8000);
   },
 });
 

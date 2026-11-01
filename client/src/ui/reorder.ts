@@ -1,17 +1,12 @@
-import { reorder } from '../../../shared/playlist';
 import { $ } from './dom';
-import { lists } from './playlistStore';
+import { applyReorder } from './playlistStore';
 
 /** ドラッグ中、リストの端に近づいたら自動でスクロールする範囲 (px) */
 const AUTO_SCROLL_EDGE = 32;
-/** 並べ替えたあと、サーバーの返事で再び描き直されても、フォーカスを戻し続ける時間 (ms) */
-const FOCUS_KEEP_MS = 2000;
 
 export interface Reordering {
   /** ドラッグ中か（描き直すと掴んでいる要素が消えるので、終わってから描く） */
   isDragging(): boolean;
-  /** 描き直したあとに呼ぶ。キーボードで並べ替えた動画のつまみに、フォーカスを戻す */
-  restoreFocus(ol: HTMLElement): void;
 }
 
 /**
@@ -19,13 +14,16 @@ export interface Reordering {
  * 掴んだ項目はポインタに付いて動き、ほかの項目は transform でスライドして場所を空ける。
  * DOM 上の並びは変えず（変えるとポインタの追跡が切れる）、離したときに確定する。
  */
-export function setupReorder(move: (id: string, index: number) => void, renderList: () => void): Reordering {
+export function setupReorder(
+  move: (id: string, index: number) => void,
+  renderList: () => void,
+  /** 並べ替えの結果を読み上げる（キーボード操作のとき） */
+  announce: (id: string, index: number, total: number) => void,
+): Reordering {
   const ol = $('queue');
   const app = ol.closest<HTMLElement>('#app')!;
   /** 並べ替えのドラッグ中 */
   let dragging = false;
-  /** キーボードで並べ替えた動画の ID（描き直したあと、そのつまみにフォーカスを戻す） */
-  let focusHandleOf: { id: string; until: number } | null = null;
 
   // キーボード: つまみにフォーカスして、上下の矢印キーで 1 つずつ動かす
   ol.addEventListener('keydown', (e) => {
@@ -38,13 +36,11 @@ export function setupReorder(move: (id: string, index: number) => void, renderLi
     const to = Math.max(0, Math.min(items.length - 1, from + (e.key === 'ArrowUp' ? -1 : 1)));
     if (to === from) return;
     const id = li.dataset.id!;
-    const result = reorder(lists.history, lists.current, lists.queue, id, to);
-    if (!result) return;
-    lists.history = result.history;
-    lists.queue = result.queue;
+    if (!applyReorder(id, to)) return;
     move(id, to);
-    focusHandleOf = { id, until: Date.now() + FOCUS_KEEP_MS };
+    // 描き直しで、フォーカスは同じ動画のつまみに戻される（playlist.ts の renderList）
     renderList();
+    announce(id, to, items.length);
   });
 
   ol.addEventListener('pointerdown', (e) => {
@@ -107,12 +103,7 @@ export function setupReorder(move: (id: string, index: number) => void, renderLi
       dragging = false;
       if (commit && to !== from) {
         // サーバーの返事を待たずに見た目を確定させておく（サーバーと同じ規則で並べ替える）
-        const result = reorder(lists.history, lists.current, lists.queue, id, to);
-        if (result) {
-          lists.history = result.history;
-          lists.queue = result.queue;
-          move(id, to);
-        }
+        if (applyReorder(id, to)) move(id, to);
       }
       // 描き直すと transform の付いていない新しい要素になるので、元に戻るアニメーションは出ない
       renderList();
@@ -129,12 +120,5 @@ export function setupReorder(move: (id: string, index: number) => void, renderLi
     window.addEventListener('keydown', onKey);
   });
 
-  return {
-    isDragging: () => dragging,
-    restoreFocus: (list) => {
-      if (!focusHandleOf) return;
-      if (Date.now() < focusHandleOf.until) list.querySelector<HTMLElement>(`li[data-id="${focusHandleOf.id}"] .handle`)?.focus();
-      else focusHandleOf = null;
-    },
-  };
+  return { isDragging: () => dragging };
 }

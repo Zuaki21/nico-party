@@ -19,9 +19,10 @@
             <img src="/img/cover.webp" width="1376" height="768" alt="NicoParty のロゴ" />
             <img src="/img/demo.webp" width="1376" height="768" alt="Discord のボイスチャンネルで NicoParty を使っている画面" />
           </div>
-          <button class="slide-nav prev" id="slide-prev" aria-label="前の画像">‹</button>
-          <button class="slide-nav next" id="slide-next" aria-label="次の画像">›</button>
+          <button type="button" class="slide-nav prev" id="slide-prev" aria-label="前の画像">‹</button>
+          <button type="button" class="slide-nav next" id="slide-next" aria-label="次の画像">›</button>
           <div class="slide-dots" id="slide-dots"></div>
+          <button type="button" class="slide-pause" id="slide-pause" aria-pressed="false">自動切り替えを止める</button>
         </section>
         <h1 class="tagline">ニコニコ動画を、みんなで同時に。</h1>
         <p class="lead">
@@ -33,15 +34,15 @@
 
         <section class="features">
           <div class="card">
-            <h3><span class="dot"></span>ぴったり同時再生</h3>
+            <h2><span class="dot" aria-hidden="true"></span>ぴったり同時再生</h2>
             <p>再生・一時停止・シークを参加者全員で共有。途中から参加しても今の場面から始まります。</p>
           </div>
           <div class="card">
-            <h3><span class="dot"></span>みんなで作る再生リスト</h3>
+            <h2><span class="dot" aria-hidden="true"></span>みんなで作る再生リスト</h2>
             <p>URL を貼るだけで追加。サムネイルや再生数も表示され、ドラッグで順番を入れ替えられます。</p>
           </div>
           <div class="card">
-            <h3><span class="dot"></span>コメントもそのまま</h3>
+            <h2><span class="dot" aria-hidden="true"></span>コメントもそのまま</h2>
             <p>ニコニコ動画の公式プレイヤーで再生するので、おなじみのコメントも一緒に楽しめます。</p>
           </div>
         </section>

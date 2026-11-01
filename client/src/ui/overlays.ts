@@ -30,12 +30,9 @@ export function slowLoading() {
   if (text) text.textContent = t('loadingSlow');
 }
 
-/** PiP など小さく表示されているときは動画だけを出す */
+/** PiP など小さく表示されているときは動画だけを出す（設定画面は CSS でも出さない） */
 export function setCompact(compact: boolean) {
   document.getElementById('app')!.classList.toggle('compact', compact);
-  // 小さい表示では、設定画面が動画を覆ってしまうので、開いていたら閉じる（CSS でも出さない）
-  const settings = document.getElementById('settings');
-  if (compact && settings && !settings.hidden) $('settings-close').click();
 }
 
 let errorTimer: number | undefined;

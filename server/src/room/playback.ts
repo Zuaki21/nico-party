@@ -27,12 +27,14 @@ export interface Actor {
   name: string;
 }
 
-/** 状態遷移の結果。変わったものだけが入る */
-export interface Change {
-  state?: PlaybackState;
-  queue?: QueueItem[];
-  history?: QueueItem[];
-}
+/**
+ * 状態遷移の結果。変わったものだけが入る。
+ * 再生リストが変わるときは、キューと視聴済みが必ずそろう（片方だけ変わる遷移はない）
+ */
+export type Change =
+  | { state: PlaybackState; queue?: undefined; history?: undefined }
+  | { state?: undefined; queue: QueueItem[]; history: QueueItem[] }
+  | { state: PlaybackState; queue: QueueItem[]; history: QueueItem[] };
 
 /** 時刻・ID・乱数。テストでは固定したものを渡す */
 export interface Deps {
@@ -48,7 +50,7 @@ export function newItemId() {
 export const realDeps = (): Deps => ({ now: Date.now(), newId: newItemId, random: Math.random });
 
 /** これから再生する動画から次の1本を取り出す（queue から取り除く）。シャッフルならランダムに選ぶ */
-export function takeNext(queue: QueueItem[], shuffle = false, random = Math.random): QueueItem | null {
+export function takeNext(queue: QueueItem[], shuffle: boolean, random: () => number): QueueItem | null {
   const index = shuffle && queue.length > 1 ? Math.floor(random() * queue.length) : 0;
   return queue.splice(index, 1)[0] ?? null;
 }
@@ -62,7 +64,7 @@ export function advance(
   s: PlaybackState,
   queue: QueueItem[],
   history: QueueItem[],
-  d: Deps = realDeps(),
+  d: Deps,
 ): { item: QueueItem | null; queue: QueueItem[]; history: QueueItem[] } {
   let nextQueue = [...queue];
   let nextHistory = [...history];
@@ -72,7 +74,7 @@ export function advance(
     nextQueue = nextHistory.map((q) => ({ ...q, id: d.newId() }));
     nextHistory = [];
   }
-  const item = takeNext(nextQueue, s.shuffle, d.random);
+  const item = takeNext(nextQueue, !!s.shuffle, d.random);
   return { item, queue: nextQueue, history: nextHistory };
 }
 
@@ -109,8 +111,11 @@ export function control(
   return stamp({ ...s, playing: msg.playing, position: Math.max(0, msg.position) }, by, d.now);
 }
 
-/** リピート・シャッフルの切り替え。再生位置の基準 (updatedAt) は変えない */
-export function setMode(s: PlaybackState, msg: { repeat?: RepeatMode; shuffle?: boolean }): PlaybackState {
+/** リピート・シャッフルの切り替え。再生位置の基準 (updatedAt) は変えない。何も変わらないなら null */
+export function setMode(s: PlaybackState, msg: { repeat?: RepeatMode; shuffle?: boolean }): PlaybackState | null {
+  const repeat = msg.repeat ?? s.repeat;
+  const shuffle = msg.shuffle ?? s.shuffle;
+  if (repeat === s.repeat && shuffle === s.shuffle) return null;
   return {
     ...s,
     ...(msg.repeat ? { repeat: msg.repeat } : {}),
@@ -118,13 +123,17 @@ export function setMode(s: PlaybackState, msg: { repeat?: RepeatMode; shuffle?: 
   };
 }
 
+/** 今の動画を視聴済みに残さず手放して、次の動画へ進める */
+function dropCurrent(snap: Snapshot, by: Actor, d: Deps): Change {
+  const { state, queue, history } = snap;
+  const next = advance({ ...state, current: null }, queue, history, d);
+  return { state: startItem(state, next.item, by, d), queue: next.queue, history: next.history };
+}
+
 /** 動画を再生リストから消す。再生中の動画を消したら、視聴済みには残さず、次の動画へ進める */
 export function removeItem(snap: Snapshot, id: string, by: Actor, d: Deps): Change | null {
   const { state, queue, history } = snap;
-  if (state.current?.id === id) {
-    const next = advance({ ...state, current: null }, queue, history, d);
-    return { state: startItem(state, next.item, by, d), queue: next.queue, history: next.history };
-  }
+  if (state.current?.id === id) return dropCurrent(snap, by, d);
   const nextQueue = queue.filter((q) => q.id !== id);
   const nextHistory = history.filter((q) => q.id !== id);
   if (nextQueue.length === queue.length && nextHistory.length === history.length) return null;
@@ -184,13 +193,11 @@ export function addItem(snap: Snapshot, item: QueueItem, by: Actor, d: Deps): Ch
   const queue = [...snap.queue, item];
   const history = trimHistory(snap.history, state.current !== null, queue.length);
   if (state.current) return { queue, history };
-  const next = takeNext(queue, state.shuffle, d.random);
+  const next = takeNext(queue, !!state.shuffle, d.random);
   return { state: startItem(state, next, by, d), queue, history };
 }
 
 /** 全員が読み込めなかった動画を、視聴済みに残さず、再生リストから外して次へ進める */
 export function skipUnloadable(snap: Snapshot, by: Actor, d: Deps): Change {
-  const { state, queue, history } = snap;
-  const next = advance({ ...state, current: null }, queue, history, d);
-  return { state: startItem(state, next.item, by, d), queue: next.queue, history: next.history };
+  return dropCurrent(snap, by, d);
 }

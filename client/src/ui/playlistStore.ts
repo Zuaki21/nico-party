@@ -1,3 +1,4 @@
+import { reorder } from '../../../shared/playlist';
 import type { PlaybackState, QueueItem, RepeatMode } from '../../../shared/protocol';
 
 /** 再生リスト欄に並べる内容（画面の再生リストの状態）。サーバーから届くたびに書き換わる */
@@ -9,24 +10,37 @@ export const lists = {
   shuffle: false,
 };
 
-export function setPlaybackState(s: PlaybackState) {
-  lists.current = s.current;
-  lists.repeat = s.repeat ?? 'off';
-  lists.shuffle = s.shuffle ?? false;
-}
-
-export function setLists(queue: QueueItem[], history: QueueItem[]) {
-  lists.queue = queue;
-  lists.history = history;
-}
-
 /** 再生リストが変わったときに呼ぶ関数（検索結果の「追加済み」の表示を更新するため） */
 const changeListeners: (() => void)[] = [];
 export function onPlaylistChange(fn: () => void) {
   changeListeners.push(fn);
 }
-export function notifyPlaylistChange() {
+function notifyPlaylistChange() {
   for (const fn of changeListeners) fn();
+}
+
+export function setPlaybackState(s: PlaybackState) {
+  lists.current = s.current;
+  lists.repeat = s.repeat ?? 'off';
+  lists.shuffle = s.shuffle ?? false;
+  notifyPlaylistChange();
+}
+
+export function setLists(queue: QueueItem[], history: QueueItem[]) {
+  lists.queue = queue;
+  lists.history = history;
+  notifyPlaylistChange();
+}
+
+/**
+ * id の動画を、視聴済み + 再生中 + キューを並べたリストの index 番目に移す（サーバーと同じ規則）。
+ * サーバーの返事を待たずに画面を確定させるために使う。並びが変わらなければ false
+ */
+export function applyReorder(id: string, index: number): boolean {
+  const result = reorder(lists.history, lists.current, lists.queue, id, index);
+  if (!result) return false;
+  setLists(result.queue, result.history);
+  return true;
 }
 
 /** videoId の動画が、これから再生する中か再生中にあるか（視聴済みは含めない。もう一度追加したいことがあるため） */

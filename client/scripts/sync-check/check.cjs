@@ -21,11 +21,11 @@ const actual = JSON.parse(execFileSync(process.execPath, [path.join(__dirname, '
 fs.rmSync(out, { recursive: true, force: true });
 
 // 記録との比較とは別に、どの場面も、終わったあとに元の状態へ戻っていること（ミュートが元に戻る・覆いが外れる・
-// エンジンのタイマーが残らない）を確かめる。これが崩れると、音が出続ける・画面が隠れたまま・タイマーの漏れになる
+// エンジンのタイマーとイベントの購読が残らない）を確かめる。これが崩れると、音が出続ける・画面が隠れたまま・タイマーの漏れになる
 let broken = 0;
 for (const [name, lines] of Object.entries(actual)) {
   const end = lines[lines.length - 1];
-  if (end !== 'END mutedRestored=true cover=false timersAfterDispose=0' || lines.some((l) => l.startsWith('EXCEPTION'))) {
+  if (end !== 'END mutedRestored=true cover=false timersAfterDispose=0 listenersAfterDispose=0' || lines.some((l) => l.startsWith('EXCEPTION'))) {
     broken++;
     console.log('終了後の状態が崩れている:', name, '=>', end);
   }

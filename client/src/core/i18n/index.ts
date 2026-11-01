@@ -61,6 +61,8 @@ export function serverErrorText(code: ErrorCode, params: Record<string, string> 
       return t('err_too_fast');
     case 'queue_full':
       return t('err_queue_full');
+    case 'upstream_error':
+      return t('err_upstream_error');
     case 'not_found':
       return t('err_not_found', { id: params.id });
     case 'unplayable':
@@ -72,7 +74,10 @@ export function serverErrorText(code: ErrorCode, params: Record<string, string> 
   }
 }
 
-/** data-i18n（文字）/ data-i18n-title / data-i18n-placeholder の付いた要素を今の言語に書き換える */
+/**
+ * data-i18n（文字）/ data-i18n-label（読み上げの名前）/ data-i18n-title（吹き出し。文字のないボタンは名前にも使う）/
+ * data-i18n-placeholder の付いた要素を今の言語に書き換える
+ */
 export function applyI18n(root: ParentNode = document) {
   for (const el of root.querySelectorAll<HTMLElement>('[data-i18n]')) {
     el.textContent = t(el.dataset.i18n as Key);
@@ -84,7 +89,7 @@ export function applyI18n(root: ParentNode = document) {
   for (const el of root.querySelectorAll<HTMLElement>('[data-i18n-title]')) {
     el.title = t(el.dataset.i18nTitle as Key);
     // アイコンだけのボタンなどは、読み上げの名前にも同じ文言を使う（title だけだと読み上げられないことがある）
-    if (!el.textContent?.trim()) el.setAttribute('aria-label', el.title);
+    if (!el.textContent?.trim() && !el.dataset.i18nLabel) el.setAttribute('aria-label', el.title);
   }
   for (const el of root.querySelectorAll<HTMLInputElement>('[data-i18n-placeholder]')) {
     el.placeholder = t(el.dataset.i18nPlaceholder as Key);

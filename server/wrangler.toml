@@ -27,3 +27,7 @@ new_sqlite_classes = ["Room"]
 [vars]
 # 秘密ではない値。DISCORD_CLIENT_SECRET は `wrangler secret put` で登録する
 DISCORD_CLIENT_ID = "1563868455646531737"
+
+# 例外や console.error のログを Cloudflare のダッシュボードで見られるようにする
+[observability]
+enabled = true

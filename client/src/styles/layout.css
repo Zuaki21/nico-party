@@ -71,8 +71,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.4286rem;
-  /* 既定の大きさ。ドラッグすると sidePanel.ts が flex-basis を上書きする */
-  flex: 0 0 35%;
+  /* 既定の大きさ。ドラッグやキーボードで変えると、sidePanel.ts が --side-size を設定する */
+  flex: 0 0 var(--side-size, 35%);
   min-height: 0;
   min-width: 0;
 }

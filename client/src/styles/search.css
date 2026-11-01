@@ -17,13 +17,21 @@
   font-weight: 600;
 }
 
-.tabs button.active {
+.tabs button[aria-selected='true'] {
   color: var(--text);
   border-bottom-color: var(--accent);
 }
 
-.side[data-tab='search'] .queue-head,
-.side[data-tab='search'] #queue,
+/* 再生リストの面（シャッフル・リピートの見出しと一覧）。検索のタブでは隠す */
+.panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4286rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.side[data-tab='search'] .panel-list,
 .side[data-tab='list'] .search {
   display: none;
 }

@@ -21,7 +21,7 @@ export function reorder(
   const from = all.findIndex((q) => q.id === id);
   if (from < 0) return null;
   const [item] = all.splice(from, 1);
-  const to = Math.max(0, Math.min(all.length, Math.trunc(index)));
+  const to = Math.max(0, Math.min(all.length, Math.trunc(index) || 0));
   if (to === from) return null;
   all.splice(to, 0, item);
 

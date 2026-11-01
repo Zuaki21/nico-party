@@ -1,12 +1,18 @@
 /**
  * Discord でログインした人であることを示す「通行証」（HMAC 署名つき）。
  * /api/token でトークンを交換したときに、サーバーが Discord からユーザーの情報を取得して発行する。
- * 署名の鍵には DISCORD_CLIENT_SECRET を使う（サーバーしか知らない）。
+ * 署名の鍵には PASS_SECRET を使う（サーバーしか知らない。Discord のクライアントシークレットとは別にしてある）。
  *
  * 用途ごとに scope を分けて、取り違えて使えないようにしている。
  *   ws:   WebSocket の接続に付ける。名前を確かめたものとして部屋に渡す
  *   nico: ニコニコの中継 (/nico/<通行証>/...) と検索の呼び出しに付ける。名前は入れない（URL に載るため）
  */
+
+/** 通行証の署名の鍵。登録されていなければ例外（鍵なしで署名や検証をしない） */
+export function passSecret(env: { PASS_SECRET?: string }): string {
+  if (!env.PASS_SECRET) throw new Error('PASS_SECRET is not set');
+  return env.PASS_SECRET;
+}
 
 export type PassScope = 'ws' | 'nico';
 

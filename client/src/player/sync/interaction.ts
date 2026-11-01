@@ -21,12 +21,23 @@ export class InteractionTracker {
   /** この時刻までは、ユーザーの操作を優先して部屋の状態を反映しない */
   private holdUntil = 0;
 
+  private onEnter = () => (this.pointerInside = true);
+  private onLeave = () => (this.pointerInside = false);
+  /** フォーカスがプレイヤーの iframe に移った（中をクリックした）ときに、window の blur が起きる */
+  private onBlur = () => {
+    if (document.activeElement === this.iframe) this.interactUntil = Date.now() + INTERACT_MS;
+  };
+
   constructor(private iframe: HTMLIFrameElement) {
-    iframe.addEventListener('pointerenter', () => (this.pointerInside = true));
-    iframe.addEventListener('pointerleave', () => (this.pointerInside = false));
-    window.addEventListener('blur', () => {
-      if (document.activeElement === iframe) this.interactUntil = Date.now() + INTERACT_MS;
-    });
+    iframe.addEventListener('pointerenter', this.onEnter);
+    iframe.addEventListener('pointerleave', this.onLeave);
+    window.addEventListener('blur', this.onBlur);
+  }
+
+  dispose() {
+    this.iframe.removeEventListener('pointerenter', this.onEnter);
+    this.iframe.removeEventListener('pointerleave', this.onLeave);
+    window.removeEventListener('blur', this.onBlur);
   }
 
   /**

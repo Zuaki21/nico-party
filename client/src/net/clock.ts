@@ -24,8 +24,11 @@ export class ClockSync {
     if (this.samples.length === 0) this.offset = serverTime - now;
   }
 
+  /**
+   * 再接続したとき。古いサンプルは捨てるが、offset は直前の値を残す
+   * （0 に戻すと、welcome が届くまでの間、同期エンジンの見る時刻が端末の時計に跳ぶ）
+   */
   reset() {
     this.samples = [];
-    this.offset = 0;
   }
 }

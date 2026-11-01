@@ -19,7 +19,7 @@ export class EnqueueQueue {
     this.waitingBy.set(memberId, mine + 1);
     this.chain = this.chain
       .then(job)
-      .catch(() => {})
+      .catch((e) => console.error('enqueue job failed', e))
       .finally(() => {
         this.waiting--;
         const left = (this.waitingBy.get(memberId) ?? 1) - 1;

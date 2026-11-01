@@ -105,6 +105,8 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
       // 追加済みは ✓、そこにマウスを乗せるとゴミ箱（style.css）。どちらも置いておき、見た目は CSS で切り替える
       add.innerHTML = done ? `<span class="when-idle">✓</span><span class="when-hover">${TRASH_ICON}</span>` : '＋';
       add.title = t(done ? 'removeAdded' : 'addToList');
+      // 結果が並ぶので、どの動画への操作かが分かる名前にする（見た目の「＋」「✓」は名前にしない）
+      add.setAttribute('aria-label', `${add.title}: ${r.title}`);
       add.classList.toggle('done', done);
     };
     const refresh = () => mark(isAdded(r.videoId));
@@ -116,6 +118,7 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
       li.title = reason;
       add.disabled = true;
       add.title = reason;
+      add.setAttribute('aria-label', `${reason}: ${r.title}`);
       const badge = document.createElement('span');
       badge.className = 'badge unplayable-badge';
       badge.textContent = t('unplayableBadge');

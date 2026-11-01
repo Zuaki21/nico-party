@@ -8,7 +8,8 @@
     "typecheck": "tsc --noEmit",
     "check:playback": "node scripts/check-playback.cjs",
     "check:nico": "node scripts/check-nico.cjs",
-    "check": "npm run typecheck && npm run check:playback && npm run check:nico"
+    "check:misc": "node scripts/check-misc.cjs",
+    "check": "npm run typecheck && npm run check:playback && npm run check:nico && npm run check:misc"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261025.1",

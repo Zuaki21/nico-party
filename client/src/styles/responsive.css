@@ -6,8 +6,8 @@
     flex-direction: row;
   }
   .side {
-    flex-basis: 28.5714rem;
-    /* sidePanel.ts の MIN_SIDE_WIDTH と揃える */
+    flex-basis: var(--side-size, 28.5714rem);
+    /* sidePanel.ts が、これを最小の幅として読む */
     min-width: 18.5714rem;
   }
   .splitter {
@@ -36,29 +36,6 @@
 
 #app.compact .player {
   border-radius: 0;
-}
-
-@media (max-height: 300px) {
-  #app {
-    padding: 0;
-  }
-  .now,
-  .splitter,
-  .side,
-  .settings {
-    display: none !important;
-  }
-  .player {
-    border-radius: 0;
-  }
-  .main,
-  .player {
-    flex: 1 !important;
-    aspect-ratio: auto !important;
-  }
-  .player {
-    container-type: size;
-  }
 }
 
 @media (hover: none) {
@@ -107,8 +84,8 @@
     max-height: 60vh;
   }
   .side {
-    /* ドラッグで保存された大きさ（sidePanel.ts が付ける flex-basis）より優先する */
-    flex: 1 1 auto !important;
+    /* 縦に並べているときは、動画の下の残りを使う（--side-size は使わない） */
+    flex: 1 1 auto;
     margin-top: 0.5714rem;
   }
 }
@@ -136,5 +113,31 @@
     height: 100%;
     aspect-ratio: 16 / 9;
     transform: translateX(-50%);
+  }
+}
+
+/*
+ * 高さが 300px 以下（PiP など）のときも動画だけを出す。上の規則（タッチ端末の縦並びなど）より優先させたいので、最後に置く
+ */
+@media (max-height: 300px) {
+  #app {
+    padding: 0;
+  }
+  .now,
+  .splitter,
+  .side,
+  .settings {
+    display: none;
+  }
+  .player {
+    border-radius: 0;
+  }
+  .main,
+  .player {
+    flex: 1;
+    aspect-ratio: auto;
+  }
+  .player {
+    container-type: size;
   }
 }

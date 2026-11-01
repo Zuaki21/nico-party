@@ -5,11 +5,16 @@ export interface Env {
   ROOM: DurableObjectNamespace<Room>;
   ASSETS: Fetcher;
   DISCORD_CLIENT_ID: string;
-  /** 通行証の署名の鍵にも使う（サーバーしか知らない） */
   DISCORD_CLIENT_SECRET: string;
   /**
+   * 通行証の署名の鍵（サーバーしか知らない）。`wrangler secret put PASS_SECRET` で登録する。
+   * DISCORD_CLIENT_SECRET とは別にしてあるので、どちらかを変えても、もう一方は影響を受けない
+   * （これを変えると、発行済みの通行証はすべて無効になる）
+   */
+  PASS_SECRET: string;
+  /**
    * 'true' のときだけ、通行証のない WebSocket 接続を受け付ける（ローカル確認用。.dev.vars に書く）。
-   * 本番では設定しない
+   * 本番では設定しない。誤って設定されても、localhost への接続でしか効かない
    */
   ALLOW_ANON_WS?: string;
 }

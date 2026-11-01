@@ -1,7 +1,7 @@
 import type { Member, PlaybackState, QueueItem, RepeatMode } from '../../../shared/protocol';
 import type { SearchResult, SearchSort } from '../../../shared/search';
 import { parseVideoId } from '../../../shared/video';
-import { $, markSeg, onSeg } from './dom';
+import { $, onSeg } from './dom';
 import { applyI18n, onLangChange, t } from '../core/i18n';
 import { LIST_ICON, NEXT_ICON, PREV_ICON, REPEAT_ICON, SETTINGS_ICON, SHUFFLE_ICON } from './icons';
 import { renderPlaylist, setPlayback, setupPlaylist } from './playlist';
@@ -45,6 +45,8 @@ export interface Ui {
   renderMembers: (members: Member[]) => void;
   /** 部屋に入れていない間の表示。waiting は接続後に送る操作の数 */
   renderConnecting: (waiting?: number) => void;
+  /** 設定画面を閉じる */
+  closeSettings: () => void;
 }
 
 /** 画面の骨組みを作る */
@@ -66,13 +68,13 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
           <button id="skip" class="secondary icon-button" data-i18n-label="next" disabled>${NEXT_ICON}</button>
         </div>
         <div class="controls">
-          <button id="open-settings" class="secondary icon-button" data-i18n-title="settings" aria-pressed="false">${SETTINGS_ICON}</button>
-          <button id="toggle-side" class="secondary icon-button">${LIST_ICON}</button>
+          <button id="open-settings" class="secondary icon-button" data-i18n-title="settings" aria-haspopup="dialog" aria-expanded="false" aria-controls="settings">${SETTINGS_ICON}</button>
+          <button id="toggle-side" class="secondary icon-button" data-i18n-label="tabList" aria-expanded="true" aria-controls="side">${LIST_ICON}</button>
         </div>
       </div>
       ${settingsHtml()}
     </main>
-    <div class="splitter" id="splitter" role="separator" tabindex="0" data-i18n-title="resize" data-i18n-label="resize"></div>
+    <div class="splitter" id="splitter" role="separator" tabindex="0" aria-controls="side" data-i18n-title="resize" data-i18n-label="resize"></div>
     <aside class="side" id="side">
       <form class="bar" id="form">
         <input type="text" id="url" data-i18n-placeholder="inputPlaceholder" autocomplete="off" />
@@ -80,16 +82,18 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
         <div class="error" id="error" role="alert" hidden></div>
       </form>
       <div class="tabs" id="side-tabs" role="tablist">
-        <button type="button" role="tab" data-tab="list" aria-controls="queue" data-i18n="tabList"></button>
-        <button type="button" role="tab" data-tab="search" aria-controls="search" data-i18n="tabSearch"></button>
+        <button type="button" role="tab" id="tab-list" data-tab="list" aria-controls="panel-list" data-i18n="tabList"></button>
+        <button type="button" role="tab" id="tab-search" data-tab="search" aria-controls="search" data-i18n="tabSearch"></button>
       </div>
-      <div class="queue-head">
-        <button id="shuffle" class="mode" aria-pressed="false">${SHUFFLE_ICON}</button>
-        <button id="repeat" class="mode" aria-pressed="false">${REPEAT_ICON}</button>
-        <span class="muted members" id="members"></span>
+      <div class="panel-list" id="panel-list" role="tabpanel" aria-labelledby="tab-list">
+        <div class="queue-head">
+          <button id="shuffle" class="mode" aria-pressed="false">${SHUFFLE_ICON}</button>
+          <button id="repeat" class="mode">${REPEAT_ICON}</button>
+          <span class="muted members" id="members"></span>
+        </div>
+        <ol class="queue" id="queue"><li class="muted" data-i18n="connecting"></li></ol>
       </div>
-      <ol class="queue" id="queue"><li class="muted" data-i18n="connecting"></li></ol>
-      <div class="search" id="search">
+      <div class="search" id="search" role="tabpanel" aria-labelledby="tab-search">
         <div class="search-head">
           <span class="search-title" id="search-title"></span>
           <div class="seg" id="search-sort" role="group" data-i18n-title="sortTitle" data-i18n-label="sortTitle">
@@ -101,6 +105,8 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
         <ol class="queue" id="results"></ol>
       </div>
     </aside>
+    <!-- 並べ替えの結果など、画面には出さずに読み上げだけする -->
+    <div class="sr-only" id="sr-status" role="status"></div>
     <div class="loading" id="loading" role="status">
       <img class="loading-icon" src="/img/icon-256.png" alt="" />
       <div class="spinner" aria-hidden="true"></div>
@@ -110,7 +116,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
   `;
   applyI18n(root);
   // 再生リスト欄の最小幅などが UI サイズで変わるので、保存されている設定を最初に当てておく
-  setupSettings(h);
+  const settings = setupSettings(h);
 
   const showTab = setupTabs();
   const search = setupSearch(h, () => showTab('search'));
@@ -179,25 +185,34 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
       $('members').textContent = waiting > 0 ? t('connectingPending', { n: waiting }) : t('connecting');
       $('members').title = '';
     },
+    closeSettings: settings.close,
   };
 }
 
 /** 再生リストと検索結果の切り替え。切り替え関数を返す */
 function setupTabs() {
   const side = $('side');
+  const tabs = [...$('side-tabs').querySelectorAll<HTMLButtonElement>('button')];
   const show = (tab: string) => {
     side.dataset.tab = tab;
-    markSeg('side-tabs', 'tab', tab);
-    for (const b of $('side-tabs').querySelectorAll<HTMLButtonElement>('button')) {
-      b.setAttribute('aria-selected', String(b.dataset.tab === tab));
+    // 選んでいるタブだけが Tab キーで止まる（タブの間は矢印キーで移る）
+    for (const b of tabs) {
+      const selected = b.dataset.tab === tab;
+      b.setAttribute('aria-selected', String(selected));
+      b.tabIndex = selected ? 0 : -1;
     }
   };
   onSeg('side-tabs', 'tab', show);
-  // 矢印キーで、隣のタブへ移る
+  // 矢印キーで隣のタブへ、Home / End で最初・最後のタブへ移る
   $('side-tabs').addEventListener('keydown', (e) => {
-    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-    const tabs = [...$('side-tabs').querySelectorAll<HTMLButtonElement>('button')];
-    const next = tabs[(tabs.indexOf(document.activeElement as HTMLButtonElement) + (e.key === 'ArrowLeft' ? -1 : 1) + tabs.length) % tabs.length];
+    const at = tabs.indexOf(document.activeElement as HTMLButtonElement);
+    const next =
+      e.key === 'ArrowLeft' ? tabs[(at - 1 + tabs.length) % tabs.length]
+      : e.key === 'ArrowRight' ? tabs[(at + 1) % tabs.length]
+      : e.key === 'Home' ? tabs[0]
+      : e.key === 'End' ? tabs[tabs.length - 1]
+      : null;
+    if (!next || at < 0) return;
     e.preventDefault();
     next.focus();
     show(next.dataset.tab!);

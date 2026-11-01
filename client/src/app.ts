@@ -2,7 +2,7 @@ import { DiscordSDK } from '@discord/embedded-app-sdk';
 import type { ClientMsg, Member, PlaybackState, ServerMsg } from '../../shared/protocol';
 import { describeError, devlog, watchErrors } from './core/devlog';
 import { inDiscord } from './core/env';
-import { getLang, serverErrorText, t } from './core/i18n';
+import { serverErrorText, t } from './core/i18n';
 import { searchNico } from './net/api';
 import { authenticate, openExternal, watchLayout } from './net/discord';
 import { createPresence } from './net/presence';
@@ -80,9 +80,9 @@ function applyMembers(members: Member[]) {
   session.presence?.setMembers(members.length);
 }
 
-let slowTimer: number | undefined;
 /** 部屋に入るまでこれ以上かかったら、時間がかかっていると伝える */
 const SLOW_CONNECT_MS = 10_000;
+let slowTimer: number | undefined;
 
 function onMessage(msg: ServerMsg) {
   switch (msg.t) {
@@ -107,9 +107,6 @@ function onMessage(msg: ServerMsg) {
       devlog(`server error: ${msg.code}`);
       showError(serverErrorText(msg.code, msg.params));
       return;
-    case 'pong':
-      // 時計のずれの推定は、RoomConnection が更新済み。同期エンジンは serverNow() で毎回それを使う
-      return;
   }
 }
 
@@ -128,7 +125,7 @@ async function main() {
   const discord = new DiscordSDK(import.meta.env.VITE_DISCORD_CLIENT_ID);
   session.sdk = discord;
   await discord.ready();
-  let name = getLang() === 'ja' ? 'ゲスト' : 'Guest';
+  let name = '';
   let pass: string | undefined;
   try {
     ({ name, pass, nicoPass: session.nicoPass } = await authenticate(discord));
@@ -136,7 +133,11 @@ async function main() {
   } catch (e) {
     devlog(`authenticate failed: ${describeError(e)}`);
   }
-  watchLayout(discord, setCompact);
+  watchLayout(discord, (compact) => {
+    setCompact(compact);
+    // 小さい表示では、設定画面が動画を覆ってしまうので、開いていたら閉じる
+    if (compact) ui.closeSettings();
+  });
   // 通行証がないと、部屋に入れず、動画の読み込みも検索もできない。ローディングのまま止まらないよう、理由を出す
   if (!pass || !session.nicoPass) {
     failLoading(t('loginRequired'));

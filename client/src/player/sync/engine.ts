@@ -15,7 +15,10 @@ import {
 import type { LoadedState, SyncContext } from './context';
 import { InteractionTracker } from './interaction';
 import { StartGate } from './startGate';
+
 import { SuppressWindow } from './suppress';
+
+type ApplyMode = 'normal' | 'afterLoad' | 'afterCatchUp';
 
 /**
  * 部屋の再生状態と自分のプレイヤーを一致させる。
@@ -41,8 +44,6 @@ export class SyncEngine {
   private reportedFailFor: string | null = null;
   private ticks = 0;
   private tickTimer: number | undefined;
-  /** 読み込み完了の直後で、最初の同期をしている */
-  private justLoaded = false;
   /** この時刻までは、自動送りの要求を送り直さない */
   private nextSentUntil = 0;
   /** ユーザーの操作の保護が終わったら、保留した同期をやり直すためのタイマー */
@@ -69,7 +70,7 @@ export class SyncEngine {
       expected: (s) => this.expected(s),
       suppress: this.suppress,
       apply: () => this.apply(APPLY_THRESHOLD),
-      applyAfterLoad: () => this.applyAfterLoad(),
+      applyAfterCatchUp: () => this.apply(APPLY_THRESHOLD, 'afterCatchUp'),
     };
     this.local = new InteractionTracker(player.iframe);
     this.gate = new StartGate(ctx);
@@ -95,9 +96,9 @@ export class SyncEngine {
       clearTimeout(this.loadTimer);
       // 読み込めなかったと伝えた後で読み込めたら取り消す
       if (this.reportedFailFor === this.loadedItemId) this.resendLoadReport();
-      this.applyAfterLoad();
+      this.apply(APPLY_THRESHOLD, 'afterLoad');
     });
-    player.on('ended', () => this.requestNext(true));
+    player.on('ended', () => this.requestNext());
     this.tickTimer = window.setInterval(() => this.onTick(), 1000);
   }
 
@@ -109,6 +110,7 @@ export class SyncEngine {
     clearTimeout(this.holdRetryTimer);
     this.gate.reset();
     this.catchUp.cancel();
+    this.local.dispose();
   }
 
   update(state: PlaybackState) {
@@ -172,24 +174,20 @@ export class SyncEngine {
     return s.position;
   }
 
-  /**
-   * 読み込み直後の同期。ここでの途中シークだけ、長めに無視する
-   * （それ以外では、ユーザーの次の操作を長く受け付けなくなってしまう）
-   */
-  private applyAfterLoad() {
-    this.justLoaded = true;
-    this.apply(APPLY_THRESHOLD);
-    this.justLoaded = false;
-  }
-
   /** 今起きた変化が、プレイヤーへのユーザー操作によるものと考えられるか */
   private isUserInput() {
     if (this.suppress.active() || this.gate.active) return false;
     return this.local.engaged();
   }
 
-  /** 部屋の状態に自分のプレイヤーを合わせる */
-  private apply(threshold: number) {
+  /**
+   * 部屋の状態に自分のプレイヤーを合わせる。
+   * mode は、どの場面の同期か（途中シークを長めに無視するのは、読み込み直後と位置合わせの直後だけ。
+   * それ以外では、ユーザーの次の操作を長く受け付けなくなってしまう）
+   * - afterLoad: 読み込み完了の直後。途中参加なら位置合わせ（CatchUp）をする
+   * - afterCatchUp: 位置合わせが終わった直後。再生が始まらなくても、位置合わせを繰り返さない
+   */
+  private apply(threshold: number, mode: ApplyMode = 'normal') {
     const p = this.player;
     // 途中参加で位置が合うのを待っている間は、そちらで合わせる（CatchUp）
     if (this.catchUp.active) return;
@@ -197,7 +195,7 @@ export class SyncEngine {
     if (this.local.isHolding()) {
       // 保護が終わったら、保留した他の人の操作を反映する
       clearTimeout(this.holdRetryTimer);
-      this.holdRetryTimer = window.setTimeout(() => this.apply(APPLY_THRESHOLD), this.local.holdRemainingMs() + 50);
+      this.holdRetryTimer = window.setTimeout(() => this.apply(APPLY_THRESHOLD, mode), this.local.holdRemainingMs() + 50);
       return;
     }
     const s = this.loadedState();
@@ -219,12 +217,12 @@ export class SyncEngine {
     // 途中参加: 読み込んだばかりの動画を途中の位置から始めると、位置が合うまでの間、最初から再生されてしまう。
     // 位置が合うまでミュートして画面を隠し、合ったら元に戻す。
     // 先頭からのずれが APPLY_THRESHOLD 以内なら、通常の同期でもシークしないので、この処理は要らない
-    if (this.justLoaded && s.playing && target > APPLY_THRESHOLD && p.isPaused()) {
+    if (mode === 'afterLoad' && s.playing && target > APPLY_THRESHOLD && p.isPaused()) {
       this.catchUp.begin();
       return;
     }
     if (Math.abs(p.getTime() - target) > threshold) {
-      this.suppress.extend(this.justLoaded && target > 1 ? SEEK_SUPPRESS_MS : SUPPRESS_MS);
+      this.suppress.extend(mode !== 'normal' && target > 1 ? SEEK_SUPPRESS_MS : SUPPRESS_MS);
       p.seek(target);
     }
     if (s.playing && p.isPaused()) {
@@ -264,16 +262,14 @@ export class SyncEngine {
   }
 
   /** 動画が最後まで再生されたので次へ進める（1曲リピートならサーバーが同じ動画を繰り返す） */
-  private requestNext(auto: boolean) {
+  private requestNext() {
     // 動画を読み込み直している最中に、前の動画の終了通知が遅れて届いても、次の動画の終了と取り違えない
-    if (auto && !this.player.ready()) return;
+    if (!this.player.ready()) return;
     if (!this.loadedState()) return;
     // 終わっているのに進まない確認が毎秒呼ばれても、数秒に1回しか送らない
-    if (auto) {
-      if (Date.now() < this.nextSentUntil) return;
-      this.nextSentUntil = Date.now() + NEXT_RESEND_MS;
-    }
-    this.send({ t: 'next', itemId: this.loadedItemId, auto });
+    if (Date.now() < this.nextSentUntil) return;
+    this.nextSentUntil = Date.now() + NEXT_RESEND_MS;
+    this.send({ t: 'next', itemId: this.loadedItemId, auto: true });
   }
 
   private onTick() {
@@ -285,7 +281,7 @@ export class SyncEngine {
     // 途中参加などで誰のプレイヤーも終了イベントを出さないまま終端を過ぎた
     const duration = p.getDuration();
     if (s.playing && duration > 0 && this.expected(s) > duration + STUCK_MARGIN) {
-      this.requestNext(true);
+      this.requestNext();
       return;
     }
 

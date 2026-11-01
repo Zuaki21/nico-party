@@ -62,6 +62,11 @@
 
 .handle {
   flex: 0 0 1.2em;
+  /* button の既定の見た目（背景・余白・枠）は使わない */
+  padding: 0;
+  border-radius: 0.2857rem;
+  background: none;
+  font: inherit;
   text-align: center;
   color: var(--muted);
   user-select: none;

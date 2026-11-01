@@ -3,9 +3,12 @@ import { $, bodyEl, countsMeta, noteEl, thumbEl } from './dom';
 import { setupNavPreview, type NavKind, type NavPreview } from './navPreview';
 import { PLAY_ICON, TRASH_ICON } from './icons';
 import { t } from '../core/i18n';
-import { lists, navTarget, notifyPlaylistChange, setLists, setPlaybackState } from './playlistStore';
+import { lists, navTarget, setLists, setPlaybackState } from './playlistStore';
 import { setupReorder, type Reordering } from './reorder';
 import type { UiHandlers } from './ui';
+
+/** 並べ替えの結果を読み上げる領域（ui.ts が置く） */
+const STATUS_ID = 'sr-status';
 
 const REPEAT_LABEL = { off: 'repeatOff', all: 'repeatAll', one: 'repeatOne' } as const;
 const NEXT_REPEAT: Record<RepeatMode, RepeatMode> = { off: 'all', all: 'one', one: 'off' };
@@ -43,7 +46,10 @@ export function setupPlaylist(h: Pick<UiHandlers, 'remove' | 'jump' | 'skip' | '
   $('shuffle').addEventListener('click', () => h.mode({ shuffle: !lists.shuffle }));
   $('repeat').addEventListener('click', () => h.mode({ repeat: NEXT_REPEAT[lists.repeat] }));
   renderMode();
-  reordering = setupReorder(h.move, renderList);
+  reordering = setupReorder(h.move, renderList, (id, index, total) => {
+    const q = [...lists.history, ...(lists.current ? [lists.current] : []), ...lists.queue].find((x) => x.id === id);
+    if (q) $(STATUS_ID).textContent = t('movedTo', { title: q.title, n: String(index + 1), total: String(total) });
+  });
   refreshNavPreview = setupNavPreview(navPreview);
 }
 
@@ -72,14 +78,17 @@ export function renderPlaylist() {
 
 /** リピート・シャッフルのボタンの見た目 */
 function renderMode() {
+  // シャッフルは名前を固定し、オン・オフは aria-pressed で伝える（title にも状態を出す）
   const shuffle = $('shuffle');
   shuffle.title = t(lists.shuffle ? 'shuffleOn' : 'shuffleOff');
+  shuffle.setAttribute('aria-label', t('shuffleLabel'));
   shuffle.setAttribute('aria-pressed', String(lists.shuffle));
+  // リピートは 3 つの状態（オフ・全体・1曲）なので、aria-pressed ではなく名前に状態を含める
   const repeat = $('repeat');
   // 1曲リピートはボタンの右上に「1」のバッジを付ける（style.css）
   repeat.dataset.repeat = lists.repeat;
   repeat.title = t(REPEAT_LABEL[lists.repeat]);
-  repeat.setAttribute('aria-pressed', String(lists.repeat !== 'off'));
+  repeat.setAttribute('aria-label', repeat.title);
 }
 
 /** 視聴済み → 再生中 → これから再生、の順に並べる */
@@ -90,18 +99,18 @@ function renderList() {
   // 全曲リピート中は、次が無くても最初に戻れる
   $<HTMLButtonElement>('skip').disabled = !current || (queue.length === 0 && lists.repeat !== 'all');
   refreshNavPreview();
-  notifyPlaylistChange();
   // 並べ替えのドラッグ中に描き直すと掴んでいる要素が消えるので、終わってから描く
   if (reordering?.isDragging()) return;
   const ol = $('queue');
+  const focused = focusedControl(ol);
   ol.replaceChildren(
     ...history.map((q) => itemEl(q, 'done')),
     ...(current ? [itemEl(current, 'current')] : []),
     ...queue.map((q) => itemEl(q, 'next')),
   );
   if (ol.childElementCount === 0) ol.append(noteEl(t('listEmpty')));
-  // キーボードで並べ替えたあとは、描き直しで消えたフォーカスを、同じ動画のつまみに戻す
-  reordering?.restoreFocus(ol);
+  // 描き直しで消えたフォーカスを、同じ動画の同じ操作に戻す（他の人の操作で描き直されても、キーボード操作が途切れない）
+  restoreFocus(ol, focused);
   // 再生中の動画が変わったら、それが見える位置までスクロールする
   const curId = current?.id ?? null;
   if (curId !== scrolledTo) {
@@ -110,22 +119,42 @@ function renderList() {
   }
 }
 
+/** 再生リストの中でフォーカスされている操作（どの動画の、どのボタンか） */
+type FocusedControl = { id: string; selector: string };
+const CONTROL_SELECTORS = ['.handle', '[data-play]', '[data-remove]'];
+
+function focusedControl(ol: HTMLElement): FocusedControl | null {
+  const el = document.activeElement;
+  if (!(el instanceof HTMLElement) || !ol.contains(el)) return null;
+  const id = el.closest<HTMLElement>('li[data-id]')?.dataset.id;
+  const selector = CONTROL_SELECTORS.find((s) => el.matches(s));
+  return id && selector ? { id, selector } : null;
+}
+
+function restoreFocus(ol: HTMLElement, focused: FocusedControl | null) {
+  if (!focused) return;
+  const li = [...ol.querySelectorAll<HTMLElement>('li[data-id]')].find((x) => x.dataset.id === focused.id);
+  // 同じボタンが無くなっていたら（再生中になって「ここから再生」が消えたなど）、同じ動画のつまみに
+  const target = li?.querySelector<HTMLElement>(focused.selector) ?? li?.querySelector<HTMLElement>('.handle');
+  target?.focus({ preventScroll: true });
+}
+
 type ItemKind = 'done' | 'current' | 'next';
 
 function itemEl(q: QueueItem, kind: ItemKind) {
   const li = document.createElement('li');
   li.className = kind;
   li.dataset.id = q.id;
+  if (kind === 'current') li.setAttribute('aria-current', 'true');
 
   // つまみをドラッグして並べ替えられる（視聴済み・再生中も含めて自由に動かせる）
-  const handle = document.createElement('span');
+  const handle = document.createElement('button');
+  handle.type = 'button';
   handle.className = 'handle';
   handle.textContent = '⋮⋮';
-  handle.title = t('dragToReorder');
   // キーボードでも、フォーカスして上下の矢印キーで並べ替えられる（setupReorder の keydown）
-  handle.tabIndex = 0;
-  handle.setAttribute('role', 'button');
-  handle.setAttribute('aria-label', t('dragToReorder'));
+  handle.title = t('dragToReorder');
+  handle.setAttribute('aria-label', t('reorderItem', { title: q.title }));
 
   const thumb = thumbEl(q.thumbnail, q.length);
   if (kind === 'current') {
@@ -151,7 +180,7 @@ function itemEl(q: QueueItem, kind: ItemKind) {
     play.className = 'icon play';
     play.dataset.play = q.id;
     play.title = t('playFromHere');
-    play.setAttribute('aria-label', t('playFromHere'));
+    play.setAttribute('aria-label', `${t('playFromHere')}: ${q.title}`);
     play.innerHTML = PLAY_ICON;
     actions.append(play);
   }
@@ -159,7 +188,7 @@ function itemEl(q: QueueItem, kind: ItemKind) {
   del.className = 'icon remove';
   del.dataset.remove = q.id;
   del.title = t('removeFromList');
-  del.setAttribute('aria-label', t('removeFromList'));
+  del.setAttribute('aria-label', `${t('removeFromList')}: ${q.title}`);
   del.innerHTML = TRASH_ICON;
   actions.append(del);
   li.append(actions);

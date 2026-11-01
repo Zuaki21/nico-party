@@ -71,7 +71,15 @@ export type ClientMsg =
  * invalid_url: 動画 ID が読み取れない / queue_full: 再生リストが上限 / not_found: 動画が無い (id) /
  * unplayable: 埋め込みで再生できない (title, reason=埋め込みページのエラーコード) / not_embeddable: 埋め込み禁止 (title)
  */
-export type ErrorCode = 'invalid_url' | 'queue_full' | 'not_found' | 'unplayable' | 'not_embeddable' | 'too_fast';
+export type ErrorCode =
+  | 'invalid_url'
+  | 'queue_full'
+  | 'not_found'
+  | 'unplayable'
+  | 'not_embeddable'
+  | 'too_fast'
+  /** ニコニコに問い合わせられなかった（動画の有無は分からない） */
+  | 'upstream_error';
 
 export type ServerMsg =
   | {

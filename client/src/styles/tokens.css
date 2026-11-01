@@ -48,6 +48,18 @@
   display: none !important;
 }
 
+/* 画面には出さず、読み上げだけに使う */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* アプリとして使う画面なので、入力欄以外の文字は選択させない */
 body {
   user-select: none;

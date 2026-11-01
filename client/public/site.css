@@ -142,6 +142,28 @@ a {
   }
 }
 
+/* 自動で切り替わる内容は、止められるようにする */
+.slide-pause {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.25rem 0.625rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.slider:hover .slide-pause,
+.slide-pause:focus-visible,
+.slide-pause[aria-pressed='true'] {
+  opacity: 1;
+}
+
 .slide-dots {
   position: absolute;
   left: 0;
@@ -224,7 +246,7 @@ a {
   padding: 18px 18px 14px;
 }
 
-.card h3 {
+.card h2 {
   margin: 0 0 6px;
   font-size: 1.02em;
   display: flex;
@@ -232,7 +254,7 @@ a {
   gap: 8px;
 }
 
-.card h3 .dot {
+.card h2 .dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;

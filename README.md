@@ -79,6 +79,7 @@ cd server && npm run check                   # 型・再生の状態遷移・中
 - `server/scripts/check-playback.cjs`: 次へ・前へ・ジャンプ・リピート・シャッフル・削除・追加などの状態遷移（`server/src/room/playback.ts`）。
   時刻・ID・乱数を固定して確かめる
 - `server/scripts/check-nico.cjs`: 中継の書き換えルール。書き換えた URL に、必ず通行証が入ることを確かめる
+- `server/scripts/check-misc.cjs`: メッセージの検証・通行証・読み込み失敗の記録・量の制限・保存先・本文の読み取り上限・中継の経路・並べ替え
 
 ローカルで WebSocket に通行証なしで入るには、`server/.dev.vars` に `ALLOW_ANON_WS=true` を書く（本番では設定しない）。
 
@@ -90,6 +91,7 @@ cd server && npm run check                   # 型・再生の状態遷移・中
 cd client && npx vite build
 cd server && npx wrangler deploy
 npx wrangler secret put DISCORD_CLIENT_SECRET   # 初回のみ
+npx wrangler secret put PASS_SECRET             # 初回のみ（通行証の署名の鍵。長いランダムな文字列。変えると発行済みの通行証が全部無効になる）
 ```
 
 デプロイ後、URL Mapping の `/` を `<name>.<subdomain>.workers.dev` にする。
