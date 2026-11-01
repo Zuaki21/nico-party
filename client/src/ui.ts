@@ -2,12 +2,11 @@ import type { Member, PlaybackState, QueueItem, RepeatMode } from '../../shared/
 import type { SearchResult, SearchSort } from '../../shared/search';
 import { parseVideoId } from '../../shared/video';
 import { $, markSeg, onSeg } from './dom';
-import { APP_VERSION } from './env';
 import { applyI18n, onLangChange, t } from './i18n';
 import { LIST_ICON, NEXT_ICON, PREV_ICON, REPEAT_ICON, SETTINGS_ICON, SHUFFLE_ICON } from './icons';
 import { renderPlaylist, setPlayback, setupPlaylist } from './playlist';
 import { setupSearch } from './search';
-import { setupSettings } from './settings';
+import { settingsHtml, setupSettings } from './settings';
 import { setupSidePanel } from './sidePanel';
 
 /**
@@ -33,24 +32,27 @@ export interface UiHandlers {
   setPresence: (enabled: boolean) => void;
 }
 
-/** 設定画面から開くページ */
-const SITE_URL = 'https://nico-party.zuaki.dev';
-
 /** スマホなどタッチ操作の端末か */
 const touchQuery = window.matchMedia('(pointer: coarse)');
 
-/** 言語を切り替えたときに描き直すため、最後に受け取った再生中の動画とメンバー */
-let current: QueueItem | null = null;
-let lastMembers: Member[] | null = null;
-
-/** 指定した言葉で検索する（プレイヤー内のタグのクリックから呼ばれる） */
-export function searchFor(q: string) {
-  searchByTag?.(q);
+/** mountUi が返す、画面を操作するための関数 */
+export interface Ui {
+  /** プレイヤー（iframe）を入れる要素 */
+  player: HTMLElement;
+  /** 指定した言葉で検索する（プレイヤー内のタグのクリックから呼ばれる。再生リスト欄が隠れていれば出す） */
+  searchFor: (q: string) => void;
+  renderState: (s: PlaybackState) => void;
+  renderMembers: (members: Member[]) => void;
+  /** 部屋に入れていない間の表示。waiting は接続後に送る操作の数 */
+  renderConnecting: (waiting?: number) => void;
 }
-let searchByTag: ((q: string) => void) | null = null;
 
-/** 画面の骨組みを作り、プレイヤーを入れる要素を返す */
-export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
+/** 画面の骨組みを作る */
+export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
+  // 言語を切り替えたときに描き直すため、最後に受け取った再生中の動画とメンバーを覚えておく
+  let current: QueueItem | null = null;
+  let lastMembers: Member[] | null = null;
+
   root.innerHTML = `
     <main class="main">
       <div class="player" id="player">
@@ -68,50 +70,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
           <button id="toggle-side" class="secondary icon-button">${LIST_ICON}</button>
         </div>
       </div>
-      <div class="settings" id="settings" role="dialog" aria-labelledby="settings-title" hidden>
-        <div class="settings-head">
-          <div>
-            <h2 id="settings-title" data-i18n="settingsTitle"></h2>
-            <p class="setting-note" data-i18n="settingsNote"></p>
-          </div>
-          <button type="button" class="icon" id="settings-close" data-i18n-title="close">×</button>
-        </div>
-        <div class="setting-row">
-          <span class="setting-label" data-i18n="theme"></span>
-          <div class="seg" id="theme-seg">
-            <button type="button" data-theme="auto" data-i18n="themeAuto"></button>
-            <button type="button" data-theme="light" data-i18n="themeLight"></button>
-            <button type="button" data-theme="dark" data-i18n="themeDark"></button>
-          </div>
-        </div>
-        <div class="setting-row">
-          <span class="setting-label" data-i18n="uiSize"></span>
-          <div class="seg" id="scale-seg">
-            <button type="button" data-scale="0.85" data-i18n="sizeSmall"></button>
-            <button type="button" data-scale="1" data-i18n="sizeNormal"></button>
-            <button type="button" data-scale="1.15" data-i18n="sizeLarge"></button>
-            <button type="button" data-scale="1.3" data-i18n="sizeXLarge"></button>
-          </div>
-        </div>
-        <div class="setting-row">
-          <span class="setting-label" data-i18n="language"></span>
-          <div class="seg" id="lang-seg">
-            <button type="button" data-lang="ja">日本語</button>
-            <button type="button" data-lang="en">English</button>
-          </div>
-        </div>
-        <div class="setting-row">
-          <span>
-            <span class="setting-label" data-i18n="presence"></span>
-            <span class="setting-desc" data-i18n="presenceDesc"></span>
-          </span>
-          <input type="checkbox" class="switch" id="presence-toggle" data-i18n-title="presence" />
-        </div>
-        <div class="settings-links">
-          <span class="version">ver ${APP_VERSION}</span>
-          <button type="button" class="link" data-url="${SITE_URL}/" data-i18n="about"></button>
-        </div>
-      </div>
+      ${settingsHtml()}
     </main>
     <div class="splitter" id="splitter" data-i18n-title="resize"></div>
     <aside class="side" id="side">
@@ -179,12 +138,22 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
   });
   setupPlaylist(h);
   const sidePanel = setupSidePanel(root);
-  // プレイヤー内のタグを押したときは、そのタグで検索する（欄が隠れていれば出す）
-  searchByTag = (tag) => {
+  const searchFor = (q: string) => {
     sidePanel.show();
-    input.value = tag;
+    input.value = q;
     updateSubmit();
-    search.open(tag);
+    search.open(q);
+  };
+
+  /** 動画の下の「▶ タイトル（追加した人）」と、何も再生していないときの案内 */
+  const renderNow = () => {
+    $('empty').hidden = !!current;
+    $('now-title').textContent = current ? t('nowPlaying', { title: current.title, name: current.addedBy }) : '';
+  };
+  const renderMembers = (members: Member[]) => {
+    lastMembers = members;
+    $('members').textContent = t('watching', { n: members.length });
+    $('members').title = members.map((m) => m.name).join(', ');
   };
 
   // 言語が変わったら、固定の文言を書き換え、あとから描いた部分を描き直す
@@ -197,7 +166,20 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
     search.rerender();
   });
 
-  return $('player');
+  return {
+    player: $('player'),
+    searchFor,
+    renderState: (state) => {
+      current = state.current;
+      renderNow();
+      setPlayback(state);
+    },
+    renderMembers,
+    renderConnecting: (waiting = 0) => {
+      $('members').textContent = waiting > 0 ? t('connectingPending', { n: waiting }) : t('connecting');
+      $('members').title = '';
+    },
+  };
 }
 
 /** 再生リストと検索結果の切り替え。切り替え関数を返す */
@@ -213,70 +195,4 @@ function setupTabs() {
   onSeg('side-tabs', 'tab', show);
   show('list');
   return show;
-}
-
-/**
- * 最初に部屋に入れるまで、画面全体を覆う表示を出している。入れたら外す。
- * 途中で接続が切れたときは出さない（動画の再生中に覆ってしまうため）
- */
-export function hideLoading() {
-  // 再接続のたびに呼ばれるので、すでに無いときは何もしない
-  document.getElementById('loading')?.remove();
-}
-
-/** 途中参加で位置が合うまで、プレイヤーを黒く覆う（最初から再生される映像を見せない） */
-export function setPlayerCover(on: boolean) {
-  $('player-cover').hidden = !on;
-}
-
-/** 接続に時間がかかっているときの文言に変える */
-export function slowLoading() {
-  const text = document.getElementById('loading-text');
-  if (text) text.textContent = t('loadingSlow');
-}
-
-export function renderState(s: PlaybackState) {
-  current = s.current;
-  renderNow();
-  setPlayback(s);
-}
-
-/** 動画の下の「▶ タイトル（追加した人）」と、何も再生していないときの案内 */
-function renderNow() {
-  $('empty').hidden = !!current;
-  $('now-title').textContent = current ? t('nowPlaying', { title: current.title, name: current.addedBy }) : '';
-}
-
-/** PiP など小さく表示されているときは動画だけを出す */
-export function setCompact(compact: boolean) {
-  document.getElementById('app')!.classList.toggle('compact', compact);
-}
-
-/** 部屋に入れていない間の表示。waiting は接続後に送る操作の数 */
-export function renderConnecting(waiting = 0) {
-  $('members').textContent = waiting > 0 ? t('connectingPending', { n: waiting }) : t('connecting');
-  $('members').title = '';
-}
-
-export function renderMembers(members: Member[]) {
-  lastMembers = members;
-  $('members').textContent = t('watching', { n: members.length });
-  $('members').title = members.map((m) => m.name).join(', ');
-}
-
-let errorTimer: number | undefined;
-/** エラーを表示しておく時間。下端のバー（style.css の .error::after）もこの時間で縮む */
-const ERROR_MS = 3000;
-
-export function showError(message: string) {
-  const el = $('error');
-  el.textContent = message;
-  el.hidden = false;
-  el.style.setProperty('--error-ms', `${ERROR_MS}ms`);
-  // 続けて表示したときもバーを最初から縮め直す
-  el.classList.remove('timing');
-  void el.offsetWidth;
-  el.classList.add('timing');
-  clearTimeout(errorTimer);
-  errorTimer = window.setTimeout(() => (el.hidden = true), ERROR_MS);
 }

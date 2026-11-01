@@ -1,7 +1,12 @@
 import { externalUrl } from './env';
 import { formatCount } from './i18n';
 
-export const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+/** id から要素を取る。無ければすぐ分かるよう例外にする（id の付け間違いが、あとで別の場所で壊れる形で出ないように） */
+export const $ = <T extends HTMLElement>(id: string): T => {
+  const el = document.getElementById(id);
+  if (!el) throw new Error(`#${id} not found`);
+  return el as T;
+};
 
 /** 切り替えボタン（.seg）のうち、data-<key> が value のボタンを選択中の見た目にする */
 export function markSeg(id: string, key: string, value: string) {

@@ -13,18 +13,8 @@ import { createPresence } from './presence';
 import { isPresenceEnabled } from './settings';
 import { setupViewport } from './viewport';
 import { SyncEngine } from './sync';
-import {
-  hideLoading,
-  mountUi,
-  renderConnecting,
-  renderMembers,
-  renderState,
-  searchFor,
-  setPlayerCover,
-  setCompact,
-  showError,
-  slowLoading,
-} from './ui';
+import { hideLoading, setCompact, setPlayerCover, showError, slowLoading } from './overlays';
+import { mountUi } from './ui';
 
 /** Discord 内では iframe から外のページへ移れないので、Discord の「外部リンクを開く」を使う */
 function openExternal(url: string) {
@@ -35,7 +25,7 @@ function openExternal(url: string) {
 /** サーバーが発行した、ニコニコの中継と検索を使うための通行証（Discord にログインできたときだけ） */
 let nicoPass: string | undefined;
 
-const playerEl = mountUi(document.querySelector<HTMLElement>('#app')!, {
+const ui = mountUi(document.querySelector<HTMLElement>('#app')!, {
   enqueue: (url) => request({ t: 'enqueue', url }),
   remove: (id) => request({ t: 'remove', id }),
   skip: (itemId) => request({ t: 'next', itemId }),
@@ -55,7 +45,7 @@ const playerEl = mountUi(document.querySelector<HTMLElement>('#app')!, {
   },
 });
 
-const player = new NicoPlayer(playerEl, (videoId, playerId) => {
+const player = new NicoPlayer(ui.player, (videoId, playerId) => {
   const params = new URLSearchParams({
     jsapi: '1',
     playerId,
@@ -74,7 +64,7 @@ const player = new NicoPlayer(playerEl, (videoId, playerId) => {
 
 setupViewport();
 
-attachPlayerDocHooks(player.iframe, { onTag: searchFor, onLink: openExternal });
+attachPlayerDocHooks(player.iframe, { onTag: ui.searchFor, onLink: openExternal });
 watchErrors(player.iframe);
 for (const ev of ['load', 'play', 'pause', 'ended'] as const) player.on(ev, () => devlog(`player ${ev}`));
 
@@ -90,13 +80,13 @@ function request(msg: ClientMsg) {
 
 /** 部屋の再生状態を、画面・プレイヤー・Discord の表示に反映する */
 function applyState(state: PlaybackState) {
-  renderState(state);
+  ui.renderState(state);
   engine.update(state);
   presence?.setState(state);
 }
 
 function applyMembers(members: Member[]) {
-  renderMembers(members);
+  ui.renderMembers(members);
   presence?.setMembers(members.length);
 }
 
@@ -144,7 +134,7 @@ const SLOW_CONNECT_MS = 10_000;
 
 function connect(roomId: string, name: string, pass?: string) {
   slowTimer = window.setTimeout(slowLoading, SLOW_CONNECT_MS);
-  conn = new RoomConnection({ roomId, name, clientId, pass, onMessage, onWaiting: renderConnecting });
+  conn = new RoomConnection({ roomId, name, clientId, pass, onMessage, onWaiting: ui.renderConnecting });
   conn.start();
 }
 

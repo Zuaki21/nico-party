@@ -1,3 +1,4 @@
+import { APP_VERSION } from './env';
 import { $, markSeg, onSeg } from './dom';
 import { getLang, setLang } from './i18n';
 import { load, save } from './storage';
@@ -108,4 +109,57 @@ export function setupSettings(h: Pick<UiHandlers, 'openLink' | 'setPresence'>) {
     const url = (e.target as HTMLElement).closest<HTMLElement>('[data-url]')?.dataset.url;
     if (url) h.openLink(url);
   });
+}
+
+/** 設定画面から開くページ */
+const SITE_URL = 'https://nico-party.zuaki.dev';
+
+/** 設定画面の HTML（画面の骨組み ui.ts の中に入れる。中の動きは setupSettings が受け持つ） */
+export function settingsHtml(): string {
+  return `
+  <div class="settings" id="settings" role="dialog" aria-labelledby="settings-title" hidden>
+    <div class="settings-head">
+      <div>
+        <h2 id="settings-title" data-i18n="settingsTitle"></h2>
+        <p class="setting-note" data-i18n="settingsNote"></p>
+      </div>
+      <button type="button" class="icon" id="settings-close" data-i18n-title="close">×</button>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label" data-i18n="theme"></span>
+      <div class="seg" id="theme-seg">
+        <button type="button" data-theme="auto" data-i18n="themeAuto"></button>
+        <button type="button" data-theme="light" data-i18n="themeLight"></button>
+        <button type="button" data-theme="dark" data-i18n="themeDark"></button>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label" data-i18n="uiSize"></span>
+      <div class="seg" id="scale-seg">
+        <button type="button" data-scale="0.85" data-i18n="sizeSmall"></button>
+        <button type="button" data-scale="1" data-i18n="sizeNormal"></button>
+        <button type="button" data-scale="1.15" data-i18n="sizeLarge"></button>
+        <button type="button" data-scale="1.3" data-i18n="sizeXLarge"></button>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label" data-i18n="language"></span>
+      <div class="seg" id="lang-seg">
+        <button type="button" data-lang="ja">日本語</button>
+        <button type="button" data-lang="en">English</button>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span>
+        <span class="setting-label" data-i18n="presence"></span>
+        <span class="setting-desc" data-i18n="presenceDesc"></span>
+      </span>
+      <input type="checkbox" class="switch" id="presence-toggle" data-i18n-title="presence" />
+    </div>
+    <div class="settings-links">
+      <span class="version">ver ${APP_VERSION}</span>
+      <button type="button" class="link" data-url="${SITE_URL}/" data-i18n="about"></button>
+    </div>
+  </div>
+  `;
 }
