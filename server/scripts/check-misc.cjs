@@ -12,6 +12,7 @@ const load = loadTs([
   'server/src/room/playback.ts',
   'server/src/env.ts',
   'server/src/wsAuth.ts',
+  'server/src/instanceCheck.ts',
   'server/src/room/enqueue.ts',
   'server/src/room/roomStore.ts',
   'server/src/room/state.ts',
@@ -26,6 +27,7 @@ const { parseClientMsg } = load('server/src/room/validate.ts');
 const { reportLoad, everyoneFailed } = load('server/src/room/loadReport.ts');
 const { MessageLimiter } = load('server/src/room/limiter.ts');
 const { authorizeRoom } = load('server/src/wsAuth.ts');
+const { checkParticipation } = load('server/src/instanceCheck.ts');
 const { EnqueueQueue } = load('server/src/room/enqueue.ts');
 const { RoomStore } = load('server/src/room/roomStore.ts');
 const pass = load('server/src/pass.ts');
@@ -446,6 +448,42 @@ test('メッセージの量の制限: 他の制限に断られたときは、数
   assert.equal(l.take('a', 0), true);
   assert.equal(l.take('a', 0), true);
   assert.equal(l.take('a', 0), false);
+});
+
+// ---- Activity インスタンスの参加者の確認
+const jsonRes = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
+const checkWith = (fetchFn, over = {}) =>
+  checkParticipation({ botToken: 'tok', applicationId: 'app1', instanceId: 'inst/1', userId: 'u1', delayMs: 0, fetchFn, ...over });
+
+test('参加者の確認: 一覧に本人がいれば member。問い合わせの宛先と認証が正しい', async () => {
+  let seen;
+  const r = await checkWith(async (url, init) => { seen = { url, auth: init.headers.authorization }; return jsonRes(200, { users: ['u0', 'u1'] }); });
+  assert.equal(r, 'member');
+  assert.equal(seen.url, 'https://discord.com/api/v10/applications/app1/activity-instances/inst%2F1');
+  assert.equal(seen.auth, 'Bot tok');
+});
+
+test('参加者の確認: 一覧にいなければ、取り直してから not_member', async () => {
+  let calls = 0;
+  const r = await checkWith(async () => { calls++; return jsonRes(200, { users: ['u0'] }); });
+  assert.equal(r, 'not_member');
+  assert.equal(calls, 3);
+});
+
+test('参加者の確認: 参加した直後で、取り直したら一覧に入っていれば member', async () => {
+  let calls = 0;
+  const r = await checkWith(async () => jsonRes(200, { users: ++calls >= 2 ? ['u1'] : [] }));
+  assert.equal(r, 'member');
+  assert.equal(calls, 2);
+});
+
+test('参加者の確認: 取得できなかったときは unknown（正規の利用者を止めない）', async () => {
+  assert.equal(await checkWith(async () => jsonRes(404, {})), 'unknown');
+  assert.equal(await checkWith(async () => jsonRes(401, {})), 'unknown');
+  assert.equal(await checkWith(async () => jsonRes(500, {})), 'unknown');
+  assert.equal(await checkWith(async () => { throw new Error('network'); }), 'unknown');
+  assert.equal(await checkWith(async () => jsonRes(200, { users: 'nope' })), 'unknown');
+  assert.equal(await checkWith(async () => jsonRes(200, {})), 'unknown');
 });
 
 (async () => {

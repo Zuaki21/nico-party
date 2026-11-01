@@ -13,6 +13,11 @@ export interface Env {
    */
   PASS_SECRET: string;
   /**
+   * Discord のボットトークン（`wrangler secret put DISCORD_BOT_TOKEN`）。通行証を渡す前に、
+   * その人が申告した部屋（Activity インスタンス）の参加者か確かめるのに使う。未登録なら確かめない
+   */
+  DISCORD_BOT_TOKEN?: string;
+  /**
    * 'true' のときだけ、通行証のない WebSocket 接続を受け付ける（ローカル確認用。.dev.vars に書く）。
    * 本番では設定しない。誤って設定されても、localhost への接続でしか効かない
    */

@@ -93,13 +93,14 @@ cd client && npx vite build
 cd server && npx wrangler deploy
 npx wrangler secret put DISCORD_CLIENT_SECRET   # 初回のみ
 npx wrangler secret put PASS_SECRET             # 初回のみ（通行証の署名の鍵。長いランダムな文字列。変えると発行済みの通行証が全部無効になる）
+npx wrangler secret put DISCORD_BOT_TOKEN       # 任意（Developer Portal の Bot のページで発行。部屋の参加者の確認に使う）
 ```
 
 デプロイ後、URL Mapping の `/` を `<name>.<subdomain>.workers.dev` にする。
 
 ## セキュリティ上の前提
 
-- 部屋の通行証は、クライアントが申告した部屋（Activity の instanceId）に対して発行される。Discord でログインできれば、instanceId を知っている部屋には入れる。instanceId は Discord が発行する推測しにくい ID だが、漏れた場合は防げない
+- 部屋の通行証は、クライアントが申告した部屋（Activity の instanceId）に対して発行される。発行の前に、Discord の Activity インスタンス取得 API（ボットトークン `DISCORD_BOT_TOKEN` が要る）で、その人が参加者か確かめる。参加者でないと分かったときだけ 403。ボットトークンが未登録のとき・Discord に確かめられなかったときは確かめずに通す（Discord 側の事情で、正規の利用者がログインできなくなるのを避けるため）
 - デプロイ前に、本番の vars / secret に `ALLOW_ANON_WS` が入っていないことを確かめる（入っていても、接続元がローカルでなければ無効）
 - 通行証の有効期間は 24 時間。クライアントは 6 時間ごとに取り直す
 

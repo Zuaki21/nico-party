@@ -1,5 +1,6 @@
 import { BodyTooLargeError, readLimited } from './body';
 import type { Env } from './env';
+import { checkParticipation } from './instanceCheck';
 import { issuePass, passSecret, sha256Hex, withinRateLimit } from './pass';
 import { ROOM_ID } from './wsAuth';
 
@@ -57,6 +58,17 @@ export async function exchangeToken(request: Request, env: Env): Promise<Respons
   // トークンの交換に成功した時点で、ログインはできている。ユーザー情報が取れなくても、通行証は発行する
   // （無いと、部屋に入れず、動画も再生できなくなるため）。ID が取れなければ、トークンから作った識別子で代える
   const uid = me?.id ?? (await sha256Hex(data.access_token)).slice(0, 18);
+  // 申告された部屋（Activity インスタンス）の参加者でなければ、その部屋の通行証は渡さない。
+  // ボットトークンが未登録のとき、ユーザー ID が取れなかったとき、Discord に確かめられなかったときは確かめずに通す
+  if (env.DISCORD_BOT_TOKEN && me?.id) {
+    const participation = await checkParticipation({
+      botToken: env.DISCORD_BOT_TOKEN,
+      applicationId: env.DISCORD_CLIENT_ID,
+      instanceId: room,
+      userId: me.id,
+    });
+    if (participation === 'not_member') return Response.json({ error: 'not in this activity' }, { status: 403 });
+  }
   const secret = passSecret(env);
   const [pass, nicoPass] = await Promise.all([
     issuePass(secret, 'ws', { u: uid, n: name, r: room }),
