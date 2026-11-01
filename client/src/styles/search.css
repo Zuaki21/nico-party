@@ -31,6 +31,11 @@
   min-height: 0;
 }
 
+/* 結果が全部押せないときの、フォーカスの逃げ場。枠は出さない */
+#results:focus {
+  outline: none;
+}
+
 .panel-list > .queue {
   flex: 1;
 }

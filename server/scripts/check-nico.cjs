@@ -158,6 +158,26 @@ const ok = (text, init = {}) => new Response(text, { status: 200, ...init });
     assert.ok(r302.calls[1].init.headers['user-agent'], 'リダイレクト先にも User-Agent を付ける');
   });
 
+  await run('中継: 待つ時間は、リダイレクトを含めた全体で 1 本（ホップごとに取り直さない）', async () => {
+    const { calls } = await relayWith((url, init, n) =>
+      n < 3 ? new Response(null, { status: 302, headers: { location: 'https://www.nicovideo.jp/next' + n } }) : ok('done'));
+    assert.equal(calls.length, 3);
+    assert.ok(calls[0].init.signal && calls.every((c) => c.init.signal === calls[0].init.signal));
+  });
+
+  await run('中継: 本物のタイムアウトの中断は 504 になる', async () => {
+    const realError = console.error;
+    console.error = () => {};
+    try {
+      const signal = AbortSignal.timeout(1);
+      await new Promise((r) => setTimeout(r, 20));
+      const { res } = await relayWith(() => { throw signal.reason; });
+      assert.equal(res.status, 504);
+    } finally {
+      console.error = realError;
+    }
+  });
+
   await run('中継: 秘密の未登録は、502 にせず例外にする（外側が 500 にする）', async () => {
     const req = new Request('http://x/nico/p.q/nico-embed/sm9');
     await assert.rejects(() => handleNico(req, { DISCORD_CLIENT_ID: 'a' }, '/p.q/nico-embed/sm9'), /PASS_SECRET is not set/);
@@ -174,6 +194,15 @@ const ok = (text, init = {}) => new Response(text, { status: 200, ...init });
     }
     assert.equal(warns.length, 1);
     assert.match(warns[0], /evil\.example/);
+    // 辿りすぎのときも残る
+    const warns2 = [];
+    console.warn = (m) => warns2.push(m);
+    try {
+      await relayWith(() => new Response(null, { status: 302, headers: { location: 'https://www.nicovideo.jp/loop' } }));
+    } finally {
+      console.warn = realWarn;
+    }
+    assert.match(warns2.at(-1), /too many redirects/);
   });
 
   await run('中継: 大きすぎる応答は 502', async () => {

@@ -79,7 +79,11 @@ async function makeRoom() {
   const ctx = {
     storage,
     getWebSockets: () => sockets,
-    acceptWebSocket: (ws) => sockets.push(ws),
+    // 本物は、accept の時点で接続の情報（attachment）が設定済みでなければ、部屋が壊れる
+    acceptWebSocket: (ws) => {
+      if (ws.att === null) throw new Error('accepted a socket without its attachment');
+      sockets.push(ws);
+    },
     blockConcurrencyWhile: (fn) => { ready = fn(); },
     setWebSocketAutoResponse: () => {},
   };

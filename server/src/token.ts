@@ -1,7 +1,7 @@
 import { BodyTooLargeError, readLimited } from './body';
 import type { Env } from './env';
 import { checkParticipation } from './instanceCheck';
-import { issuePass, passSecret, sha256Hex, withinRateLimit } from './pass';
+import { ConfigError, issuePass, passSecret, sha256Hex, withinRateLimit } from './pass';
 import { ROOM_ID } from './wsAuth';
 
 const ROOM_PATTERN = new RegExp(`^${ROOM_ID}$`);
@@ -22,7 +22,7 @@ let warnedNoBotToken = false;
 export async function exchangeToken(request: Request, env: Env): Promise<Response> {
   // 鍵が未登録なら、Discord に問い合わせる前に失敗させる（無駄な問い合わせと、半端な処理を避ける）
   const secret = passSecret(env);
-  if (!env.DISCORD_CLIENT_SECRET) throw new Error('DISCORD_CLIENT_SECRET is not set');
+  if (!env.DISCORD_CLIENT_SECRET) throw new ConfigError('DISCORD_CLIENT_SECRET is not set');
   if (!env.DISCORD_BOT_TOKEN && !warnedNoBotToken) {
     warnedNoBotToken = true;
     console.warn('DISCORD_BOT_TOKEN is not set: skipping the check that the user is in the activity instance');

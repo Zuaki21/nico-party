@@ -510,6 +510,7 @@ async function tokenWith(env, body, discord = {}) {
 }
 const good = { code: 'abc123', room: 'room1' };
 
+// 警告を出したかを覚えているのはモジュールの中なので、ボットトークン無しで呼ぶ他のテストより前に置くこと
 test('トークン交換: ボットトークンが無いという警告は、1 回だけ出す', async () => {
   const warns = [];
   const realWarn = console.warn;

@@ -103,8 +103,10 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
     const rect = root.getBoundingClientRect();
     const wide = wideQuery.matches;
 
+    let moved = false;
     const onMove = (ev: PointerEvent) => {
       const raw = wide ? rect.right - ev.clientX : rect.bottom - ev.clientY;
+      moved = true;
       setSize(clampSize(raw));
     };
     const onUp = () => {
@@ -112,6 +114,9 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
       splitter.removeEventListener('pointermove', onMove);
       splitter.removeEventListener('pointerup', onUp);
       splitter.removeEventListener('pointercancel', onUp);
+      // 動かさずに離しただけなら、保存しない（画面に合わせて収めた小さい値が、保存した大きさになってしまう）
+      if (!moved) return;
+      fitted = false;
       save(sizeKey(), String(parseInt(side.style.getPropertyValue('--side-size')) || ''));
     };
     splitter.addEventListener('pointermove', onMove);
@@ -134,6 +139,7 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
     else return;
     e.preventDefault();
     setSize(size);
+    fitted = false;
     save(sizeKey(), String(size));
   });
 
@@ -142,6 +148,7 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
   // ダブルクリックで既定の大きさに戻す
   splitter.addEventListener('dblclick', () => {
     setSize(null);
+    fitted = false;
     save(sizeKey(), '');
   });
 

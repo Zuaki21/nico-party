@@ -102,7 +102,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
             <button type="button" data-sort="likes" data-i18n="sortLikes"></button>
           </div>
         </div>
-        <ol class="queue" id="results"></ol>
+        <ol class="queue" id="results" tabindex="-1"></ol>
       </div>
     </aside>
     <!-- 並べ替えの結果など、画面には出さずに読み上げだけする -->

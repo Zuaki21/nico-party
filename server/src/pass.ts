@@ -8,9 +8,12 @@
  *   nico: ニコニコの中継 (/nico/<通行証>/...) と検索の呼び出しに付ける。名前は入れない（URL に載るため）
  */
 
+/** 秘密の未登録など、サーバーの設定の不備（利用者や上流のせいではない）。外側で 500 にする */
+export class ConfigError extends Error {}
+
 /** 通行証の署名の鍵。登録されていなければ例外（鍵なしで署名や検証をしない） */
 export function passSecret(env: { PASS_SECRET?: string }): string {
-  if (!env.PASS_SECRET) throw new Error('PASS_SECRET is not set');
+  if (!env.PASS_SECRET) throw new ConfigError('PASS_SECRET is not set');
   return env.PASS_SECRET;
 }
 

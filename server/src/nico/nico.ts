@@ -9,7 +9,7 @@
 
 import { BodyTooLargeError } from '../body';
 import type { Env } from '../env';
-import { passSecret, verifyPass, withinRateLimit } from '../pass';
+import { ConfigError, passSecret, verifyPass, withinRateLimit } from '../pass';
 import { DEFAULT_UA } from './nicoApi';
 import { rewriter } from './nicoRewrite';
 import { matchRoute, type Upstream } from './nicoRoutes';
@@ -48,7 +48,7 @@ export async function handleNico(req: Request, env: NicoRouteEnv, path: string):
     return await route(req, env, path);
   } catch (e) {
     // 秘密の未登録など、設定の不備は、上流の不調（502）にせず、外側の 500 に任せる
-    if (e instanceof Error && e.message.endsWith(' is not set')) throw e;
+    if (e instanceof ConfigError) throw e;
     if (e instanceof BodyTooLargeError) return new Response('Payload too large', { status: 413 });
     const timedOut = e instanceof Error && e.name === 'TimeoutError';
     if (!timedOut) console.error('nico relay failed', e);
@@ -118,5 +118,6 @@ async function fetchUpstream(up: Upstream, ua: string): Promise<Response | null>
     // 307・308 以外は、GET に切り替えて本文を捨てる（通常のリダイレクトの扱い）
     if (res.status !== 307 && res.status !== 308) init = { ...init, method: 'GET', body: undefined };
   }
+  console.warn(`nico relay: too many redirects from ${new URL(up.url).hostname}`);
   return null;
 }
