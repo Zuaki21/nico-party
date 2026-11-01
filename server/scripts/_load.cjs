@@ -1,4 +1,5 @@
 // 確認スクリプトの共通部分: TypeScript のファイルを CommonJS に変換して一時フォルダに置き、require できるようにする。
+// 相対 import は、`from '...'` / `import '...'` の形（静的なもの）だけ自動でたどる。
 // 同じフォルダ構成（server/src/..., shared/...）のまま置くので、ファイル同士の import もそのまま通る。
 const fs = require('fs');
 const os = require('os');

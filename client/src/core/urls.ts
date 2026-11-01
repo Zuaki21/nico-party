@@ -12,7 +12,11 @@ export function realUrl(href: string, base: string, ownOrigin: string): string |
   }
   const m = u.pathname.match(/^\/(?:\.proxy\/)?external\/([^/]+)(\/.*)?$/);
   if (m && u.origin === ownOrigin) {
-    u = new URL(`https://${m[1].replaceAll('--', '.')}${m[2] ?? '/'}${u.search}${u.hash}`);
+    try {
+      u = new URL(`https://${m[1].replaceAll('--', '.')}${m[2] ?? '/'}${u.search}${u.hash}`);
+    } catch {
+      return null; // ホストにできない文字がある
+    }
   }
   // 開くのは http(s) だけ（javascript: などは開かない）。Discord が開く前に確認の画面を出す
   if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;

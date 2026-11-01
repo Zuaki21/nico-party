@@ -9,19 +9,17 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const ts = require('typescript');
 
+const transpile = (file) =>
+  ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
 const src = path.resolve(__dirname, '../../src/player/sync');
 const out = fs.mkdtempSync(path.join(os.tmpdir(), 'sync-check-'));
 for (const f of fs.readdirSync(src).filter((f) => f.endsWith('.ts'))) {
-  const js = ts.transpileModule(fs.readFileSync(path.join(src, f), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  }).outputText;
-  fs.writeFileSync(path.join(out, f.replace(/\.ts$/, '.js')), js);
+  fs.writeFileSync(path.join(out, f.replace(/\.ts$/, '.js')), transpile(path.join(src, f)));
 }
 // 時計のずれの推定 (src/net/clock.ts) の単体テスト
-const clockJs = ts.transpileModule(fs.readFileSync(path.resolve(__dirname, '../../src/net/clock.ts'), 'utf8'), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-fs.writeFileSync(path.join(out, 'clock.js'), clockJs);
+fs.writeFileSync(path.join(out, 'clock.js'), transpile(path.resolve(__dirname, '../../src/net/clock.ts')));
 {
   const assert = require('node:assert/strict');
   const { ClockSync } = require(path.join(out, 'clock.js'));
@@ -45,10 +43,7 @@ fs.writeFileSync(path.join(out, 'clock.js'), clockJs);
 // プレイヤーの中のリンクを、外部で開く本当の URL に戻す処理 (src/core/urls.ts) の単体テスト
 {
   const assert = require('node:assert/strict');
-  const js = ts.transpileModule(fs.readFileSync(path.resolve(__dirname, '../../src/core/urls.ts'), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  }).outputText;
-  fs.writeFileSync(path.join(out, 'urls.js'), js);
+  fs.writeFileSync(path.join(out, 'urls.js'), transpile(path.resolve(__dirname, '../../src/core/urls.ts')));
   const { realUrl } = require(path.join(out, 'urls.js'));
   const own = 'https://app.discordsays.com';
   const base = `${own}/.proxy/nico/x/watch`;
@@ -58,6 +53,7 @@ fs.writeFileSync(path.join(out, 'clock.js'), clockJs);
   assert.equal(realUrl('https://other.example/external/www--nicovideo--jp/x', base, own), 'https://other.example/external/www--nicovideo--jp/x', '自分のオリジンでなければ戻さない');
   assert.equal(realUrl('javascript:alert(1)', base, own), null, 'http(s) 以外は開かない');
   assert.equal(realUrl('http://[', base, own), null, '壊れた URL は開かない');
+  assert.equal(realUrl(`${own}/.proxy/external/a%00b/x`, base, own), null, 'ホストにできない文字があっても例外にしない');
 }
 let actual;
 try {

@@ -30,6 +30,8 @@ test('プレイヤーの JS の URL は、通行証つきの中継を通す', ()
     replace('https://assets.embed.res.nimg.jp/js/watch_ja_abc123.js'),
     `/nico/${PASS}/watch/watch_ja_abc123`,
   );
+  // `.js` の . は文字どおりの . だけ（任意の 1 文字ではない）
+  assert.ok(!replace('https://assets.embed.res.nimg.jp/js/xjs').includes('/watch/'));
 });
 
 test('stella・users・v1/v4 の watch は、通行証つきの中継を通す', () => {

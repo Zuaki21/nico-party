@@ -1,4 +1,4 @@
-/** Discord の API の入口（バージョンの付け方は、呼び出し先ごとに今のまま） */
+/** Discord の API の入口。oauth2 と users は版なし、activity-instances だけ /v10（instanceCheck.ts） */
 export const DISCORD_API = 'https://discord.com/api';
 
 /** 認可コードをアクセストークンに交換する。失敗したら null */

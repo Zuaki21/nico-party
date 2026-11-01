@@ -1,4 +1,4 @@
-/** 呼び出し回数の制限（固定の窓。このサーバー内の集計なので目安。大量の呼び出しを抑えるためのもの） */
+/** 呼び出し回数の制限（HTTP 用。固定の窓。WebSocket のメッセージの制限は room/limiter.ts。このサーバー内の集計なので目安。大量の呼び出しを抑えるためのもの） */
 const windows = new Map<string, { start: number; count: number }>();
 
 /** @returns 制限内なら true */

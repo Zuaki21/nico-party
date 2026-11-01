@@ -12,7 +12,7 @@ export interface Attachment extends Member {
 }
 
 /** 他のメンバーに見せる項目だけにする */
-export function toMember(a: Attachment): Member {
+function toMember(a: Attachment): Member {
   const { joined: _joined, connectedAt: _connectedAt, uid: _uid, ...member } = a;
   return member;
 }
