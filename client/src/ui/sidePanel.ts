@@ -66,7 +66,11 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
     applySize();
     syncAria();
   });
-  new ResizeObserver(syncAria).observe(root);
+  // 保存した大きさは、画面が小さくなったあとでも、動画側を潰さない範囲に収める
+  new ResizeObserver(() => {
+    if (!root.classList.contains('side-hidden') && currentSize() > clampSize(currentSize())) setSize(clampSize(currentSize()));
+    syncAria();
+  }).observe(root);
   setHidden(load(HIDDEN_KEY) === '1');
   applySize();
 

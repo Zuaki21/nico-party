@@ -22,6 +22,10 @@ export class CatchUp {
   private startedAt = 0;
   private seekAt = 0;
   private timer: number | undefined;
+  private pauseAtEnd = false;
+  /** 位置が合ったので止めた。止まるのを待ってから、ミュートと覆いを元に戻す（再生したまま音が出ないように） */
+  private finishing = false;
+  private finishPolls = 0;
 
   constructor(
     private ctx: CatchUpContext,
@@ -33,9 +37,16 @@ export class CatchUp {
     return this.catchingUp;
   }
 
-  begin() {
+  /**
+   * @param pauseAtEnd 一時停止中の部屋に途中参加したとき。位置が合ったら、再生をやめて止める
+   *   （動画データを読み込ませるには一度再生が要る。再生しないまま seek しても効かず、位置が 0 秒のままになる）
+   */
+  begin(pauseAtEnd = false) {
     if (this.catchingUp) return;
     const p = this.ctx.player;
+    this.pauseAtEnd = pauseAtEnd;
+    this.finishing = false;
+    this.finishPolls = 0;
     this.catchingUp = true;
     this.startedAt = Date.now();
     this.seekAt = 0;
@@ -57,9 +68,17 @@ export class CatchUp {
     const s = this.ctx.loadedState();
     const p = this.ctx.player;
     // 動画が変わった・止まった・読み込み直しなど、待つ前提が崩れたときは、やめて通常の同期に任せる
-    if (!s || !s.playing || !p.ready()) {
+    if (!s || (!s.playing && !this.pauseAtEnd) || !p.ready()) {
       this.end();
       this.ctx.apply();
+      return;
+    }
+    if (this.finishing) {
+      // 止める命令が無視されても、いつまでも待たない
+      if (p.isPaused() || ++this.finishPolls > 5) {
+        this.end();
+        this.ctx.applyAfterCatchUp();
+      }
       return;
     }
     const timedOut = Date.now() - this.startedAt > CATCHUP_MAX_MS;
@@ -79,6 +98,11 @@ export class CatchUp {
         }
         return;
       }
+    }
+    if (this.pauseAtEnd) {
+      p.pause();
+      this.finishing = true;
+      return;
     }
     this.end();
     // タイムアウトで位置が合っていないままのときは、ここでシークが入る。読み込み直後と同じく長めに無視する

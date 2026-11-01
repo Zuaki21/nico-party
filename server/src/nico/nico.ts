@@ -17,6 +17,11 @@ import { matchRoute, type Upstream } from './nicoRoutes';
 /** ニコニコへの問い合わせを待つ上限（応答しない相手で、リクエストが溜まり続けないように） */
 const UPSTREAM_TIMEOUT_MS = 15_000;
 
+/** 中継してよい上流のホスト（リダイレクトの先も含めて確かめる） */
+const ALLOWED_HOST = /(^|\.)(nicovideo\.jp|nimg\.jp)$/;
+/** 上流の応答の大きさの上限（HLS のプレイリストやプレイヤーの JS は、数 MB 以下） */
+const RESPONSE_MAX = 10 * 1024 * 1024;
+
 /** 1 人が 1 分間にできる中継の回数（動画 1 本の再生で十数回。先読みや再読み込みを見込んで余裕を持たせる） */
 const NICO_LIMIT_PER_MIN = 300;
 
@@ -73,5 +78,9 @@ async function route(req: Request, env: NicoRouteEnv, path: string): Promise<Res
     signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     headers: { 'user-agent': ua, ...up.init?.headers },
   });
+  // リダイレクトの先が、ニコニコ以外になっていないか（上流にオープンリダイレクトがあっても、外部の内容を中継しない）
+  if (!ALLOWED_HOST.test(new URL(res.url || up.url).hostname)) return new Response('Bad gateway', { status: 502 });
+  // 想定外に大きな応答は、全部読み込まずに断る
+  if (Number(res.headers.get('content-length') ?? 0) > RESPONSE_MAX) return new Response('Bad gateway', { status: 502 });
   return relay(res, up);
 }

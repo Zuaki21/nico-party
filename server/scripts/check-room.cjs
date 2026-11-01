@@ -282,6 +282,18 @@ test('量の制限: 部屋全体の制限に断られても、そのユーザー
   assert.ok(room.limiter.buckets.get('u1').tokens >= before - 0.01, '断られた分は戻っている');
 });
 
+test('量の制限: 壊れたメッセージを大量に送ると、解析する前に数えられ、正しい操作も受け付けなくなる', async () => {
+  const { room } = await makeRoom();
+  const a = await connect(room, 'u1');
+  await join(room, a);
+  for (let i = 0; i < 200; i++) await room.webSocketMessage(a, '{broken');
+  await send(room, a, { t: 'mode', shuffle: true });
+  assert.equal(a.sent.filter((m) => m.t === 'state').length, 0);
+  advance(5000);
+  await send(room, a, { t: 'mode', shuffle: true });
+  assert.equal(a.sent.filter((m) => m.t === 'state').length, 1, '時間がたてば、また受け付ける');
+});
+
 (async () => {
   let passed = 0;
   for (const [name, fn] of tests) {

@@ -99,7 +99,7 @@ function renderMode() {
 }
 
 /** 視聴済み → 再生中 → これから再生、の順に並べる */
-function renderList() {
+function renderList(scrollToFocus = false) {
   const { history, current, queue } = lists;
   // 前へ・次へは常に表示し、戻る先・進む先が無いときは押せなくする
   $<HTMLButtonElement>('prev').disabled = !current || history.length === 0;
@@ -117,7 +117,7 @@ function renderList() {
   );
   if (ol.childElementCount === 0) ol.append(noteEl(t('listEmpty')));
   // 描き直しで消えたフォーカスを、同じ動画の同じ操作に戻す（他の人の操作で描き直されても、キーボード操作が途切れない）
-  restoreFocus(ol, focused);
+  restoreFocus(ol, focused, scrollToFocus);
   // 再生中の動画が変わったら、それが見える位置までスクロールする
   const curId = current?.id ?? null;
   if (curId !== scrolledTo) {
@@ -139,7 +139,7 @@ function focusedControl(ol: HTMLElement): FocusedControl | null {
   return id && selector ? { id, selector, index } : null;
 }
 
-function restoreFocus(ol: HTMLElement, focused: FocusedControl | null) {
+function restoreFocus(ol: HTMLElement, focused: FocusedControl | null, scroll: boolean) {
   if (!focused) return;
   const items = [...ol.querySelectorAll<HTMLElement>('li[data-id]')];
   const li = items.find((x) => x.dataset.id === focused.id);
@@ -149,7 +149,8 @@ function restoreFocus(ol: HTMLElement, focused: FocusedControl | null) {
   target ??= items[Math.min(focused.index, items.length - 1)]?.querySelector<HTMLElement>('.handle') ?? document.getElementById('url');
   // キーボードで動かした先が画面の外にならないよう、見える位置まで動かす
   target?.focus({ preventScroll: true });
-  target?.scrollIntoView({ block: 'nearest' });
+  // 自分でキーボード操作したときだけ追従する（他の人の操作で描き直されたときに、見ている場所から引き戻さない）
+  if (scroll) target?.scrollIntoView({ block: 'nearest' });
 }
 
 type ItemKind = 'done' | 'current' | 'next';

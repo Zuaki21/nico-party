@@ -16,7 +16,7 @@ export interface Reordering {
  */
 export function setupReorder(
   move: (id: string, index: number) => void,
-  renderList: () => void,
+  renderList: (scrollToFocus?: boolean) => void,
   /** 並べ替えの結果を読み上げる（キーボード操作のとき） */
   announce: (id: string, index: number, total: number) => void,
 ): Reordering {
@@ -38,8 +38,8 @@ export function setupReorder(
     const id = li.dataset.id!;
     if (!applyReorder(id, to)) return;
     move(id, to);
-    // 描き直しで、フォーカスは同じ動画のつまみに戻される（playlist.ts の renderList）
-    renderList();
+    // 描き直しで、フォーカスは同じ動画のつまみに戻される（playlist.ts の renderList）。動かした先が見えるようにする
+    renderList(true);
     announce(id, to, items.length);
   });
 

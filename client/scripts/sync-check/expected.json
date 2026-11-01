@@ -263,7 +263,13 @@
  ],
  "参加時に一時停止中の部屋": [
   "     0 player.load sm1",
-  "   300 player.seek 45.00",
+  "   300 cover true",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.seek 45.00",
+  "   900 player.pause",
+  "  1100 player.mute false",
+  "  1100 cover false",
   "END mutedRestored=true cover=false timersAfterDispose=0 listenersAfterDispose=0"
  ],
  "何も再生していない状態へ": [
@@ -425,9 +431,15 @@
  ],
  "ユーザーが再生ボタンで再生（一時停止中の部屋）": [
   "     0 player.load sm1",
-  "   300 player.seek 45.00",
+  "   300 cover true",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.seek 45.00",
+  "   900 player.pause",
+  "  1100 player.mute false",
+  "  1100 cover false",
   "  8000 USER play",
-  "  8150 send {\"t\":\"control\",\"itemId\":\"i1\",\"playing\":true,\"position\":0.15}",
+  "  8150 send {\"t\":\"control\",\"itemId\":\"i1\",\"playing\":true,\"position\":45.5}",
   " 10000 player.seek 45.00",
   " 10000 player.pause",
   "END mutedRestored=true cover=false timersAfterDispose=0 listenersAfterDispose=0"

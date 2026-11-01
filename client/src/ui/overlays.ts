@@ -38,16 +38,25 @@ export function setCompact(compact: boolean) {
 let errorTimer: number | undefined;
 /** エラーを表示しておく時間。下端のバー（style.css の .error::after）もこの時間で縮む */
 const ERROR_MS = 3000;
+/** 長い文言は読むのに時間がかかるので、文字数に応じて長く出す（上限つき） */
+const errorDuration = (message: string) => Math.min(10_000, Math.max(ERROR_MS, 1500 + message.length * 120));
 
 export function showError(message: string) {
   const el = $('error');
+  const duration = errorDuration(message);
   el.textContent = message;
   el.hidden = false;
-  el.style.setProperty('--error-ms', `${ERROR_MS}ms`);
+  el.style.setProperty('--error-ms', `${duration}ms`);
+  // 再生リスト欄を隠しているときは、エラーの表示が見えない・読み上げられない。読み上げだけは必ず届ける
+  const status = document.getElementById('sr-status');
+  if (status) {
+    status.textContent = '';
+    requestAnimationFrame(() => (status.textContent = message));
+  }
   // 続けて表示したときもバーを最初から縮め直す
   el.classList.remove('timing');
   void el.offsetWidth;
   el.classList.add('timing');
   clearTimeout(errorTimer);
-  errorTimer = window.setTimeout(() => (el.hidden = true), ERROR_MS);
+  errorTimer = window.setTimeout(() => (el.hidden = true), duration);
 }

@@ -78,7 +78,11 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
     const rows: HTMLElement[] = [];
     // 「もっと見る」の取得中は、同じ場所に同じ大きさのボタンを出したままにして、表示が動かないようにする
     if (view === 'loading') rows.push(items.length > 0 ? moreEl(true) : noteEl(t('searching')));
-    else if (view === 'error') rows.push(noteEl(t('searchFailed')));
+    else if (view === 'error') {
+      rows.push(noteEl(t('searchFailed')));
+      // 「もっと見る」の取得に失敗したときは、もう一度試せるようにする
+      if (items.length > 0) rows.push(moreEl(false));
+    }
     else if (items.length === 0) {
       rows.push(noteEl(t('searchNone')));
     } else if (items.length < Math.min(total, SEARCH_MAX_OFFSET + SEARCH_PAGE_SIZE)) {
@@ -160,7 +164,9 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
       total = res.total;
       items = offset === 0 ? res.items : [...items, ...res.items.slice(0, SEARCH_PAGE_SIZE)];
       render('done');
-      if (refocus) list.children[before]?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
+      // 取得を待っている間に、利用者が別の場所へ移っていたら、フォーカスは奪わない
+      const focusLost = document.activeElement === document.body || list.contains(document.activeElement);
+      if (refocus && focusLost) list.children[before]?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
     } catch {
       if (my === seq) render('error');
     }

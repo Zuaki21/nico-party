@@ -239,8 +239,9 @@ export class SyncEngine {
     // 途中参加: 読み込んだばかりの動画を途中の位置から始めると、位置が合うまでの間、最初から再生されてしまう。
     // 位置が合うまでミュートして画面を隠し、合ったら元に戻す。
     // 先頭からのずれが APPLY_THRESHOLD 以内なら、通常の同期でもシークしないので、この処理は要らない
-    if (mode === 'afterLoad' && s.playing && target > APPLY_THRESHOLD && p.isPaused()) {
-      this.catchUp.begin();
+    // 一時停止中の部屋でも同じ（位置が合ったら止める）
+    if (mode === 'afterLoad' && target > APPLY_THRESHOLD && p.isPaused()) {
+      this.catchUp.begin(!s.playing);
       return;
     }
     if (Math.abs(p.getTime() - target) > threshold) {

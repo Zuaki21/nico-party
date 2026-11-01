@@ -59,7 +59,11 @@ export class NicoPlayer {
 
   unload() {
     this.loaded = false;
-    this.iframe.removeAttribute('src');
+    // src 属性を消すだけでは、中のページが残って再生され続ける。空のページに移して止める
+    this.iframe.src = 'about:blank';
+    this.time = 0;
+    this.duration = 0;
+    this.reported = { time: 0, at: 0 };
   }
 
   ready() {

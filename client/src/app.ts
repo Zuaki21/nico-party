@@ -4,7 +4,7 @@ import { describeError, devlog, watchErrors } from './core/devlog';
 import { inDiscord } from './core/env';
 import { serverErrorText, t } from './core/i18n';
 import { searchNico } from './net/api';
-import { authenticate, openExternal, watchLayout } from './net/discord';
+import { authenticate, NotInActivityError, openExternal, watchLayout } from './net/discord';
 import { createPresence } from './net/presence';
 import { RoomConnection } from './net/roomConnection';
 import { nicoEmbedUrl } from './player/embedUrl';
@@ -82,6 +82,8 @@ function applyMembers(members: Member[]) {
 
 /** 通行証を取り直す間隔（有効期限 24 時間より十分に短く） */
 const PASS_REFRESH_MS = 6 * 60 * 60 * 1000;
+/** 取り直しに失敗したあと、次に試すまでの間隔 */
+const PASS_RETRY_MS = 60_000;
 /** 部屋に入るまでこれ以上かかったら、時間がかかっていると伝える */
 const SLOW_CONNECT_MS = 10_000;
 let slowTimer: number | undefined;
@@ -142,6 +144,10 @@ async function main() {
     session.presence = createPresence(discord, serverNow, isPresenceEnabled());
   } catch (e) {
     devlog(`authenticate failed: ${describeError(e)}`);
+    if (e instanceof NotInActivityError) {
+      failLoading(t('notInActivity'));
+      return;
+    }
   }
   watchLayout(discord, (compact) => {
     setCompact(compact);
@@ -163,17 +169,35 @@ async function main() {
  * 再接続のときに使う通行証と、次に読み込む動画の中継の通行証が新しくなる（読み込み済みの動画は、そのまま再生できる）
  */
 function scheduleRefresh(discord: DiscordSDK) {
-  window.setInterval(async () => {
+  let lastTriedAt = Date.now();
+  let lastSucceededAt = Date.now();
+  let running = false;
+  const refresh = async () => {
+    if (running) return;
+    running = true;
+    lastTriedAt = Date.now();
     try {
       const fresh = await authenticate(discord, false);
       if (!fresh.pass || !fresh.nicoPass) return;
       session.nicoPass = fresh.nicoPass;
       session.conn?.setPass(fresh.pass);
+      lastSucceededAt = Date.now();
       devlog('passes refreshed');
     } catch (e) {
       devlog(`refresh failed: ${describeError(e)}`);
+    } finally {
+      running = false;
     }
-  }, PASS_REFRESH_MS);
+  };
+  window.setInterval(refresh, PASS_REFRESH_MS);
+  // スリープなどでタイマーが進まなかったときのために、画面に戻ったとき・ネットワークが戻ったときにも、
+  // 古くなっていれば取り直す（失敗したあとは、短い間隔を空けて再び試す）
+  const refreshIfStale = () => {
+    const now = Date.now();
+    if (now - lastSucceededAt > PASS_REFRESH_MS / 2 && now - lastTriedAt > PASS_RETRY_MS) void refresh();
+  };
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && refreshIfStale());
+  window.addEventListener('online', refreshIfStale);
 }
 
 main().catch((e) => {

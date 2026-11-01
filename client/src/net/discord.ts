@@ -2,6 +2,9 @@ import { Common, type DiscordSDK } from '@discord/embedded-app-sdk';
 import { describeError, devlog } from '../core/devlog';
 import { proxied } from '../core/env';
 
+/** 通行証を発行してもらう部屋（Activity インスタンス）の参加者ではない */
+export class NotInActivityError extends Error {}
+
 /**
  * Discord にログインしてもらい、表示名を取得する。
  * @param interactive false なら、確認画面は出さない（許可済みでなければ失敗する。開きっぱなしの間の取り直し用）
@@ -25,6 +28,8 @@ export async function authenticate(sdk: DiscordSDK, interactive = true): Promise
     // room: 通行証は、この部屋（Activity の instanceId）のものとして発行してもらう（別の部屋への使い回しを防ぐ）
     body: JSON.stringify({ code, room: sdk.instanceId }),
   });
+  // この部屋（Activity インスタンス）の参加者ではない、とサーバーに断られた
+  if (res.status === 403) throw new NotInActivityError();
   const { access_token, pass, nicoPass } = (await res.json()) as {
     access_token?: string;
     pass?: string;

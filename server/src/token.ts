@@ -15,9 +15,17 @@ const CODE_PATTERN = /^[\w.-]{1,512}$/;
  * 入力の形が正しいものだけを数える（形の悪い呼び出しで、正規のログインの枠を使い切られないように）
  */
 const TOKEN_LIMIT_PER_MIN = 120;
+/** ボットトークンが無いという警告を、何度も出さないための印 */
+let warnedNoBotToken = false;
 
 /** Discord SDK の authorize で得た code をアクセストークンに交換し、通行証を発行する */
 export async function exchangeToken(request: Request, env: Env): Promise<Response> {
+  // 鍵が未登録なら、Discord に問い合わせる前に失敗させる（無駄な問い合わせと、半端な処理を避ける）
+  const secret = passSecret(env);
+  if (!env.DISCORD_BOT_TOKEN && !warnedNoBotToken) {
+    warnedNoBotToken = true;
+    console.warn('DISCORD_BOT_TOKEN is not set: skipping the check that the user is in the activity instance');
+  }
   let body: { code?: unknown; room?: unknown } = {};
   try {
     body = JSON.parse(await readLimited(request, TOKEN_BODY_MAX));
@@ -69,7 +77,6 @@ export async function exchangeToken(request: Request, env: Env): Promise<Respons
     });
     if (participation === 'not_member') return Response.json({ error: 'not in this activity' }, { status: 403 });
   }
-  const secret = passSecret(env);
   const [pass, nicoPass] = await Promise.all([
     issuePass(secret, 'ws', { u: uid, n: name, r: room }),
     issuePass(secret, 'nico', { u: uid }),

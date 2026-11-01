@@ -155,7 +155,10 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
   /** 動画の下の「▶ タイトル（追加した人）」と、何も再生していないときの案内 */
   const renderNow = () => {
     $('empty').hidden = !!current;
-    $('now-title').textContent = current ? t('nowPlaying', { title: current.title, name: current.addedBy }) : '';
+    const nowTitle = current ? t('nowPlaying', { title: current.title, name: current.addedBy }) : '';
+    $('now-title').textContent = nowTitle;
+    // 長くて省略されても、全文を見られるようにする
+    $('now-title').title = nowTitle;
   };
   const renderMembers = (members: Member[]) => {
     lastMembers = members;

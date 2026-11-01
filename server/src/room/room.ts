@@ -64,6 +64,8 @@ export class Room extends DurableObject<Env> {
   private pingLimiter = new MessageLimiter(4, 10);
   /** 部屋全体の操作の量の制限（人数が多くても、保存と配信が増えすぎないように） */
   private roomLimiter = new MessageLimiter(100, 200);
+  /** 届いたメッセージの量の制限。解析する前にかける（壊れたメッセージを大量に送られても、解析と処理を重ねないため） */
+  private rawLimiter = new MessageLimiter(60, 120);
   private enqueues = new EnqueueQueue();
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -124,6 +126,8 @@ export class Room extends DurableObject<Env> {
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     if (typeof raw !== 'string' || raw.length > MAX_MESSAGE_LENGTH) return;
+    const attachment = this.sockets.attachment(ws);
+    if (!this.rawLimiter.take(attachment.uid ?? attachment.id)) return;
     let msg: ClientMsg | null;
     try {
       msg = parseClientMsg(JSON.parse(raw));
@@ -267,6 +271,8 @@ export class Room extends DurableObject<Env> {
     const snap = this.snapshot();
     if (!hasRoom(snap)) return sendError(ws, 'queue_full');
     await this.commit(addItem(snap, item, by, realDeps()));
+    // 追加を待っている間に全員が退出して、部屋が破棄されていたら、書き込んだデータが残る。破棄を予約し直す
+    if (this.sockets.joined().length === 0) await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
   }
 
   private async onLeave(ws: WebSocket) {

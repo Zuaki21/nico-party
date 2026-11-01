@@ -65,7 +65,7 @@
  * スマホで縦に並べているときは、動画を幅いっぱいの 16:9 に固定し、再生リストが残りの高さを使う。
  * 大きさを変えるハンドルは出さない（キーボードが出ても動画の位置と大きさは変わらず、再生リストだけ縮む）
  */
-@media (pointer: coarse) and (max-width: 899px) {
+@media (pointer: coarse) and (max-width: 899px) and (orientation: portrait) {
   .main {
     flex: none;
   }

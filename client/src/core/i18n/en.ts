@@ -70,6 +70,7 @@ export const en: Record<Key, string> = {
   connectionReplaced: 'This screen was disconnected because the same account connected elsewhere. It will reconnect when you come back to it',
   err_unknown: 'Something went wrong ({code})',
   err_too_fast: 'Too many videos are waiting to be added. Please wait a moment',
+  notInActivity: 'Could not confirm you are in this activity. Join the voice channel and reopen the activity',
   loginRequired: 'Could not log in to Discord, so videos cannot be played or searched. Reopen the activity and allow the app',
   notConnected: 'Not connected yet. Please try again once connected',
   settingsTitle: 'Settings',
