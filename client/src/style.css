@@ -559,7 +559,8 @@ button.icon:hover {
 
 #app.compact .now,
 #app.compact .splitter,
-#app.compact .side {
+#app.compact .side,
+#app.compact .settings {
   display: none;
 }
 
@@ -573,7 +574,8 @@ button.icon:hover {
   }
   .now,
   .splitter,
-  .side {
+  .side,
+  .settings {
     display: none !important;
   }
   .player {
