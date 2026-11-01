@@ -113,6 +113,10 @@
   background: #fff;
 }
 
+.loading.failed .spinner {
+  display: none;
+}
+
 .spinner {
   width: 2.2857rem;
   height: 2.2857rem;

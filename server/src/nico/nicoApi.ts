@@ -122,7 +122,7 @@ export async function searchVideos(
   const q = (url.searchParams.get('q') ?? '').trim().slice(0, 100);
   const sortParam = url.searchParams.get('sort');
   const sort: SearchSort = sortParam === 'new' || sortParam === 'likes' ? sortParam : 'popular';
-  const offset = Math.max(0, Math.min(SEARCH_MAX_OFFSET, Number(url.searchParams.get('offset')) || 0));
+  const offset = Math.max(0, Math.min(SEARCH_MAX_OFFSET, Math.trunc(Number(url.searchParams.get('offset'))) || 0));
   if (!q) return Response.json({ total: 0, items: [] } satisfies SearchResult);
 
   // 同じ検索は Cloudflare のキャッシュから返す（ニコニコへの問い合わせとリクエスト数を抑える）
@@ -146,8 +146,8 @@ export async function searchVideos(
   const res = await fetch(api, {
     headers: { 'user-agent': 'nico-party (https://nico-party.zuaki.dev)' },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
-  if (!res.ok) return Response.json({ error: 'search failed' }, { status: 502 });
+  }).catch(() => null);
+  if (!res?.ok) return Response.json({ error: 'search failed' }, { status: 502 });
 
   const json = await res.json<{
     meta: { totalCount?: number };
@@ -160,7 +160,8 @@ export async function searchVideos(
       lengthSeconds?: number;
       startTime?: string;
     }[];
-  }>();
+  }>().catch(() => null);
+  if (!json?.meta) return Response.json({ error: 'search failed' }, { status: 502 });
   const data = json.data ?? [];
   // 再生できない動画（センシティブ・外部再生禁止など）は、選べないよう事前に印を付ける
   const errors = await Promise.all(data.map((d) => fetchEmbedError(d.contentId)));

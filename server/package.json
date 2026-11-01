@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:playback": "node scripts/check-playback.cjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261025.1",

@@ -13,7 +13,7 @@ import { createPresence } from './core/presence';
 import { isPresenceEnabled } from './ui/settings';
 import { setupViewport } from './ui/viewport';
 import { SyncEngine } from './player/sync';
-import { hideLoading, setCompact, setPlayerCover, showError, slowLoading } from './ui/overlays';
+import { failLoading, hideLoading, setCompact, setPlayerCover, showError, slowLoading } from './ui/overlays';
 import { mountUi } from './ui/ui';
 
 /** Discord 内では iframe から外のページへ移れないので、Discord の「外部リンクを開く」を使う */
@@ -95,10 +95,6 @@ function onMessage(msg: ServerMsg) {
     case 'welcome':
       clearTimeout(slowTimer);
       hideLoading();
-      if (loginFailed) {
-        loginFailed = false;
-        showError(t('loginRequired'));
-      }
       engine.setClockOffset(conn!.clock.offset);
       renderQueue(msg.queue, msg.history);
       applyMembers(msg.members);
@@ -123,9 +119,6 @@ function onMessage(msg: ServerMsg) {
       return;
   }
 }
-
-/** Discord にログインできなかった（通行証がない）。部屋に入れたときに案内を出す */
-let loginFailed = false;
 
 let slowTimer: number | undefined;
 
@@ -161,16 +154,17 @@ async function main() {
     // 名前が取れなくても視聴はできるようにする
     devlog(`authenticate failed: ${describeError(e)}`);
   }
-  // 通行証がないと、動画の読み込みと検索ができない
-  // （起動中は画面全体を覆う表示の下になって読めないので、部屋に入れてから出す）
-  loginFailed = !nicoPass;
   watchLayout(discord, setCompact);
+  // 通行証がないと、部屋に入れず、動画の読み込みも検索もできない。ローディングのまま止まらないよう、理由を出す
+  if (!pass || !nicoPass) {
+    failLoading(t('loginRequired'));
+    return;
+  }
   devlog(`ready as ${name} (instance ${discord.instanceId})`);
   connect(discord.instanceId, name, pass);
 }
 
 main().catch((e) => {
-  hideLoading();
   devlog(`main failed: ${describeError(e)}`);
-  showError(t('startFailed', { msg: e instanceof Error ? e.message : String(e) }));
+  failLoading(t('startFailed', { msg: e instanceof Error ? e.message : String(e) }));
 });

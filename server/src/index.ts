@@ -9,6 +9,10 @@ export { Room } from './room/room';
 const SEARCH_LIMIT_PER_MIN = 30;
 
 const ROOM_PATH = /^\/ws\/([A-Za-z0-9_-]{1,128})$/;
+/** /api/token の入力の上限（認可コードや部屋 ID は短い文字列。大きな本文は読まずに断る） */
+const TOKEN_BODY_MAX = 2048;
+const CODE_PATTERN = /^[\w.-]{1,512}$/;
+const ROOM_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -42,14 +46,17 @@ export default {
     // 部屋 = Activity の instanceId。同じボイスチャンネルで起動した人は同じ部屋に入る
     const match = path.match(ROOM_PATH);
     if (match) {
-      // 通行証があれば、Discord のものとして確かめた名前を部屋に渡す。外から来た同名のヘッダーは信用しない
+      // Discord でログインした人だけが入れる。通行証は、入ろうとしている部屋のものでなければならない
+      // （別の部屋の通行証の使い回しを防ぐ）。確かめた名前を部屋に渡す。外から来た同名のヘッダーは信用しない
       const headers = new Headers(request.headers);
       headers.delete(VERIFIED_NAME_HEADER);
       headers.delete(VERIFIED_UID_HEADER);
       const claims = await verifyPass(env.DISCORD_CLIENT_SECRET, 'ws', url.searchParams.get('pass'));
-      if (claims?.n !== undefined) {
+      if (claims && claims.r === match[1] && claims.n !== undefined) {
         headers.set(VERIFIED_NAME_HEADER, encodeURIComponent(claims.n));
         headers.set(VERIFIED_UID_HEADER, claims.u);
+      } else if (env.ALLOW_ANON_WS !== 'true') {
+        return new Response('Unauthorized', { status: 401 });
       }
       const id = env.ROOM.idFromName(match[1]);
       return env.ROOM.get(id).fetch(new Request(request, { headers }));
@@ -59,10 +66,19 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-/** Discord SDK の authorize で得た code をアクセストークンに交換する */
+/** Discord SDK の authorize で得た code をアクセストークンに交換し、通行証を発行する */
 async function exchangeToken(request: Request, env: Env): Promise<Response> {
-  const { code } = await request.json<{ code?: string }>().catch(() => ({ code: undefined }));
-  if (!code) return Response.json({ error: 'code is required' }, { status: 400 });
+  if (Number(request.headers.get('content-length') ?? 0) > TOKEN_BODY_MAX) {
+    return Response.json({ error: 'too large' }, { status: 413 });
+  }
+  const body = await request.json<{ code?: unknown; room?: unknown }>().catch(() => ({}) as { code?: unknown; room?: unknown });
+  const { code, room } = body;
+  if (typeof code !== 'string' || !CODE_PATTERN.test(code)) {
+    return Response.json({ error: 'code is required' }, { status: 400 });
+  }
+  if (typeof room !== 'string' || !ROOM_PATTERN.test(room)) {
+    return Response.json({ error: 'room is required' }, { status: 400 });
+  }
   const res = await fetch('https://discord.com/api/oauth2/token', {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -72,9 +88,10 @@ async function exchangeToken(request: Request, env: Env): Promise<Response> {
       grant_type: 'authorization_code',
       code,
     }),
-  });
-  const data = await res.json<{ access_token?: string }>().catch(() => ({ access_token: undefined }));
-  if (!data.access_token) return Response.json({ error: 'token exchange failed' }, { status: 400 });
+    signal: AbortSignal.timeout(8000),
+  }).catch(() => null);
+  const data = await res?.json<{ access_token?: string }>().catch(() => ({ access_token: undefined }));
+  if (!data?.access_token) return Response.json({ error: 'token exchange failed' }, { status: 400 });
   // 名前はサーバーが Discord から取得する（クライアントの申告は信用しない）
   const me = await fetch('https://discord.com/api/users/@me', {
     headers: { authorization: `Bearer ${data.access_token}` },
@@ -82,12 +99,13 @@ async function exchangeToken(request: Request, env: Env): Promise<Response> {
   })
     .then((r) => (r.ok ? r.json<{ id?: string; global_name?: string | null; username?: string }>() : null))
     .catch(() => null);
-  const name = me?.global_name ?? me?.username;
-  // トークンの交換に成功した時点で、ログインはできている。ユーザー情報が取れなくても、中継と検索の通行証は発行する
-  // （無いと動画が再生できなくなるため）。ID が取れなければ、トークンから作った識別子で代える
+  const name = me?.global_name ?? me?.username ?? 'guest';
+  // トークンの交換に成功した時点で、ログインはできている。ユーザー情報が取れなくても、通行証は発行する
+  // （無いと、部屋に入れず、動画も再生できなくなるため）。ID が取れなければ、トークンから作った識別子で代える
   const uid = me?.id ?? (await sha256Hex(data.access_token)).slice(0, 18);
-  const nicoPass = await issuePass(env.DISCORD_CLIENT_SECRET, 'nico', { u: uid });
-  // 名前入りの通行証は、名前が取れたときだけ
-  const pass = name ? await issuePass(env.DISCORD_CLIENT_SECRET, 'ws', { u: uid, n: name }) : undefined;
+  const [pass, nicoPass] = await Promise.all([
+    issuePass(env.DISCORD_CLIENT_SECRET, 'ws', { u: uid, n: name, r: room }),
+    issuePass(env.DISCORD_CLIENT_SECRET, 'nico', { u: uid }),
+  ]);
   return Response.json({ access_token: data.access_token, pass, nicoPass });
 }

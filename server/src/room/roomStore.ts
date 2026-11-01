@@ -3,6 +3,14 @@ import { initialState } from './state';
 
 export type LoadFailed = { itemId: string; ids: string[] };
 
+/** 1 回の書き込みで保存する内容（指定したものだけ。failed は null で記録を消す） */
+export interface Commit {
+  state?: PlaybackState;
+  queue?: QueueItem[];
+  history?: QueueItem[];
+  failed?: LoadFailed | null;
+}
+
 const STATE_KEY = 'state';
 const QUEUE_KEY = 'queue';
 const HISTORY_KEY = 'history';
@@ -12,7 +20,8 @@ const LOAD_FAILED_KEY = 'loadFailed';
 /**
  * 部屋の再生状態・再生リスト・読み込み失敗の報告の保存先。
  * 読み込みは、起こされてから最初の1回だけ storage に行き、あとはメモリのものを使う。
- * 書き込みは storage に成功してからメモリを更新する（失敗したときに、メモリだけ新しくならないように）。
+ * 書き込みは commit に集めて、1 回の書き込みにまとめる（途中で退避されても、半端な状態が残らない）。
+ * storage に成功してからメモリを更新する（失敗したときに、メモリだけ新しくならないように）。
  * 呼び出し側が受け取ったものを書き換えても、メモリの中身が勝手に変わらないよう、コピーを返す
  */
 export class RoomStore {
@@ -49,28 +58,28 @@ export class RoomStore {
     return this.cache.failed;
   }
 
-  /** 版を進めて保存する */
-  async putState(s: PlaybackState) {
-    s.version++;
-    await this.storage.put(STATE_KEY, s);
-    this.cache.state = { ...s };
-  }
-
-  /** 渡されたリストだけを保存する（片方だけでもよい） */
-  async putLists(lists: { queue?: QueueItem[]; history?: QueueItem[] }) {
-    const entries: Record<string, QueueItem[]> = {};
-    if (lists.queue) entries[QUEUE_KEY] = [...lists.queue];
-    if (lists.history) entries[HISTORY_KEY] = [...lists.history];
-    if (Object.keys(entries).length > 0) await this.storage.put(entries);
-    if (lists.queue) this.cache.queue = entries[QUEUE_KEY];
-    if (lists.history) this.cache.history = entries[HISTORY_KEY];
-  }
-
-  async putLoadFailed(failed: LoadFailed | undefined) {
-    if (failed) await this.storage.put(LOAD_FAILED_KEY, failed);
-    else await this.storage.delete(LOAD_FAILED_KEY);
-    this.cache.failed = failed;
-    this.cache.failedLoaded = true;
+  /** 渡されたものを、1 回の書き込みで保存する。state は版を進める */
+  async commit(c: Commit) {
+    const entries: Record<string, unknown> = {};
+    if (c.state) {
+      c.state.version++;
+      entries[STATE_KEY] = c.state;
+    }
+    if (c.queue) entries[QUEUE_KEY] = [...c.queue];
+    if (c.history) entries[HISTORY_KEY] = [...c.history];
+    if (c.failed) entries[LOAD_FAILED_KEY] = c.failed;
+    // 同じ瞬間に出した書き込みは、まとめて 1 回で保存される
+    const writes: Promise<unknown>[] = [];
+    if (Object.keys(entries).length > 0) writes.push(this.storage.put(entries));
+    if (c.failed === null) writes.push(this.storage.delete(LOAD_FAILED_KEY));
+    await Promise.all(writes);
+    if (c.state) this.cache.state = { ...c.state };
+    if (c.queue) this.cache.queue = [...c.queue];
+    if (c.history) this.cache.history = [...c.history];
+    if (c.failed !== undefined) {
+      this.cache.failed = c.failed ?? undefined;
+      this.cache.failedLoaded = true;
+    }
   }
 
   async deleteAll() {

@@ -21,7 +21,8 @@ export async function authenticate(sdk: DiscordSDK): Promise<{ name: string; pas
   const res = await fetch(proxied('/api/token'), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ code }),
+    // room: 通行証は、この部屋（Activity の instanceId）のものとして発行してもらう（別の部屋への使い回しを防ぐ）
+    body: JSON.stringify({ code, room: sdk.instanceId }),
   });
   const { access_token, pass, nicoPass } = (await res.json()) as {
     access_token?: string;

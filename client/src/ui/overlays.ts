@@ -15,6 +15,15 @@ export function setPlayerCover(on: boolean) {
   $('player-cover').hidden = !on;
 }
 
+/** 起動できなかった。ローディングのままにせず、読めるよう文言を出したままにする（スピナーは止める） */
+export function failLoading(message: string) {
+  const el = document.getElementById('loading');
+  if (!el) return;
+  el.classList.add('failed');
+  const text = document.getElementById('loading-text');
+  if (text) text.textContent = message;
+}
+
 /** 接続に時間がかかっているときの文言に変える */
 export function slowLoading() {
   const text = document.getElementById('loading-text');

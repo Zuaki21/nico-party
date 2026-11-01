@@ -1,2 +1,4 @@
 DISCORD_CLIENT_ID=
 DISCORD_CLIENT_SECRET=
+# ローカル確認用: 通行証のない WebSocket 接続（通常のブラウザで開いたとき）を受け付ける。本番では設定しない
+ALLOW_ANON_WS=true

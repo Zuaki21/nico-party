@@ -15,6 +15,8 @@ export interface PassClaims {
   u: string;
   /** 表示名（ws の通行証のみ） */
   n?: string;
+  /** 入れる部屋（Activity の instanceId）。ws の通行証のみ。別の部屋への使い回しを防ぐ */
+  r?: string;
 }
 
 /** 通行証の有効期間。Activity を開きっぱなしの間は同じものを使い続けるので、長めにしておく */
@@ -75,7 +77,11 @@ export async function verifyPass(
     const body = JSON.parse(new TextDecoder().decode(fromBase64Url(payload))) as Record<string, unknown>;
     if (body.s !== scope || typeof body.exp !== 'number' || body.exp < Date.now()) return null;
     if (typeof body.u !== 'string') return null;
-    return { u: body.u, ...(typeof body.n === 'string' ? { n: body.n } : {}) };
+    return {
+      u: body.u,
+      ...(typeof body.n === 'string' ? { n: body.n } : {}),
+      ...(typeof body.r === 'string' ? { r: body.r } : {}),
+    };
   } catch {
     return null;
   }
