@@ -29,6 +29,8 @@ export class NicoPlayer {
   /** 最後に通知された再生位置 (秒) と、その受信時刻 */
   private time = 0;
   private timeAt = 0;
+  /** プレイヤーが実際に通知してきた再生位置 (秒) と、その受信時刻（seek() で見かけ上動かした値とは別） */
+  private reported = { time: 0, at: 0 };
   /** どこまで読み込み済みか (秒) */
   private buffered = 0;
   private muted = false;
@@ -112,6 +114,7 @@ export class NicoPlayer {
     this.timeAt = 0;
     this.duration = 0;
     this.buffered = 0;
+    this.reported = { time: 0, at: 0 };
     this.iframe.src = this.src(videoId, PLAYER_ID);
   }
 
@@ -152,6 +155,11 @@ export class NicoPlayer {
     this.post('seek', { time: sec * 1000 });
     this.time = sec;
     this.timeAt = performance.now();
+  }
+
+  /** プレイヤーが最後に通知してきた再生位置と、その受信時刻 (performance.now)。まだ通知が無ければ at は 0 */
+  getReported() {
+    return this.reported;
   }
 
   /** 現在の再生位置 (秒)。通知の間隔を補間する */
@@ -224,6 +232,7 @@ export class NicoPlayer {
           const prev = this.time;
           this.time = data.currentTime / 1000;
           this.timeAt = performance.now();
+          this.reported = { time: this.time, at: this.timeAt };
           if (this.time > prev) this.emit('progress');
         }
         if (typeof data.duration === 'number' && data.duration > 0) {

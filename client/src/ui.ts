@@ -61,6 +61,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
     <main class="main">
       <div class="player" id="player">
         <div class="empty" id="empty" data-i18n="empty"></div>
+        <div class="player-cover" id="player-cover" hidden><div class="spinner" aria-hidden="true"></div></div>
       </div>
       <div class="now">
         <div class="now-title" id="now-title"></div>
@@ -227,6 +228,11 @@ function setupTabs() {
 export function hideLoading() {
   // 再接続のたびに呼ばれるので、すでに無いときは何もしない
   document.getElementById('loading')?.remove();
+}
+
+/** 途中参加で位置が合うまで、プレイヤーを黒く覆う（最初から再生される映像を見せない） */
+export function setPlayerCover(on: boolean) {
+  $('player-cover').hidden = !on;
 }
 
 /** 接続に時間がかかっているときの文言に変える */

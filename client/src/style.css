@@ -1079,3 +1079,17 @@ button.add.done:hover {
     transform: rotate(360deg);
   }
 }
+
+/* 途中参加で位置が合うまで、プレイヤーを覆う */
+.player-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  background: #000;
+}
+
+.player-cover[hidden] {
+  display: none;
+}

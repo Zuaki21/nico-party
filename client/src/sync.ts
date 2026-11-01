@@ -20,6 +20,11 @@ const INTERACT_MS = 5000;
  * これが無いと、操作の直後に届いた他の状態更新や定期補正で、操作が無かったことにされてシークが戻る
  */
 const LOCAL_HOLD_MS = 1500;
+/** 位置が合うのを待つ上限。これを過ぎたら、合っていなくても通常の同期に任せる */
+const CATCHUP_MAX_MS = 8000;
+/** 位置が合うまで、この間隔でシークを送り直す */
+const CATCHUP_RESEEK_MS = 1500;
+const CATCHUP_POLL_MS = 200;
 /** 動画の終端とみなす余裕（秒） */
 const END_MARGIN = 0.5;
 /**
@@ -74,6 +79,12 @@ export class SyncEngine {
   private localHoldUntil = 0;
   /** 読み込み完了の直後で、最初の同期をしている */
   private justLoaded = false;
+  /** 途中参加で、位置が合うまでミュート・画面を隠して待っている */
+  private catchingUp = false;
+  private catchStartedAt = 0;
+  private catchSeekAt = 0;
+  private catchMutedBefore = false;
+  private catchTimer: number | undefined;
   /** この時刻までは、自動送りの要求を送り直さない */
   private nextSentUntil = 0;
   private holdTimeout: number | undefined;
@@ -85,6 +96,8 @@ export class SyncEngine {
     private send: (msg: ClientMsg) => void,
     /** 自分のプレイヤーで動画を読み込めなかった */
     private onLoadFailed: () => void,
+    /** 途中参加で位置が合うまでの間、プレイヤーを隠す・隠すのをやめる */
+    private onCatchUp: (on: boolean) => void,
   ) {
     // プレイヤーは別オリジンの iframe で、中の操作は見えない。
     // ポインターが上にある・クリックでフォーカスが移った、のどちらかのときだけ、変化をユーザー操作とみなす
@@ -141,6 +154,7 @@ export class SyncEngine {
       clearTimeout(this.holdTimeout);
       this.localHoldUntil = 0;
       this.nextSentUntil = 0;
+      if (this.catchingUp) this.endCatchUp();
       this.preloading = false;
       this.preloadedFor = null;
       this.reportedFailFor = null;
@@ -216,6 +230,8 @@ export class SyncEngine {
   private apply(threshold: number) {
     const s = this.state;
     const p = this.player;
+    // 途中参加で位置が合うのを待っている間は、そちらで合わせる（stepCatchUp）
+    if (this.catchingUp) return;
     // ユーザーが操作した直後。その操作が部屋に反映されるまで巻き戻さない（this.state は更新済みなので、後の定期補正で合う）
     if (Date.now() < this.localHoldUntil) {
       // 保持が終わったら、保留した他の人の操作を反映する
@@ -247,6 +263,13 @@ export class SyncEngine {
       return;
     }
 
+    // 途中参加: 読み込んだばかりの動画を途中の位置から始めると、位置が合うまでの間、最初から再生されてしまう。
+    // 位置が合うまでミュートして画面を隠し、合ったら元に戻す。
+    // 先頭からのずれが APPLY_THRESHOLD 以内なら、通常の同期でもシークしないので、この処理は要らない
+    if (this.justLoaded && s.playing && target > APPLY_THRESHOLD && p.isPaused()) {
+      this.beginCatchUp();
+      return;
+    }
     if (Math.abs(p.getTime() - target) > threshold) {
       this.suppress(this.justLoaded && target > 1 ? SEEK_SUPPRESS_MS : SUPPRESS_MS);
       p.seek(target);
@@ -258,6 +281,64 @@ export class SyncEngine {
       this.suppress();
       p.pause();
     }
+  }
+
+  /**
+   * 途中参加のとき、ミュートして一度再生し（動画データを読み込ませる）、再生が始まったら目的の位置へシークする。
+   * ニコニコのプレイヤーは再生するまで動画データを読み込まないので、先にシークしても効かず、0 秒から再生されてしまう
+   */
+  private beginCatchUp() {
+    const p = this.player;
+    this.catchingUp = true;
+    this.catchStartedAt = Date.now();
+    this.catchSeekAt = 0;
+    this.catchMutedBefore = p.isMuted();
+    this.onCatchUp(true);
+    this.suppress(CATCHUP_MAX_MS + 2000);
+    p.mute(true);
+    p.play();
+    this.catchTimer = window.setInterval(() => this.stepCatchUp(), CATCHUP_POLL_MS);
+  }
+
+  private stepCatchUp() {
+    const s = this.state;
+    const p = this.player;
+    if (!this.catchingUp) return;
+    // 動画が変わった・止まった・読み込み直しなど、待つ前提が崩れたときは、やめて通常の同期に任せる
+    if (!s?.current || s.current.id !== this.loadedItemId || !s.playing || !p.ready()) {
+      this.endCatchUp();
+      this.apply(APPLY_THRESHOLD);
+      return;
+    }
+    const timedOut = Date.now() - this.catchStartedAt > CATCHUP_MAX_MS;
+    const target = this.expected(s);
+    const reported = p.getReported();
+    const started = !p.isPaused() || reported.time > 0;
+    if (!timedOut && started) {
+      // プレイヤー自身が通知してきた位置で、位置が合っているかを見る（seek() 直後の見かけの値は使わない）
+      const reportedAfterSeek = this.catchSeekAt > 0 && reported.at > this.catchSeekAt;
+      if (reportedAfterSeek && Math.abs(reported.time - target) <= APPLY_THRESHOLD) {
+        // 位置が合った
+      } else {
+        if (performance.now() - this.catchSeekAt > CATCHUP_RESEEK_MS) {
+          this.catchSeekAt = performance.now();
+          p.seek(target);
+        }
+        return;
+      }
+    } else if (!timedOut) {
+      return;
+    }
+    this.endCatchUp();
+    this.apply(APPLY_THRESHOLD);
+  }
+
+  private endCatchUp() {
+    clearInterval(this.catchTimer);
+    this.catchingUp = false;
+    this.suppress();
+    this.player.mute(this.catchMutedBefore);
+    this.onCatchUp(false);
   }
 
   /**
@@ -338,7 +419,7 @@ export class SyncEngine {
     const p = this.player;
     if (!s?.current || s.current.id !== this.loadedItemId) return;
     // 先読みのための再生・停止はユーザーの操作ではない
-    if (this.preloading) return;
+    if (this.preloading || this.catchingUp) return;
     // プレイヤーを触っていないのに起きた変化は、同期や読み込みの副作用
     if (!this.engaged()) {
       this.localHoldUntil = 0;

@@ -24,6 +24,7 @@ import {
   renderMembers,
   renderState,
   searchFor,
+  setPlayerCover,
   setCompact,
   showError,
   slowLoading,
@@ -85,7 +86,7 @@ for (const ev of ['load', 'play', 'pause', 'ended'] as const) player.on(ev, () =
 /** 再接続しても同じメンバーとして扱ってもらうための ID（ページを開き直すと変わる） */
 const clientId = crypto.randomUUID();
 let conn: RoomConnection | null = null;
-const engine = new SyncEngine(player, (msg) => conn?.send(msg), () => showError(t('loadFailed')));
+const engine = new SyncEngine(player, (msg) => conn?.send(msg), () => showError(t('loadFailed')), setPlayerCover);
 
 /** ユーザー操作（追加・削除・スキップ）。部屋に入れていなければ、動画の追加以外は受け付けない */
 function request(msg: ClientMsg) {
