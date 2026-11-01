@@ -1,3 +1,5 @@
+import { DISCORD_API } from './discord';
+
 /** その人が、その Activity インスタンスに参加しているか */
 export type Participation = 'member' | 'not_member' | 'unknown';
 
@@ -29,7 +31,7 @@ export async function checkParticipation(opts: CheckOptions): Promise<Participat
     if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
     try {
       const res = await fetchFn(
-        `https://discord.com/api/v10/applications/${applicationId}/activity-instances/${encodeURIComponent(instanceId)}`,
+        `${DISCORD_API}/v10/applications/${applicationId}/activity-instances/${encodeURIComponent(instanceId)}`,
         { headers: { authorization: `Bot ${botToken}` }, signal: AbortSignal.timeout(5000) },
       );
       if (!res.ok) return 'unknown';

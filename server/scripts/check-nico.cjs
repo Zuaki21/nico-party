@@ -1,19 +1,10 @@
-// ニコニコの中継の書き換えルール (src/nico/nico.ts の rewriter) の単体テスト。
+// ニコニコの中継の書き換えルール (src/nico/nicoRewrite.ts の rewriter) の単体テスト。
 // 書き換えで作る中継の URL に、必ず通行証が入っていること（無いと 401 になって再生できなくなる）と、
 // 元の URL の形ごとの書き換え結果を確かめる。   cd server && npm run check:nico
 const assert = require('node:assert/strict');
 const { loadTs } = require('./_load.cjs');
 
-const load = loadTs([
-  'server/src/nico/nico.ts',
-  'server/src/nico/nicoRewrite.ts',
-  'server/src/nico/nicoRoutes.ts',
-  'server/src/nico/nicoApi.ts',
-  'server/src/body.ts',
-  'server/src/env.ts',
-  'server/src/pass.ts',
-  'shared/search.ts',
-]);
+const load = loadTs(['server/src/nico/nico.ts']);
 const { rewriter } = load('server/src/nico/nicoRewrite.ts');
 const { handleNico } = load('server/src/nico/nico.ts');
 const { issuePass, ConfigError } = load('server/src/pass.ts');

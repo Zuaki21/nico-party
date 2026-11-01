@@ -42,6 +42,23 @@ fs.writeFileSync(path.join(out, 'clock.js'), clockJs);
   fresh.provisional(7000, 1000);
   assert.equal(fresh.offset, 6000, '一度も測れていなければ、仮の値を使う');
 }
+// プレイヤーの中のリンクを、外部で開く本当の URL に戻す処理 (src/core/urls.ts) の単体テスト
+{
+  const assert = require('node:assert/strict');
+  const js = ts.transpileModule(fs.readFileSync(path.resolve(__dirname, '../../src/core/urls.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  fs.writeFileSync(path.join(out, 'urls.js'), js);
+  const { realUrl } = require(path.join(out, 'urls.js'));
+  const own = 'https://app.discordsays.com';
+  const base = `${own}/.proxy/nico/x/watch`;
+  assert.equal(realUrl(`${own}/.proxy/external/www--nicovideo--jp/watch/sm9?a=1#t`, base, own), 'https://www.nicovideo.jp/watch/sm9?a=1#t', '中継の URL は元に戻す');
+  assert.equal(realUrl(`${own}/external/www--nicovideo--jp`, base, own), 'https://www.nicovideo.jp/', '.proxy が付かない形も戻す。パスが無ければ /');
+  assert.equal(realUrl('https://example.com/a', base, own), 'https://example.com/a', '外のサイトはそのまま');
+  assert.equal(realUrl('https://other.example/external/www--nicovideo--jp/x', base, own), 'https://other.example/external/www--nicovideo--jp/x', '自分のオリジンでなければ戻さない');
+  assert.equal(realUrl('javascript:alert(1)', base, own), null, 'http(s) 以外は開かない');
+  assert.equal(realUrl('http://[', base, own), null, '壊れた URL は開かない');
+}
 let actual;
 try {
   actual = JSON.parse(execFileSync(process.execPath, [path.join(__dirname, 'run.cjs'), path.join(out, 'engine.js')], { encoding: 'utf8', maxBuffer: 1 << 26 }));

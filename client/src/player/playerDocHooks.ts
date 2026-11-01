@@ -1,4 +1,5 @@
 import { devlog } from '../core/devlog';
+import { realUrl } from '../core/urls';
 
 export interface PlayerDocHandlers {
   /** プレイヤーの上に出ているタグがクリックされた */
@@ -42,15 +43,17 @@ function hook(iframe: HTMLIFrameElement, h: PlayerDocHandlers) {
     if (e.type !== 'click') return;
     const tag = href.match(/\/tag\/([^/?#]+)/)?.[1];
     if (tag) {
+      devlog(`tag click: ${tag}`);
+      let word: string;
       try {
-        devlog(`tag click: ${tag}`);
-        h.onTag(decodeURIComponent(tag));
+        word = decodeURIComponent(tag);
       } catch {
-        // 壊れた URL エンコード
+        return; // 壊れた URL エンコード
       }
+      h.onTag(word);
       return;
     }
-    const url = realUrl(href, baseUri);
+    const url = realUrl(href, baseUri, location.origin);
     devlog(`link click: ${href} -> ${url ?? '(ignored)'}`);
     if (url) h.onLink(url);
   };
@@ -58,27 +61,6 @@ function hook(iframe: HTMLIFrameElement, h: PlayerDocHandlers) {
   doc.addEventListener('click', onClick, true);
   doc.addEventListener('auxclick', onClick, true);
   devlog('player doc hook: attached');
-}
-
-/**
- * プレイヤーの中のリンクを、外部のブラウザで開く本当の URL にする。
- * 中継は URL を `<自分のオリジン>/.proxy/external/<ホストの . を -- にしたもの>/...`（Discord の URL Mapping）に
- * 書き換えているので、それを元に戻す。ニコニコ以外のサイトへのリンクは書き換えられていないので、そのまま使う
- */
-function realUrl(href: string, base: string): string | null {
-  let u: URL;
-  try {
-    u = new URL(href, base);
-  } catch {
-    return null;
-  }
-  const m = u.pathname.match(/^\/(?:\.proxy\/)?external\/([^/]+)(\/.*)?$/);
-  if (m && u.origin === location.origin) {
-    u = new URL(`https://${m[1].replaceAll('--', '.')}${m[2] ?? '/'}${u.search}${u.hash}`);
-  }
-  // 開くのは http(s) だけ（javascript: などは開かない）。Discord が開く前に確認の画面を出す
-  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
-  return u.href;
 }
 
 /**

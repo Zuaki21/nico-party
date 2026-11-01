@@ -5,32 +5,7 @@ const assert = require('node:assert/strict');
 const { loadTs, stubCloudflareWorkers } = require('./_load.cjs');
 
 stubCloudflareWorkers();
-const load = loadTs([
-  'server/src/room/room.ts',
-  'server/src/room/limiter.ts',
-  'server/src/room/loadReport.ts',
-  'server/src/room/sockets.ts',
-  'server/src/room/enqueue.ts',
-  'server/src/room/validate.ts',
-  'server/src/room/playback.ts',
-  'server/src/room/roomStore.ts',
-  'server/src/room/state.ts',
-  'server/src/env.ts',
-  'server/src/pass.ts',
-  'server/src/nico/nicoApi.ts',
-  'shared/playlist.ts',
-  'shared/protocol.ts',
-  'shared/search.ts',
-  'shared/video.ts',
-  'server/src/index.ts',
-  'server/src/token.ts',
-  'server/src/wsAuth.ts',
-  'server/src/instanceCheck.ts',
-  'server/src/body.ts',
-  'server/src/nico/nico.ts',
-  'server/src/nico/nicoRoutes.ts',
-  'server/src/nico/nicoRewrite.ts',
-]);
+const load = loadTs(['server/src/index.ts', 'server/src/room/room.ts', 'server/src/nico/nicoApi.ts']);
 
 // ---- 代用品
 const realDateNow = Date.now;

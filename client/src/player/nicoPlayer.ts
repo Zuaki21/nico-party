@@ -47,26 +47,26 @@ export class NicoPlayer {
     window.addEventListener('message', this.onMessage);
   }
 
-  load(videoId: string) {
+  /** 読み込み前の状態に戻す（ミュートは別。load では保つ） */
+  private resetPlayback() {
     this.loaded = false;
     this.status = PlayerStatus.Loading;
     this.time = 0;
     this.timeAt = 0;
     this.duration = 0;
     this.reported = { time: 0, at: 0 };
+  }
+
+  load(videoId: string) {
+    this.resetPlayback();
     this.iframe.src = this.src(videoId, PLAYER_ID);
   }
 
   unload() {
-    this.loaded = false;
+    this.resetPlayback();
     // src 属性を消すだけでは、中のページが残って再生され続ける。空のページに移して止める
     this.iframe.src = 'about:blank';
-    this.status = PlayerStatus.Loading;
     this.muted = false;
-    this.timeAt = 0;
-    this.time = 0;
-    this.duration = 0;
-    this.reported = { time: 0, at: 0 };
   }
 
   ready() {

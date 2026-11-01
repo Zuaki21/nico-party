@@ -83,3 +83,14 @@ function formatTime(sec: number) {
   const ss = String(total % 60).padStart(2, '0');
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
 }
+
+/**
+ * 画面には出さず、読み上げだけする（ui.ts が置く sr-status）。
+ * 同じ文言が続いても読み上げられるよう、いったん空にしてから入れる
+ */
+export function announce(message: string) {
+  const el = document.getElementById('sr-status');
+  if (!el) return;
+  el.textContent = '';
+  requestAnimationFrame(() => (el.textContent = message));
+}

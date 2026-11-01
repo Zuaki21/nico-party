@@ -24,7 +24,7 @@ export function rewriter(host: string, pass: string) {
         /https?:\/\/delivery\.domand\.nicovideo\.jp\/hlsext\/(.+?)\.m3u8/g,
         `${host}/.proxy/${nico}/delivery-domand-nicovideo-jp/hlsext/$1.m3u8`,
       )
-      .replace(/https?:\/\/assets\.embed\.res\.nimg\.jp\/js\/(.+?).js/g, `/${nico}/watch/$1`)
+      .replace(/https?:\/\/assets\.embed\.res\.nimg\.jp\/js\/(.+?)\.js/g, `/${nico}/watch/$1`)
       .replace('https://stella.nicovideo.jp', `/.proxy/${nico}/stella`)
       .replace(/\/users/g, `/../../${nico}/users`)
       .replace(/\/v1\/watch\/(?!non)/g, `/../../${nico}/v1-watch/`)

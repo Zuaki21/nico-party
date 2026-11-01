@@ -9,7 +9,8 @@
 
 import { BodyTooLargeError } from '../body';
 import type { Env } from '../env';
-import { ConfigError, passSecret, verifyPass, withinRateLimit } from '../pass';
+import { ConfigError, passSecret, verifyPass } from '../pass';
+import { withinRateLimit } from '../rateLimit';
 import { DEFAULT_UA } from './nicoApi';
 import { rewriter } from './nicoRewrite';
 import { matchRoute, type Upstream } from './nicoRoutes';

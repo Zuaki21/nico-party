@@ -1,7 +1,8 @@
 import { handleNico } from './nico/nico';
 import { searchVideos } from './nico/nicoApi';
 import type { Env } from './env';
-import { passSecret, verifyPass, withinRateLimit } from './pass';
+import { passSecret, verifyPass } from './pass';
+import { withinRateLimit } from './rateLimit';
 import { exchangeToken } from './token';
 import { authorizeRoom, ROOM_ID } from './wsAuth';
 

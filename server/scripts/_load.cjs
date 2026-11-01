@@ -7,37 +7,31 @@ const ts = require('typescript');
 
 const root = path.resolve(__dirname, '../..');
 
-/** @param rels リポジトリのルートからの .ts のパス @returns 変換後のファイルを読み込む関数 */
+/**
+ * @param rels 入口にする .ts のパス（リポジトリのルートから）。そこから相対 import でたどれるものは、自動で一緒に変換する
+ * @returns 変換後のファイルを読み込む関数
+ */
 function loadTs(rels) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'check-'));
   process.on('exit', () => fs.rmSync(tmp, { recursive: true, force: true }));
-  for (const rel of rels) {
-    const js = ts.transpileModule(fs.readFileSync(path.join(root, rel), 'utf8'), {
+  const done = new Set();
+  const convert = (rel) => {
+    if (done.has(rel)) return;
+    done.add(rel);
+    const src = fs.readFileSync(path.join(root, rel), 'utf8');
+    const js = ts.transpileModule(src, {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
     }).outputText;
     const out = path.join(tmp, rel.replace(/\.ts$/, '.js'));
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, js);
-  }
-  return (rel) => require(path.join(tmp, rel.replace(/\.ts$/, '.js')));
-}
-
-/** テストを 1 件ずつ流す。失敗したら名前を出して止める */
-function makeRunner() {
-  let passed = 0;
-  return {
-    test(name, fn) {
-      try {
-        const r = fn();
-        if (r && typeof r.then === 'function') return r.then(() => passed++, (e) => { console.error('失敗:', name); throw e; });
-        passed++;
-      } catch (e) {
-        console.error('失敗:', name);
-        throw e;
-      }
-    },
-    get passed() { return passed; },
+    for (const m of src.matchAll(/(?:from|import)\s+['"](\.[^'"]+)['"]/g)) {
+      const dep = path.posix.join(path.posix.dirname(rel), m[1]) + '.ts';
+      if (fs.existsSync(path.join(root, dep))) convert(dep);
+    }
   };
+  rels.forEach(convert);
+  return (rel) => require(path.join(tmp, rel.replace(/\.ts$/, '.js')));
 }
 
 /** 'cloudflare:workers'（Workers の中でしか読み込めない）を、最小の代用品に差し替える。Room クラスを手元で動かすため */
@@ -59,4 +53,4 @@ function stubCloudflareWorkers() {
   };
 }
 
-module.exports = { loadTs, makeRunner, stubCloudflareWorkers };
+module.exports = { loadTs, stubCloudflareWorkers };

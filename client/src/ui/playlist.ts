@@ -1,21 +1,11 @@
 import type { PlaybackState, QueueItem, RepeatMode } from '../../../shared/protocol';
-import { $, bodyEl, countsMeta, noteEl, thumbEl } from './dom';
+import { $, announce, bodyEl, countsMeta, noteEl, thumbEl } from './dom';
 import { setupNavPreview, type NavKind, type NavPreview } from './navPreview';
 import { PLAY_ICON, TRASH_ICON } from './icons';
 import { t } from '../core/i18n';
 import { lists, navTarget, setLists, setPlaybackState } from './playlistStore';
 import { setupReorder, type Reordering } from './reorder';
 import type { UiHandlers } from './ui';
-
-/** 並べ替えの結果を読み上げる領域（ui.ts が置く） */
-const STATUS_ID = 'sr-status';
-
-/** 読み上げだけする。同じ文言が続いても読み上げられるよう、いったん空にしてから入れる */
-function announce(message: string) {
-  const el = $(STATUS_ID);
-  el.textContent = '';
-  requestAnimationFrame(() => (el.textContent = message));
-}
 
 const REPEAT_LABEL = { off: 'repeatOff', all: 'repeatAll', one: 'repeatOne' } as const;
 const NEXT_REPEAT: Record<RepeatMode, RepeatMode> = { off: 'all', all: 'one', one: 'off' };

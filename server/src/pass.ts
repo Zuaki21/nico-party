@@ -51,12 +51,6 @@ function hmacKey(secret: string): Promise<CryptoKey> {
   return key;
 }
 
-/** 文字列の SHA-256（16 進数） */
-export async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(text));
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
 /** 通行証を作る */
 export async function issuePass(secret: string, scope: PassScope, claims: PassClaims): Promise<string> {
   const body = { ...claims, s: scope, exp: Date.now() + PASS_TTL_MS };
@@ -93,20 +87,4 @@ export async function verifyPass(
   } catch {
     return null;
   }
-}
-
-/** 通行証ごとの呼び出し回数の制限（このサーバー内の集計なので目安。大量の呼び出しを抑えるためのもの） */
-const windows = new Map<string, { start: number; count: number }>();
-
-/** @returns 制限内なら true */
-export function withinRateLimit(key: string, limit: number, windowMs: number): boolean {
-  const now = Date.now();
-  const w = windows.get(key);
-  if (!w || now - w.start >= windowMs) {
-    // 古い集計が溜まり続けないよう、新しい窓を作るときに掃除する
-    if (windows.size > 5000) for (const [k, v] of windows) if (now - v.start >= windowMs) windows.delete(k);
-    windows.set(key, { start: now, count: 1 });
-    return true;
-  }
-  return ++w.count <= limit;
 }

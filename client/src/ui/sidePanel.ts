@@ -131,6 +131,13 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
     splitter.addEventListener('pointercancel', onUp);
   });
 
+  /** 大きさを決めて保存する（null は既定の大きさに戻す）。画面に合わせて収めた印も外す */
+  const commitSize = (size: number | null) => {
+    setSize(size);
+    fitted = false;
+    save(sizeKey(), size === null ? '' : String(size));
+  };
+
   // キーボードでも大きさを変えられる（矢印キーで 24px ずつ、Shift で大きく。縦並びのときは上下、横並びのときは左右。
   // Home で最小、End で最大）
   splitter.addEventListener('keydown', (e) => {
@@ -147,19 +154,13 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
     else if (e.key === 'End') size = clampSize(Infinity);
     else return;
     e.preventDefault();
-    setSize(size);
-    fitted = false;
-    save(sizeKey(), String(size));
+    commitSize(size);
   });
 
   // ダブルクリック時にブラウザが周りを選択状態にしないようにする
   splitter.addEventListener('mousedown', (e) => e.preventDefault());
   // ダブルクリックで既定の大きさに戻す
-  splitter.addEventListener('dblclick', () => {
-    setSize(null);
-    fitted = false;
-    save(sizeKey(), '');
-  });
+  splitter.addEventListener('dblclick', () => commitSize(null));
 
   return { show: () => setHidden(false) };
 }

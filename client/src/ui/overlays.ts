@@ -1,4 +1,4 @@
-import { $ } from './dom';
+import { $, announce } from './dom';
 import { t } from '../core/i18n';
 
 /**
@@ -49,11 +49,7 @@ export function showError(message: string) {
   el.style.setProperty('--error-ms', `${duration}ms`);
   // 再生リスト欄を隠しているときは、エラーの表示が見えず、読み上げられない。そのときだけ、読み上げ用の領域に入れる
   // （見えているときは role="alert" で読み上げられるので、二重にしない）
-  const status = document.getElementById('sr-status');
-  if (status && el.offsetParent === null) {
-    status.textContent = '';
-    requestAnimationFrame(() => (status.textContent = message));
-  }
+  if (el.offsetParent === null) announce(message);
   // 続けて表示したときもバーを最初から縮め直す
   el.classList.remove('timing');
   void el.offsetWidth;

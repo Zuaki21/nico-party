@@ -162,7 +162,7 @@ async function main() {
     if (compact) ui.closeSettings();
   });
   // 通行証がないと、部屋に入れず、動画の読み込みも検索もできない。ローディングのまま止まらないよう、理由を出す
-  if (!pass || !session.nicoPass) {
+  if (!pass) {
     failLoading(t('loginRequired'));
     return;
   }
@@ -191,7 +191,6 @@ function scheduleRefresh(discord: DiscordSDK) {
         authenticate(discord, false),
         new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('refresh timed out')), PASS_REFRESH_TIMEOUT_MS)),
       ]);
-      if (!fresh.pass || !fresh.nicoPass) throw new Error('no pass issued');
       session.nicoPass = fresh.nicoPass;
       session.conn?.setPass(fresh.pass);
       lastSucceededAt = Date.now();

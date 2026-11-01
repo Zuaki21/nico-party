@@ -3,7 +3,7 @@ import { CLOSE_EVICTED, HEARTBEAT, type ClientMsg, type QueueItem } from '../../
 import { parseVideoId } from '../../../shared/video';
 import { VERIFIED_NAME_HEADER, VERIFIED_UID_HEADER, type Env } from '../env';
 import { fetchEmbedError, fetchVideoInfo, UpstreamError } from '../nico/nicoApi';
-import { sha256Hex } from '../pass';
+import { sha256Hex } from '../hash';
 import { EnqueueQueue } from './enqueue';
 import { everyoneFailed, reportLoad } from './loadReport';
 import {

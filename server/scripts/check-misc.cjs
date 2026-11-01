@@ -7,20 +7,13 @@ const { loadTs } = require('./_load.cjs');
 const load = loadTs([
   'server/src/room/validate.ts',
   'server/src/room/loadReport.ts',
-  'server/src/room/sockets.ts',
   'server/src/room/limiter.ts',
-  'server/src/room/playback.ts',
-  'server/src/env.ts',
   'server/src/wsAuth.ts',
-  'server/src/instanceCheck.ts',
   'server/src/token.ts',
   'server/src/room/enqueue.ts',
   'server/src/room/roomStore.ts',
-  'server/src/room/state.ts',
-  'server/src/pass.ts',
-  'server/src/body.ts',
+  'server/src/rateLimit.ts',
   'server/src/nico/nicoRoutes.ts',
-  'server/src/nico/nicoRewrite.ts',
   'shared/playlist.ts',
   'shared/video.ts',
 ]);
@@ -33,6 +26,7 @@ const { exchangeToken } = load('server/src/token.ts');
 const { EnqueueQueue } = load('server/src/room/enqueue.ts');
 const { RoomStore } = load('server/src/room/roomStore.ts');
 const pass = load('server/src/pass.ts');
+const { withinRateLimit } = load('server/src/rateLimit.ts');
 const { readLimited, BodyTooLargeError } = load('server/src/body.ts');
 const { matchRoute } = load('server/src/nico/nicoRoutes.ts');
 const { reorder, jumpTo } = load('shared/playlist.ts');
@@ -142,11 +136,11 @@ test('回数の制限: 窓の中で上限まで。窓が過ぎたら数え直す
   try {
     let t = 1_000_000;
     Date.now = () => t;
-    for (let i = 0; i < 3; i++) assert.equal(pass.withinRateLimit('k1', 3, 1000), true);
-    assert.equal(pass.withinRateLimit('k1', 3, 1000), false);
-    assert.equal(pass.withinRateLimit('k2', 3, 1000), true);
+    for (let i = 0; i < 3; i++) assert.equal(withinRateLimit('k1', 3, 1000), true);
+    assert.equal(withinRateLimit('k1', 3, 1000), false);
+    assert.equal(withinRateLimit('k2', 3, 1000), true);
     t += 1000;
-    assert.equal(pass.withinRateLimit('k1', 3, 1000), true);
+    assert.equal(withinRateLimit('k1', 3, 1000), true);
   } finally {
     Date.now = realNow;
   }

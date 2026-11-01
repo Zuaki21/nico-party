@@ -1,7 +1,10 @@
 import { BodyTooLargeError, readLimited } from './body';
 import type { Env } from './env';
+import { exchangeCode, fetchMe } from './discord';
+import { sha256Hex } from './hash';
 import { checkParticipation } from './instanceCheck';
-import { ConfigError, issuePass, passSecret, sha256Hex, withinRateLimit } from './pass';
+import { ConfigError, issuePass, passSecret } from './pass';
+import { withinRateLimit } from './rateLimit';
 import { ROOM_ID } from './wsAuth';
 
 const ROOM_PATTERN = new RegExp(`^${ROOM_ID}$`);
@@ -43,30 +46,18 @@ export async function exchangeToken(request: Request, env: Env): Promise<Respons
   if (!withinRateLimit('token', TOKEN_LIMIT_PER_MIN, 60_000)) {
     return Response.json({ error: 'too many requests' }, { status: 429 });
   }
-  const res = await fetch('https://discord.com/api/oauth2/token', {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: env.DISCORD_CLIENT_ID,
-      client_secret: env.DISCORD_CLIENT_SECRET,
-      grant_type: 'authorization_code',
-      code,
-    }),
-    signal: AbortSignal.timeout(8000),
-  }).catch(() => null);
-  const data = await res?.json<{ access_token?: string }>().catch(() => ({ access_token: undefined }));
-  if (!data?.access_token) return Response.json({ error: 'token exchange failed' }, { status: 400 });
+  const accessToken = await exchangeCode({
+    clientId: env.DISCORD_CLIENT_ID,
+    clientSecret: env.DISCORD_CLIENT_SECRET,
+    code,
+  });
+  if (!accessToken) return Response.json({ error: 'token exchange failed' }, { status: 400 });
   // 名前はサーバーが Discord から取得する（クライアントの申告は信用しない）
-  const me = await fetch('https://discord.com/api/users/@me', {
-    headers: { authorization: `Bearer ${data.access_token}` },
-    signal: AbortSignal.timeout(5000),
-  })
-    .then((r) => (r.ok ? r.json<{ id?: string; global_name?: string | null; username?: string }>() : null))
-    .catch(() => null);
+  const me = await fetchMe(accessToken);
   const name = me?.global_name ?? me?.username ?? 'guest';
   // トークンの交換に成功した時点で、ログインはできている。ユーザー情報が取れなくても、通行証は発行する
   // （無いと、部屋に入れず、動画も再生できなくなるため）。ID が取れなければ、トークンから作った識別子で代える
-  const uid = me?.id ?? (await sha256Hex(data.access_token)).slice(0, 18);
+  const uid = me?.id ?? (await sha256Hex(accessToken)).slice(0, 18);
   // 申告された部屋（Activity インスタンス）の参加者でなければ、その部屋の通行証は渡さない。
   // ボットトークンが未登録のとき、ユーザー ID が取れなかったとき、Discord に確かめられなかったときは確かめずに通す
   if (env.DISCORD_BOT_TOKEN && me?.id) {
@@ -82,5 +73,5 @@ export async function exchangeToken(request: Request, env: Env): Promise<Respons
     issuePass(secret, 'ws', { u: uid, n: name, r: room }),
     issuePass(secret, 'nico', { u: uid }),
   ]);
-  return Response.json({ access_token: data.access_token, pass, nicoPass });
+  return Response.json({ access_token: accessToken, pass, nicoPass });
 }

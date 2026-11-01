@@ -8,9 +8,9 @@ export class NotInActivityError extends Error {}
 /**
  * Discord にログインしてもらい、表示名を取得する。
  * @param interactive false なら、確認画面は出さない（許可済みでなければ失敗する。開きっぱなしの間の取り直し用）
- * @returns 表示名と、サーバーが発行した通行証（WebSocket 用・ニコニコの中継と検索用。取得できなかったときは undefined）
+ * @returns 表示名と、サーバーが発行した通行証（WebSocket 用・ニコニコの中継と検索用）。通行証が得られなければ例外
  */
-export async function authenticate(sdk: DiscordSDK, interactive = true): Promise<{ name: string; pass?: string; nicoPass?: string }> {
+export async function authenticate(sdk: DiscordSDK, interactive = true): Promise<{ name: string; pass: string; nicoPass: string }> {
   const authorize = (prompt?: 'none') =>
     sdk.commands.authorize({
       client_id: import.meta.env.VITE_DISCORD_CLIENT_ID,
@@ -36,6 +36,7 @@ export async function authenticate(sdk: DiscordSDK, interactive = true): Promise
     nicoPass?: string;
   };
   if (!access_token) throw new Error('token exchange failed');
+  if (!pass || !nicoPass) throw new Error('no pass issued');
   const { user } = await sdk.commands.authenticate({ access_token });
   return { name: user.global_name ?? user.username, pass, nicoPass };
 }
