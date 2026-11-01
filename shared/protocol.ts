@@ -80,7 +80,11 @@ export function parseClientMsg(raw: unknown): ClientMsg | null {
   switch (m.t) {
     case 'join':
       if (!str(m.name, 200)) return null;
-      return { t: 'join', name: m.name, ...(str(m.clientId, 64) ? { clientId: m.clientId } : {}) };
+      return {
+        t: 'join',
+        name: m.name,
+        ...(str(m.clientId, 64) && /^[A-Za-z0-9-]{8,64}$/.test(m.clientId) ? { clientId: m.clientId } : {}),
+      };
     case 'control':
       if (!str(m.itemId, 64) || typeof m.playing !== 'boolean' || !num(m.position, 86_400)) return null;
       return { t: 'control', itemId: m.itemId, playing: m.playing, position: m.position };

@@ -1,7 +1,7 @@
 import { handleNico } from './nico';
 import { searchVideos } from './nicoApi';
-import { issuePass, verifyPass, withinRateLimit } from './pass';
-import { VERIFIED_NAME_HEADER, type Env } from './room';
+import { issuePass, sha256Hex, verifyPass, withinRateLimit } from './pass';
+import { VERIFIED_NAME_HEADER, VERIFIED_UID_HEADER, type Env } from './room';
 
 export { Room } from './room';
 
@@ -45,8 +45,12 @@ export default {
       // 通行証があれば、Discord のものとして確かめた名前を部屋に渡す。外から来た同名のヘッダーは信用しない
       const headers = new Headers(request.headers);
       headers.delete(VERIFIED_NAME_HEADER);
+      headers.delete(VERIFIED_UID_HEADER);
       const claims = await verifyPass(env.DISCORD_CLIENT_SECRET, 'ws', url.searchParams.get('pass'));
-      if (claims?.n !== undefined) headers.set(VERIFIED_NAME_HEADER, encodeURIComponent(claims.n));
+      if (claims?.n !== undefined) {
+        headers.set(VERIFIED_NAME_HEADER, encodeURIComponent(claims.n));
+        headers.set(VERIFIED_UID_HEADER, claims.u);
+      }
       const id = env.ROOM.idFromName(match[1]);
       return env.ROOM.get(id).fetch(new Request(request, { headers }));
     }
@@ -69,9 +73,9 @@ async function exchangeToken(request: Request, env: Env): Promise<Response> {
       code,
     }),
   });
-  const data = await res.json<{ access_token?: string }>();
+  const data = await res.json<{ access_token?: string }>().catch(() => ({ access_token: undefined }));
   if (!data.access_token) return Response.json({ error: 'token exchange failed' }, { status: 400 });
-  // 名前はサーバーが Discord から取得する（クライアントの申告は信用しない）。取れなくても視聴はできるよう、通行証なしで返す
+  // 名前はサーバーが Discord から取得する（クライアントの申告は信用しない）
   const me = await fetch('https://discord.com/api/users/@me', {
     headers: { authorization: `Bearer ${data.access_token}` },
     signal: AbortSignal.timeout(5000),
@@ -79,10 +83,11 @@ async function exchangeToken(request: Request, env: Env): Promise<Response> {
     .then((r) => (r.ok ? r.json<{ id?: string; global_name?: string | null; username?: string }>() : null))
     .catch(() => null);
   const name = me?.global_name ?? me?.username;
-  if (!me?.id || !name) return Response.json({ access_token: data.access_token });
-  const [pass, nicoPass] = await Promise.all([
-    issuePass(env.DISCORD_CLIENT_SECRET, 'ws', { u: me.id, n: name }),
-    issuePass(env.DISCORD_CLIENT_SECRET, 'nico', { u: me.id }),
-  ]);
+  // トークンの交換に成功した時点で、ログインはできている。ユーザー情報が取れなくても、中継と検索の通行証は発行する
+  // （無いと動画が再生できなくなるため）。ID が取れなければ、トークンから作った識別子で代える
+  const uid = me?.id ?? (await sha256Hex(data.access_token)).slice(0, 18);
+  const nicoPass = await issuePass(env.DISCORD_CLIENT_SECRET, 'nico', { u: uid });
+  // 名前入りの通行証は、名前が取れたときだけ
+  const pass = name ? await issuePass(env.DISCORD_CLIENT_SECRET, 'ws', { u: uid, n: name }) : undefined;
   return Response.json({ access_token: data.access_token, pass, nicoPass });
 }

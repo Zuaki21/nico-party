@@ -28,8 +28,23 @@ const toBase64Url = (bytes: Uint8Array) =>
 const fromBase64Url = (s: string) =>
   Uint8Array.from(atob(s.replaceAll('-', '+').replaceAll('_', '/')), (c) => c.charCodeAt(0));
 
-async function hmacKey(secret: string, usage: 'sign' | 'verify') {
-  return crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [usage]);
+/** 中継の 1 回ごとに鍵を作り直さないよう、取り込んだ鍵は覚えておく */
+const keys = new Map<string, Promise<CryptoKey>>();
+
+function hmacKey(secret: string, usage: 'sign' | 'verify'): Promise<CryptoKey> {
+  const id = `${usage}:${secret}`;
+  let key = keys.get(id);
+  if (!key) {
+    key = crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [usage]);
+    keys.set(id, key);
+  }
+  return key;
+}
+
+/** 文字列の SHA-256（16 進数） */
+export async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /** 通行証を作る */

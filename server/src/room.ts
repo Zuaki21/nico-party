@@ -14,6 +14,7 @@ import {
   type ServerMsg,
 } from '../../shared/protocol';
 import type { NicoEnv } from './nico';
+import { sha256Hex } from './pass';
 import { fetchEmbedError, fetchVideoInfo } from './nicoApi';
 
 type LoadFailed = { itemId: string; ids: string[] };
@@ -22,6 +23,8 @@ interface Attachment extends Member {
   joined: boolean;
   /** 名前が Discord のものとして確かめられている */
   verified?: boolean;
+  /** 確かめられた Discord のユーザー ID（メンバーの ID を作るのに使う。他のメンバーには見せない） */
+  uid?: string;
 }
 
 export interface Env extends NicoEnv {
@@ -32,6 +35,8 @@ export interface Env extends NicoEnv {
 
 /** index.ts が通行証を確かめたとき、その名前（URL エンコード済み）を渡すヘッダー */
 export const VERIFIED_NAME_HEADER = 'x-nico-party-verified-name';
+/** 同じく、確かめられた Discord のユーザー ID を渡すヘッダー */
+export const VERIFIED_UID_HEADER = 'x-nico-party-verified-uid';
 /** ログインできなかった人の表示名として、クライアントが送ってくる名前（他の名前の申告は受け付けない） */
 const GUEST_NAMES = ['ゲスト', 'Guest'];
 
@@ -54,8 +59,12 @@ const EMPTY_ROOM_TTL_MS = 60_000;
  * 各自のプレイヤーの読み込みに数秒かかるので、すぐ開始にすると冒頭が飛ばされてしまう
  */
 const START_DELAY_MS = 3000;
-/** 動画の追加の順番待ちがこれだけ溜まっていたら、新しい追加は断る */
+/** 動画の追加の順番待ちが、部屋全体・1 人あたりでこれだけ溜まっていたら、新しい追加は断る */
 const ENQUEUE_WAITING_LIMIT = 20;
+const ENQUEUE_WAITING_PER_MEMBER = 8;
+/** 1 つの接続から受け付けるメッセージの量（1 秒あたりの補充数と、溜められる最大数）。再生の操作は 1 秒に数回で足りる */
+const MESSAGE_REFILL_PER_SEC = 20;
+const MESSAGE_BURST = 40;
 
 /**
  * 1部屋 (= Activity の instanceId) = 1 Durable Object。
@@ -67,6 +76,9 @@ export class Room extends DurableObject<Env> {
   /** 動画の追加を 1 件ずつ処理するための列と、順番待ちの数 */
   private enqueueChain: Promise<void> = Promise.resolve();
   private enqueueWaiting = 0;
+  private enqueueWaitingBy = new Map<string, number>();
+  /** 接続ごとのメッセージの受け付け残り（連投で保存と配信が増えないようにする） */
+  private buckets = new WeakMap<WebSocket, { tokens: number; at: number }>();
 
   private cache: {
     state?: PlaybackState;
@@ -90,11 +102,13 @@ export class Room extends DurableObject<Env> {
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server);
     const verifiedName = request.headers.get(VERIFIED_NAME_HEADER);
+    const uid = request.headers.get(VERIFIED_UID_HEADER);
     const attachment: Attachment = {
+      // メンバーの ID はサーバーが決める（クライアントの申告にすると、他の人の ID を名乗れてしまう）
       id: crypto.randomUUID().slice(0, 8),
       name: verifiedName !== null ? decodeURIComponent(verifiedName).slice(0, 32) : 'guest',
       joined: false,
-      ...(verifiedName !== null ? { verified: true } : {}),
+      ...(verifiedName !== null && uid !== null ? { verified: true, uid } : {}),
     };
     server.serializeAttachment(attachment);
     return new Response(null, { status: 101, webSocket: client });
@@ -116,6 +130,7 @@ export class Room extends DurableObject<Env> {
     }
     // join より前に届いた部屋の操作は受け付けない
     if (msg.t !== 'join' && !a.joined) return;
+    if (!this.takeToken(ws)) return;
 
     switch (msg.t) {
       case 'join': {
@@ -123,8 +138,9 @@ export class Room extends DurableObject<Env> {
         if (a.joined) return;
         // 確かめられた名前はそのまま使う。ログインできなかった人は、他の人の名前を名乗れないよう定型のゲスト名だけ受け付ける
         if (!a.verified) a.name = GUEST_NAMES.includes(msg.name) ? msg.name : 'guest';
-        // 再接続しても同じメンバーとして扱えるよう、クライアントが決めた ID を使う
-        if (typeof msg.clientId === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(msg.clientId)) a.id = msg.clientId;
+        // 確かめられた人は、再接続しても同じメンバーとして扱えるよう、ユーザー ID と接続元の ID から決めた ID にする
+        // （どちらかが分からないと作れないので、他の人の ID は名乗れない）。ログインしていない人は、毎回新しい ID
+        if (a.uid && msg.clientId) a.id = (await sha256Hex(`${a.uid}:${msg.clientId}`)).slice(0, 8);
         a.joined = true;
         ws.serializeAttachment(a);
         send(ws, {
@@ -144,9 +160,8 @@ export class Room extends DurableObject<Env> {
         const s = await this.getState();
         // 動画が切り替わった直後に届いた、前の動画への操作は捨てる
         if (!s.current || s.current.id !== msg.itemId) return;
-        s.playing = !!msg.playing;
-        const position = Number(msg.position);
-        s.position = Number.isFinite(position) ? Math.max(0, position) : 0;
+        s.playing = msg.playing;
+        s.position = Math.max(0, msg.position);
         await this.commit(s, a);
         return;
       }
@@ -154,11 +169,22 @@ export class Room extends DurableObject<Env> {
       case 'enqueue': {
         // 動画の追加は、受け取った順に 1 件ずつ処理する（続けて追加しても弾かず、順番どおりに並ぶ）。
         // 溜まりすぎている（自動化など）ときだけ断る
-        if (this.enqueueWaiting >= ENQUEUE_WAITING_LIMIT) return sendError(ws, 'too_fast');
+        const mine = this.enqueueWaitingBy.get(a.id) ?? 0;
+        if (this.enqueueWaiting >= ENQUEUE_WAITING_LIMIT || mine >= ENQUEUE_WAITING_PER_MEMBER) {
+          return sendError(ws, 'too_fast');
+        }
         this.enqueueWaiting++;
+        this.enqueueWaitingBy.set(a.id, mine + 1);
         const url = msg.url;
         const job = this.enqueueChain.then(() => this.enqueue(ws, a, url));
-        this.enqueueChain = job.catch(() => {}).finally(() => this.enqueueWaiting--);
+        this.enqueueChain = job
+          .catch(() => {})
+          .finally(() => {
+            this.enqueueWaiting--;
+            const left = (this.enqueueWaitingBy.get(a.id) ?? 1) - 1;
+            if (left > 0) this.enqueueWaitingBy.set(a.id, left);
+            else this.enqueueWaitingBy.delete(a.id);
+          });
         await this.enqueueChain;
         return;
       }
@@ -187,8 +213,8 @@ export class Room extends DurableObject<Env> {
           await this.getHistory(),
           s.current,
           await this.getQueue(),
-          String(msg.id),
-          Number(msg.index) || 0,
+          msg.id,
+          msg.index,
         );
         if (!result) return;
         await this.putLists(result);
@@ -275,7 +301,7 @@ export class Room extends DurableObject<Env> {
 
   /** 動画を 1 本、再生リストに追加する（enqueue の列から 1 件ずつ呼ばれる） */
   private async enqueue(ws: WebSocket, a: Attachment, url: string) {
-    const videoId = parseVideoId(String(url ?? ''));
+    const videoId = parseVideoId(url);
     if (!videoId) return sendError(ws, 'invalid_url');
     if (!(await this.hasRoom())) return sendError(ws, 'queue_full');
     const [info, embedError] = await Promise.all([
@@ -312,6 +338,18 @@ export class Room extends DurableObject<Env> {
     return;
   }
 
+  /** この接続からのメッセージを 1 件受け付けられるか（連投されたら捨てる） */
+  private takeToken(ws: WebSocket): boolean {
+    const now = Date.now();
+    const b = this.buckets.get(ws) ?? { tokens: MESSAGE_BURST, at: now };
+    b.tokens = Math.min(MESSAGE_BURST, b.tokens + ((now - b.at) / 1000) * MESSAGE_REFILL_PER_SEC);
+    b.at = now;
+    this.buckets.set(ws, b);
+    if (b.tokens < 1) return false;
+    b.tokens--;
+    return true;
+  }
+
   private async onLeave(ws: WebSocket) {
     try {
       ws.close(1000, 'bye');
@@ -337,10 +375,11 @@ export class Room extends DurableObject<Env> {
   }
 
   private async putLoadFailed(failed: LoadFailed | undefined) {
-    this.cache.failed = failed;
-    this.cache.failedLoaded = true;
     if (failed) await this.ctx.storage.put(LOAD_FAILED_KEY, failed);
     else await this.ctx.storage.delete(LOAD_FAILED_KEY);
+    // 書き込めてからメモリを更新する（失敗したときに、メモリだけ新しくならないように）
+    this.cache.failed = failed;
+    this.cache.failedLoaded = true;
   }
 
   /**
@@ -408,8 +447,8 @@ export class Room extends DurableObject<Env> {
   /** 版を進めて保存し、全員に送る */
   private async putState(s: PlaybackState) {
     s.version++;
-    this.cache.state = { ...s };
     await this.ctx.storage.put(STATE_KEY, s);
+    this.cache.state = { ...s };
     this.broadcast({ t: 'state', state: s });
   }
 
@@ -433,9 +472,11 @@ export class Room extends DurableObject<Env> {
   /** 渡されたリストを保存し、キューと履歴の両方を全員に送る */
   private async putLists(lists: { queue?: QueueItem[]; history?: QueueItem[] }) {
     const entries: Record<string, QueueItem[]> = {};
-    if (lists.queue) entries[QUEUE_KEY] = this.cache.queue = [...lists.queue];
-    if (lists.history) entries[HISTORY_KEY] = this.cache.history = [...lists.history];
+    if (lists.queue) entries[QUEUE_KEY] = [...lists.queue];
+    if (lists.history) entries[HISTORY_KEY] = [...lists.history];
     if (Object.keys(entries).length > 0) await this.ctx.storage.put(entries);
+    if (lists.queue) this.cache.queue = entries[QUEUE_KEY];
+    if (lists.history) this.cache.history = entries[HISTORY_KEY];
     this.broadcast({
       t: 'queue',
       queue: lists.queue ?? (await this.getQueue()),
@@ -453,7 +494,7 @@ export class Room extends DurableObject<Env> {
     return this.sockets(exclude)
       .map((ws) => ws.deserializeAttachment() as Attachment)
       .filter((a) => a.joined)
-      .map(({ joined: _joined, verified: _verified, ...m }) => m);
+      .map(({ joined: _joined, verified: _verified, uid: _uid, ...m }) => m);
   }
 
   private broadcast(msg: ServerMsg, exclude?: WebSocket) {
