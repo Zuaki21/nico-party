@@ -144,6 +144,38 @@ const ok = (text, init = {}) => new Response(text, { status: 200, ...init });
     assert.equal(loop.calls.length, 4);
   });
 
+  await run('中継: リダイレクトは自分で辿る（redirect: manual）。307 は POST と本文を保ち、302 は GET に切り替える', async () => {
+    const hops = (status) => (url, init, n) =>
+      n === 1 ? new Response(null, { status, headers: { location: '/moved' } }) : ok('done');
+    const r307 = await relayWith(hops(307), { method: 'POST', path: '/v4-watch/sm9', body: '{"a":1}' });
+    assert.ok(r307.calls.every((c) => c.init.redirect === 'manual'), 'すべての問い合わせが manual');
+    assert.equal(r307.calls[1].url, 'https://nvapi.nicovideo.jp/moved', '相対 Location は元の URL から解決する');
+    assert.equal(r307.calls[1].init.method, 'POST');
+    assert.equal(r307.calls[1].init.body, '{"a":1}');
+    const r302 = await relayWith(hops(302), { method: 'POST', path: '/v4-watch/sm9', body: '{"a":1}' });
+    assert.equal(r302.calls[1].init.method, 'GET');
+    assert.equal(r302.calls[1].init.body, undefined);
+    assert.ok(r302.calls[1].init.headers['user-agent'], 'リダイレクト先にも User-Agent を付ける');
+  });
+
+  await run('中継: 秘密の未登録は、502 にせず例外にする（外側が 500 にする）', async () => {
+    const req = new Request('http://x/nico/p.q/nico-embed/sm9');
+    await assert.rejects(() => handleNico(req, { DISCORD_CLIENT_ID: 'a' }, '/p.q/nico-embed/sm9'), /PASS_SECRET is not set/);
+  });
+
+  await run('中継: 許可外へのリダイレクトを断ったとき、警告を残す', async () => {
+    const warns = [];
+    const realWarn = console.warn;
+    console.warn = (m) => warns.push(m);
+    try {
+      await relayWith(() => new Response(null, { status: 302, headers: { location: 'https://evil.example/x' } }));
+    } finally {
+      console.warn = realWarn;
+    }
+    assert.equal(warns.length, 1);
+    assert.match(warns[0], /evil\.example/);
+  });
+
   await run('中継: 大きすぎる応答は 502', async () => {
     const { res } = await relayWith(() => ok('x', { headers: { 'content-length': String(20 * 1024 * 1024) } }));
     assert.equal(res.status, 502);

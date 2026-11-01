@@ -47,6 +47,8 @@ export async function handleNico(req: Request, env: NicoRouteEnv, path: string):
   try {
     return await route(req, env, path);
   } catch (e) {
+    // 秘密の未登録など、設定の不備は、上流の不調（502）にせず、外側の 500 に任せる
+    if (e instanceof Error && e.message.endsWith(' is not set')) throw e;
     if (e instanceof BodyTooLargeError) return new Response('Payload too large', { status: 413 });
     const timedOut = e instanceof Error && e.name === 'TimeoutError';
     if (!timedOut) console.error('nico relay failed', e);
@@ -94,18 +96,24 @@ const MAX_REDIRECTS = 3;
 async function fetchUpstream(up: Upstream, ua: string): Promise<Response | null> {
   let url = up.url;
   let init = up.init;
+  // 待つ時間は、リダイレクトを含めた全体で数える（ホップごとに取り直すと、最悪で何倍も滞留する）
+  const signal = AbortSignal.timeout(UPSTREAM_TIMEOUT_MS);
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const res = await fetch(url, {
       ...init,
       redirect: 'manual',
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      signal,
       headers: { 'user-agent': ua, ...init?.headers },
     });
     const location = res.headers.get('location');
     if (!REDIRECT_STATUS.includes(res.status) || !location) return res;
     await res.body?.cancel().catch(() => {});
     const next = new URL(location, url);
-    if (next.protocol !== 'https:' || !ALLOWED_HOST.test(next.hostname)) return null;
+    if (next.protocol !== 'https:' || !ALLOWED_HOST.test(next.hostname)) {
+      // 上流の仕様変更で、正規の行き先が増えたときに気づけるように
+      console.warn(`nico relay: refused redirect to ${next.protocol}//${next.hostname} (hop ${hop + 1})`);
+      return null;
+    }
     url = next.toString();
     // 307・308 以外は、GET に切り替えて本文を捨てる（通常のリダイレクトの扱い）
     if (res.status !== 307 && res.status !== 308) init = { ...init, method: 'GET', body: undefined };

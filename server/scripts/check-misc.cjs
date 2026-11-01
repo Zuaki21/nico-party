@@ -510,6 +510,20 @@ async function tokenWith(env, body, discord = {}) {
 }
 const good = { code: 'abc123', room: 'room1' };
 
+test('トークン交換: ボットトークンが無いという警告は、1 回だけ出す', async () => {
+  const warns = [];
+  const realWarn = console.warn;
+  console.warn = (m) => warns.push(m);
+  try {
+    await tokenWith({}, good);
+    await tokenWith({}, good);
+  } finally {
+    console.warn = realWarn;
+  }
+  assert.equal(warns.length, 1);
+  assert.match(warns[0], /DISCORD_BOT_TOKEN/);
+});
+
 test('トークン交換: 参加者なら、部屋の通行証と中継の通行証が発行される', async () => {
   const { res } = await tokenWith({ DISCORD_BOT_TOKEN: 'bot' }, good);
   assert.equal(res.status, 200);
@@ -558,18 +572,6 @@ test('トークン交換: Discord に認可コードを断られたら 400', asy
   assert.equal(res.status, 400);
 });
 
-test('トークン交換: ボットトークンが無いという警告は、1 回だけ出す', async () => {
-  const warns = [];
-  const realWarn = console.warn;
-  console.warn = (m) => warns.push(m);
-  try {
-    await tokenWith({}, good);
-    await tokenWith({}, good);
-  } finally {
-    console.warn = realWarn;
-  }
-  assert.ok(warns.length <= 1);
-});
 
 (async () => {
   // 通行証や時計を扱うテストが重ならないよう、1 件ずつ順に流す

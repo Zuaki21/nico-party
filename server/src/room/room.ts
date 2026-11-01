@@ -89,9 +89,6 @@ export class Room extends DurableObject<Env> {
     }
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    this.ctx.acceptWebSocket(server);
-    // 入室しないまま居座る接続を、時間がたったら切る（すでにアラームがあれば、そのときに一緒に掃除する）
-    if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + JOIN_TIMEOUT_MS + 1000);
     const verifiedName = request.headers.get(VERIFIED_NAME_HEADER);
     const attachment: Attachment = {
       // メンバーの ID はサーバーが決める（クライアントの申告にすると、他の人の ID を名乗れてしまう）
@@ -102,6 +99,10 @@ export class Room extends DurableObject<Env> {
       ...(verifiedName !== null && uid !== null ? { uid } : {}),
     };
     server.serializeAttachment(attachment);
+    this.ctx.acceptWebSocket(server);
+    // 入室しないまま居座る接続を、時間がたったら切る（すでにアラームがあれば、そのときに一緒に掃除する）。
+    // 接続の情報を持たない接続が、await の間に見えることがないよう、アラームはあとで設定する
+    if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + JOIN_TIMEOUT_MS + 1000);
     return new Response(null, { status: 101, webSocket: client });
   }
 

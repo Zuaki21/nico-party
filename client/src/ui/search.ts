@@ -166,7 +166,12 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
       render('done');
       // 取得を待っている間に、利用者が別の場所へ移っていたら、フォーカスは奪わない
       const focusLost = document.activeElement === document.body || list.contains(document.activeElement);
-      if (refocus && focusLost) list.children[before]?.querySelector<HTMLElement>('button:not(:disabled)')?.focus({ preventScroll: true });
+      if (refocus && focusLost) {
+        // 足された結果のどれかのボタン。すべて再生できない動画だったら、「もっと見る」か、一覧そのもの
+        const target =
+          list.children[before]?.querySelector<HTMLElement>('button:not(:disabled)') ?? list.querySelector<HTMLElement>('button.more');
+        (target ?? list).focus({ preventScroll: true });
+      }
     } catch {
       if (my === seq) {
         render('error');

@@ -79,7 +79,11 @@ function makeEnv(scenarioName, run) {
       this.pos = 0; this.dataReady = false;
       if (!this.failLoad) internalTimeout(() => { this.loaded = true; this.duration = 120; this.emit('load'); }, 300);
     },
-    unload() { L('player.unload'); this.loaded = false; },
+    unload() {
+      L('player.unload');
+      // 本物の NicoPlayer.unload と同じ: 読み込み済みでなくなり、状態を初期に戻す
+      this.loaded = false; this.status = 'loading'; this.muted = false; this.time = 0; this.timeAt = 0; this.duration = 0; this.reported = { time: 0, at: 0 };
+    },
     ready() { return this.loaded; },
     play() {
       L('player.play');
@@ -320,6 +324,11 @@ Object.assign(scenarios, {
   '位置合わせ中に、別の状態の再送が届く': ({ clock, engine, state }) => {
     const s = state({ position: 30 }); engine.update(s); clock.advance(600);
     engine.update({ ...s, version: 2 }); clock.advance(10000);
+  },
+  '何も再生していない状態になった後で、また動画が始まる': ({ clock, engine, state, item }) => {
+    engine.update(state({ position: 30 })); clock.advance(8000);
+    engine.update({ ...state({ position: 0 }), current: null, playing: false, version: 3 }); clock.advance(3000);
+    engine.update(state({ current: item('i2', 'sm2'), position: 40, version: 4 })); clock.advance(10000);
   },
   '一時停止の部屋に途中参加（再生開始の通知が来ない）': ({ clock, engine, state, player }) => {
     player.noPlayEvent = true; engine.update(state({ playing: false, position: 45 })); clock.advance(8000);

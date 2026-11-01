@@ -46,9 +46,22 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
   };
 
   /** 保存した大きさが画面に対して大きすぎるときだけ、動画側を潰さない大きさに収める（保存した値は変えない） */
+  let fitted = false;
   const fitToScreen = () => {
-    const size = currentSize();
-    if (size > 0 && size > clampSize(size)) setSize(clampSize(size));
+    let size = currentSize();
+    if (size <= 0) return;
+    // 前に収めたことがあれば、まず保存した大きさ（無ければ既定）に戻してから、今の画面で収め直す
+    // （画面を広げたときに、狭いときの大きさのままにならないように）
+    if (fitted) {
+      const saved = Number(load(sizeKey()));
+      setSize(saved > 0 ? Math.max(minSide(), saved) : null);
+      fitted = false;
+      size = currentSize();
+    }
+    if (size > clampSize(size)) {
+      setSize(clampSize(size));
+      fitted = true;
+    }
   };
 
   const applySize = () => {

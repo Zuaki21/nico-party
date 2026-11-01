@@ -622,6 +622,24 @@
   "   900 cover false",
   "END mutedRestored=true cover=false timersAfterDispose=0 listenersAfterDispose=0"
  ],
+ "何も再生していない状態になった後で、また動画が始まる": [
+  "     0 player.load sm1",
+  "   300 cover true",
+  "   300 player.mute true",
+  "   300 player.play",
+  "   500 player.seek 30.50",
+  "   900 player.mute false",
+  "   900 cover false",
+  "  8000 player.unload",
+  " 11000 player.load sm2",
+  " 11300 cover true",
+  " 11300 player.mute true",
+  " 11300 player.play",
+  " 11500 player.seek 40.50",
+  " 11900 player.mute false",
+  " 11900 cover false",
+  "END mutedRestored=true cover=false timersAfterDispose=0 listenersAfterDispose=0"
+ ],
  "一時停止の部屋に途中参加（再生開始の通知が来ない）": [
   "     0 player.load sm1",
   "   300 cover true",
