@@ -72,7 +72,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
       </div>
       ${settingsHtml()}
     </main>
-    <div class="splitter" id="splitter" data-i18n-title="resize"></div>
+    <div class="splitter" id="splitter" role="separator" tabindex="0" data-i18n-title="resize" data-i18n-label="resize"></div>
     <aside class="side" id="side">
       <form class="bar" id="form">
         <input type="text" id="url" data-i18n-placeholder="inputPlaceholder" autocomplete="off" />
@@ -80,8 +80,8 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
         <div class="error" id="error" role="alert" hidden></div>
       </form>
       <div class="tabs" id="side-tabs" role="tablist">
-        <button type="button" role="tab" data-tab="list" data-i18n="tabList"></button>
-        <button type="button" role="tab" data-tab="search" data-i18n="tabSearch"></button>
+        <button type="button" role="tab" data-tab="list" aria-controls="queue" data-i18n="tabList"></button>
+        <button type="button" role="tab" data-tab="search" aria-controls="search" data-i18n="tabSearch"></button>
       </div>
       <div class="queue-head">
         <button id="shuffle" class="mode" aria-pressed="false">${SHUFFLE_ICON}</button>
@@ -92,7 +92,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
       <div class="search" id="search">
         <div class="search-head">
           <span class="search-title" id="search-title"></span>
-          <div class="seg" id="search-sort" data-i18n-title="sortTitle">
+          <div class="seg" id="search-sort" role="group" data-i18n-title="sortTitle" data-i18n-label="sortTitle">
             <button type="button" data-sort="popular" data-i18n="sortPopular"></button>
             <button type="button" data-sort="new" data-i18n="sortNew"></button>
             <button type="button" data-sort="likes" data-i18n="sortLikes"></button>
@@ -193,6 +193,15 @@ function setupTabs() {
     }
   };
   onSeg('side-tabs', 'tab', show);
+  // 矢印キーで、隣のタブへ移る
+  $('side-tabs').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const tabs = [...$('side-tabs').querySelectorAll<HTMLButtonElement>('button')];
+    const next = tabs[(tabs.indexOf(document.activeElement as HTMLButtonElement) + (e.key === 'ArrowLeft' ? -1 : 1) + tabs.length) % tabs.length];
+    e.preventDefault();
+    next.focus();
+    show(next.dataset.tab!);
+  });
   show('list');
   return show;
 }

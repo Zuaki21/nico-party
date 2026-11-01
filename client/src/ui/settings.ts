@@ -67,6 +67,9 @@ export function setupSettings(h: Pick<UiHandlers, 'openLink' | 'setPresence'>) {
     if (open) renderSettings();
     dialog.hidden = !open;
     button.setAttribute('aria-pressed', String(open));
+    // キーボードで操作している人のために、開いたら中へ、閉じたら開いたボタンへフォーカスを移す
+    if (open) $('settings-close').focus({ preventScroll: true });
+    else if (dialog.contains(document.activeElement)) button.focus({ preventScroll: true });
   };
 
   button.addEventListener('click', () => setOpen(dialog.hidden));
@@ -126,16 +129,16 @@ export function settingsHtml(): string {
       <button type="button" class="icon" id="settings-close" data-i18n-title="close">×</button>
     </div>
     <div class="setting-row">
-      <span class="setting-label" data-i18n="theme"></span>
-      <div class="seg" id="theme-seg">
+      <span class="setting-label" id="theme-label" data-i18n="theme"></span>
+      <div class="seg" id="theme-seg" role="group" aria-labelledby="theme-label">
         <button type="button" data-theme="auto" data-i18n="themeAuto"></button>
         <button type="button" data-theme="light" data-i18n="themeLight"></button>
         <button type="button" data-theme="dark" data-i18n="themeDark"></button>
       </div>
     </div>
     <div class="setting-row">
-      <span class="setting-label" data-i18n="uiSize"></span>
-      <div class="seg" id="scale-seg">
+      <span class="setting-label" id="scale-label" data-i18n="uiSize"></span>
+      <div class="seg" id="scale-seg" role="group" aria-labelledby="scale-label">
         <button type="button" data-scale="0.85" data-i18n="sizeSmall"></button>
         <button type="button" data-scale="1" data-i18n="sizeNormal"></button>
         <button type="button" data-scale="1.15" data-i18n="sizeLarge"></button>
@@ -143,18 +146,18 @@ export function settingsHtml(): string {
       </div>
     </div>
     <div class="setting-row">
-      <span class="setting-label" data-i18n="language"></span>
-      <div class="seg" id="lang-seg">
+      <span class="setting-label" id="lang-label" data-i18n="language"></span>
+      <div class="seg" id="lang-seg" role="group" aria-labelledby="lang-label">
         <button type="button" data-lang="ja">日本語</button>
         <button type="button" data-lang="en">English</button>
       </div>
     </div>
     <div class="setting-row">
       <span>
-        <span class="setting-label" data-i18n="presence"></span>
+        <span class="setting-label" id="presence-label" data-i18n="presence"></span>
         <span class="setting-desc" data-i18n="presenceDesc"></span>
       </span>
-      <input type="checkbox" class="switch" id="presence-toggle" data-i18n-title="presence" />
+      <input type="checkbox" class="switch" id="presence-toggle" aria-labelledby="presence-label" />
     </div>
     <div class="settings-links">
       <span class="version">ver ${APP_VERSION}</span>

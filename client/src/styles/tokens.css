@@ -37,6 +37,12 @@
   box-sizing: border-box;
 }
 
+/* キーボードで操作しているときのフォーカスの表示（ブラウザ既定の枠は、ボタンの装飾に隠れて見えにくい） */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* hidden 属性の要素は、クラスで display を指定していても必ず隠す */
 [hidden] {
   display: none !important;

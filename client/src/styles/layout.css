@@ -85,6 +85,10 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* マウスで掴んだときは枠を出さず、キーボードで選んだときだけ出す */
+.splitter:focus:not(:focus-visible) {
   outline: none;
 }
 

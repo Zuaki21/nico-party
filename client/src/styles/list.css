@@ -170,7 +170,10 @@
   top: 0;
   right: 0.2857rem;
   bottom: 0;
-  display: none;
+  /* display:none だと Tab で入れないので、見えなくするだけにする（乗せたとき・フォーカスがあるときに出す） */
+  display: flex;
+  opacity: 0;
+  pointer-events: none;
   align-items: center;
   gap: 0.1429rem;
   padding-left: 2rem;
@@ -183,7 +186,8 @@
 
 .queue li[data-id]:hover .actions,
 .actions:focus-within {
-  display: flex;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .actions button.icon {

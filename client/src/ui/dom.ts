@@ -11,7 +11,9 @@ export const $ = <T extends HTMLElement>(id: string): T => {
 /** 切り替えボタン（.seg）のうち、data-<key> が value のボタンを選択中の見た目にする */
 export function markSeg(id: string, key: string, value: string) {
   for (const b of $(id).querySelectorAll<HTMLButtonElement>('button')) {
-    b.classList.toggle('active', b.dataset[key] === value);
+    const selected = b.dataset[key] === value;
+    b.classList.toggle('active', selected);
+    b.setAttribute('aria-pressed', String(selected));
   }
 }
 

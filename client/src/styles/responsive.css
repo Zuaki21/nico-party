@@ -64,7 +64,8 @@
 @media (hover: none) {
   .actions {
     position: static;
-    display: flex;
+    opacity: 1;
+    pointer-events: auto;
     padding-left: 0;
     background: none;
   }

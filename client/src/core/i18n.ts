@@ -247,6 +247,8 @@ export function applyI18n(root: ParentNode = document) {
   }
   for (const el of root.querySelectorAll<HTMLElement>('[data-i18n-title]')) {
     el.title = t(el.dataset.i18nTitle as Key);
+    // アイコンだけのボタンなどは、読み上げの名前にも同じ文言を使う（title だけだと読み上げられないことがある）
+    if (!el.textContent?.trim()) el.setAttribute('aria-label', el.title);
   }
   for (const el of root.querySelectorAll<HTMLInputElement>('[data-i18n-placeholder]')) {
     el.placeholder = t(el.dataset.i18nPlaceholder as Key);

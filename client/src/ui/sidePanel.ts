@@ -15,6 +15,8 @@ const minSide = () => (wideQuery.matches ? MIN_SIDE_WIDTH : MIN_SIDE_HEIGHT) * g
 /** 再生リスト欄を広げても動画側にこれだけは残す */
 const MIN_MAIN = 200;
 const HIDDEN_KEY = 'nico-party:side-hidden';
+/** 分割線をキーボードで動かすときの 1 回の量 (px) */
+const KEY_STEP = 24;
 
 /** 再生リスト欄のドラッグでのサイズ変更と表示・非表示 */
 export function setupSidePanel(root: HTMLElement): { show: () => void } {
@@ -34,6 +36,7 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
     root.classList.toggle('side-hidden', hidden);
     toggle.dataset.i18nTitle = hidden ? 'showList' : 'hideList';
     toggle.title = t(hidden ? 'showList' : 'hideList');
+    toggle.setAttribute('aria-label', toggle.title);
     toggle.setAttribute('aria-pressed', String(!hidden));
     save(HIDDEN_KEY, hidden ? '1' : '');
   };
@@ -68,6 +71,22 @@ export function setupSidePanel(root: HTMLElement): { show: () => void } {
     splitter.addEventListener('pointerup', onUp);
     splitter.addEventListener('pointercancel', onUp);
   });
+
+  // キーボードでも大きさを変えられる（矢印キーで 24px ずつ。縦並びのときは上下、横並びのときは左右）
+  splitter.addEventListener('keydown', (e) => {
+    const wide = wideQuery.matches;
+    const grow = wide ? 'ArrowLeft' : 'ArrowUp';
+    const shrink = wide ? 'ArrowRight' : 'ArrowDown';
+    if (e.key !== grow && e.key !== shrink) return;
+    e.preventDefault();
+    const current = wide ? side.offsetWidth : side.offsetHeight;
+    const total = wide ? root.getBoundingClientRect().width : root.getBoundingClientRect().height;
+    const size = Math.round(Math.max(minSide(), Math.min(total - MIN_MAIN, current + (e.key === grow ? KEY_STEP : -KEY_STEP))));
+    side.style.flexBasis = `${size}px`;
+    save(sizeKey(), String(size));
+  });
+  splitter.setAttribute('aria-orientation', wideQuery.matches ? 'vertical' : 'horizontal');
+  wideQuery.addEventListener('change', () => splitter.setAttribute('aria-orientation', wideQuery.matches ? 'vertical' : 'horizontal'));
 
   // ダブルクリック時にブラウザが周りを選択状態にしないようにする
   splitter.addEventListener('mousedown', (e) => e.preventDefault());

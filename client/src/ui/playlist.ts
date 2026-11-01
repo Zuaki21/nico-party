@@ -18,6 +18,10 @@ const lists = {
   shuffle: false,
 };
 let scrolledTo: string | null = null;
+/** キーボードで並べ替えた動画の ID（描き直したあと、そのつまみにフォーカスを戻す） */
+let focusHandleOf: { id: string; until: number } | null = null;
+/** 並べ替えたあと、サーバーの返事で再び描き直されても、フォーカスを戻し続ける時間 (ms) */
+const FOCUS_KEEP_MS = 2000;
 /** ボタンに乗せて出しているカードを、再生リストが変わったときに更新する */
 let refreshNavPreview: () => void = () => {};
 /** 並べ替えのドラッグ中 */
@@ -148,6 +152,11 @@ function renderList() {
     ...queue.map((q) => itemEl(q, 'next')),
   );
   if (ol.childElementCount === 0) ol.append(noteEl(t('listEmpty')));
+  // キーボードで並べ替えたあとは、描き直しで消えたフォーカスを、同じ動画のつまみに戻す
+  if (focusHandleOf) {
+    if (Date.now() < focusHandleOf.until) ol.querySelector<HTMLElement>(`li[data-id="${focusHandleOf.id}"] .handle`)?.focus();
+    else focusHandleOf = null;
+  }
   // 再生中の動画が変わったら、それが見える位置までスクロールする
   const curId = current?.id ?? null;
   if (curId !== scrolledTo) {
@@ -168,6 +177,10 @@ function itemEl(q: QueueItem, kind: ItemKind) {
   handle.className = 'handle';
   handle.textContent = '⋮⋮';
   handle.title = t('dragToReorder');
+  // キーボードでも、フォーカスして上下の矢印キーで並べ替えられる（setupReorder の keydown）
+  handle.tabIndex = 0;
+  handle.setAttribute('role', 'button');
+  handle.setAttribute('aria-label', t('dragToReorder'));
 
   const thumb = thumbEl(q.thumbnail, q.length);
   if (kind === 'current') {
@@ -193,6 +206,7 @@ function itemEl(q: QueueItem, kind: ItemKind) {
     play.className = 'icon play';
     play.dataset.play = q.id;
     play.title = t('playFromHere');
+    play.setAttribute('aria-label', t('playFromHere'));
     play.innerHTML = PLAY_ICON;
     actions.append(play);
   }
@@ -200,6 +214,7 @@ function itemEl(q: QueueItem, kind: ItemKind) {
   del.className = 'icon remove';
   del.dataset.remove = q.id;
   del.title = t('removeFromList');
+  del.setAttribute('aria-label', t('removeFromList'));
   del.innerHTML = TRASH_ICON;
   actions.append(del);
   li.append(actions);
@@ -214,6 +229,26 @@ function itemEl(q: QueueItem, kind: ItemKind) {
 function setupReorder(move: (id: string, index: number) => void) {
   const ol = $('queue');
   const app = ol.closest<HTMLElement>('#app')!;
+
+  // キーボード: つまみにフォーカスして、上下の矢印キーで 1 つずつ動かす
+  ol.addEventListener('keydown', (e) => {
+    const handle = (e.target as HTMLElement).closest<HTMLElement>('.handle');
+    const li = handle?.closest<HTMLLIElement>('li[data-id]');
+    if (!handle || !li || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+    e.preventDefault();
+    const items = [...ol.querySelectorAll<HTMLLIElement>('li[data-id]')];
+    const from = items.indexOf(li);
+    const to = Math.max(0, Math.min(items.length - 1, from + (e.key === 'ArrowUp' ? -1 : 1)));
+    if (to === from) return;
+    const id = li.dataset.id!;
+    const result = reorder(lists.history, lists.current, lists.queue, id, to);
+    if (!result) return;
+    lists.history = result.history;
+    lists.queue = result.queue;
+    move(id, to);
+    focusHandleOf = { id, until: Date.now() + FOCUS_KEEP_MS };
+    renderList();
+  });
 
   ol.addEventListener('pointerdown', (e) => {
     const handle = (e.target as HTMLElement).closest<HTMLElement>('.handle');
