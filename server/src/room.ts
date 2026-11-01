@@ -1,11 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
+import { jumpTo, reorder } from '../../shared/playlist';
 import {
   HEARTBEAT,
-  initialState,
-  jumpTo,
-  parseClientMsg,
-  parseVideoId,
-  reorder,
   type ClientMsg,
   type ErrorCode,
   type Member,
@@ -13,7 +9,10 @@ import {
   type QueueItem,
   type ServerMsg,
 } from '../../shared/protocol';
-import type { NicoEnv } from './nico';
+import { parseVideoId } from '../../shared/video';
+import { VERIFIED_NAME_HEADER, VERIFIED_UID_HEADER, type Env } from './env';
+import { initialState } from './state';
+import { parseClientMsg } from './validate';
 import { sha256Hex } from './pass';
 import { fetchEmbedError, fetchVideoInfo } from './nicoApi';
 
@@ -27,16 +26,6 @@ interface Attachment extends Member {
   uid?: string;
 }
 
-export interface Env extends NicoEnv {
-  ROOM: DurableObjectNamespace<Room>;
-  ASSETS: Fetcher;
-  DISCORD_CLIENT_SECRET: string;
-}
-
-/** index.ts が通行証を確かめたとき、その名前（URL エンコード済み）を渡すヘッダー */
-export const VERIFIED_NAME_HEADER = 'x-nico-party-verified-name';
-/** 同じく、確かめられた Discord のユーザー ID を渡すヘッダー */
-export const VERIFIED_UID_HEADER = 'x-nico-party-verified-uid';
 /** ログインできなかった人の表示名として、クライアントが送ってくる名前（他の名前の申告は受け付けない） */
 const GUEST_NAMES = ['ゲスト', 'Guest'];
 

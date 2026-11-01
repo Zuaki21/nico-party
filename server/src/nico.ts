@@ -11,14 +11,12 @@
  * Copyright (c) 2024 sevenc7c — MIT License（THIRD_PARTY_NOTICES.md）
  */
 
+import type { Env } from './env';
 import { verifyPass, withinRateLimit } from './pass';
 import { DEFAULT_UA } from './nicoApi';
 
-export interface NicoEnv {
-  DISCORD_CLIENT_ID: string;
-  /** 通行証の署名の鍵（Discord のクライアントシークレットと同じもの） */
-  DISCORD_CLIENT_SECRET: string;
-}
+/** ニコニコへの問い合わせを待つ上限（応答しない相手で、リクエストが溜まり続けないように） */
+const UPSTREAM_TIMEOUT_MS = 15_000;
 
 /** 1 人が 1 分間にできる中継の回数（動画 1 本の再生で十数回。先読みや再読み込みを見込んで余裕を持たせる） */
 const NICO_LIMIT_PER_MIN = 300;
@@ -34,7 +32,7 @@ const NICO_HEADERS = {
  */
 function rewriter(host: string, pass: string) {
   const nico = `nico/${pass}`;
-  return (src: string) =>
+  const replace = (src: string) =>
     src
       .replace(
         /https?:\/\/delivery\.domand\.nicovideo\.jp\/hlsext\/(.+?)\.m3u8/g,
@@ -49,6 +47,12 @@ function rewriter(host: string, pass: string) {
         /https?:(?:\/\/|\\\/\\\/)([^/]+?(?:\.nicovideo\.jp|\.nimg\.jp))/g,
         (_m, p1: string) => host + '/.proxy/external/' + p1.replaceAll('.', '--'),
       );
+  // プレイヤーの JS だけにある、API の呼び先の書き換え（同じ通行証の入った中継の URL にする）
+  const replaceJs = (src: string) =>
+    replace(src)
+      .replace(/\/api\/watch/g, `/.proxy/${nico}/api-watch`)
+      .replace(/\/v1\/recommend\?/g, `/../../${nico}/nvapi-recommend?`);
+  return { replace, replaceJs };
 }
 
 /** リクエストヘッダーのうち指定したものだけを引き継ぐ（無いものは送らない） */
@@ -73,7 +77,7 @@ const text = (body: string, type: string) =>
   new Response(body, { headers: { 'content-type': `${type}; charset=utf-8` } });
 
 /** /nico/* を処理する。path は `/nico` を除いた残り */
-export async function handleNico(req: Request, env: NicoEnv, path: string): Promise<Response> {
+export async function handleNico(req: Request, env: Pick<Env, 'DISCORD_CLIENT_ID' | 'DISCORD_CLIENT_SECRET'>, path: string): Promise<Response> {
   // 中継先の URL に連結するので、パスをたどって別の場所へ行ける文字（.. や %）は受け付けない
   if (!/^[\w\-./]*$/.test(path) || path.split('/').includes('..')) {
     return new Response('Not found', { status: 404 });
@@ -89,11 +93,12 @@ export async function handleNico(req: Request, env: NicoEnv, path: string): Prom
   path = passed[2] ?? '';
   const url = new URL(req.url);
   const query = url.search;
-  const replace = rewriter(`https://${env.DISCORD_CLIENT_ID}.discordsays.com`, pass);
+  const { replace, replaceJs } = rewriter(`https://${env.DISCORD_CLIENT_ID}.discordsays.com`, pass);
   // User-Agent が無いとニコニコの CDN に 403 で弾かれるので、視聴者のものを引き継ぐ
   const ua = req.headers.get('user-agent') ?? DEFAULT_UA;
   const nf = (input: string, init: RequestInit = {}) =>
     fetch(input, {
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       ...init,
       headers: { 'user-agent': ua, ...(init.headers as Record<string, string> | undefined) },
     });
@@ -110,12 +115,7 @@ export async function handleNico(req: Request, env: NicoEnv, path: string): Prom
   // プレイヤーの JS
   if (req.method === 'GET' && (m = path.match(/^\/watch\/(.+)$/))) {
     const js = await nf(`https://assets.embed.res.nimg.jp/js/${m[1]}.js`).then((r) => r.text());
-    return text(
-      replace(js)
-        .replace(/\/api\/watch/g, `/.proxy/nico/${pass}/api-watch`)
-        .replace(/\/v1\/recommend\?/g, `/../../nico/${pass}/nvapi-recommend?`),
-      'application/javascript',
-    );
+    return text(replaceJs(js), 'application/javascript');
   }
 
   if (req.method === 'POST' && (m = path.match(/^\/stella\/v1\/watch\/(.+)$/))) {

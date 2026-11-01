@@ -1,7 +1,7 @@
 import { handleNico } from './nico';
 import { searchVideos } from './nicoApi';
 import { issuePass, sha256Hex, verifyPass, withinRateLimit } from './pass';
-import { VERIFIED_NAME_HEADER, VERIFIED_UID_HEADER, type Env } from './room';
+import { VERIFIED_NAME_HEADER, VERIFIED_UID_HEADER, type Env } from './env';
 
 export { Room } from './room';
 

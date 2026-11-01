@@ -1,4 +1,4 @@
-import { SEARCH_MAX_OFFSET, SEARCH_PAGE_SIZE, type SearchItem, type SearchSort } from '../../shared/protocol';
+import { SEARCH_MAX_OFFSET, SEARCH_PAGE_SIZE, type SearchItem, type SearchSort } from '../../shared/search';
 import { $, bodyEl, countsMeta, markSeg, noteEl, onSeg, thumbEl } from './dom';
 import { formatDate, getLang, t, unplayableReason } from './i18n';
 import { TRASH_ICON } from './icons';

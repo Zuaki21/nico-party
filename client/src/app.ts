@@ -1,16 +1,12 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
-import {
-  type ClientMsg,
-  type Member,
-  type PlaybackState,
-  type SearchResult,
-  type ServerMsg,
-} from '../../shared/protocol';
+import type { ClientMsg, Member, PlaybackState, ServerMsg } from '../../shared/protocol';
+import type { SearchResult } from '../../shared/search';
 import { authenticate, watchLayout } from './discord';
 import { describeError, devlog, watchErrors } from './devlog';
 import { inDiscord, proxied } from './env';
 import { getLang, serverErrorText, t } from './i18n';
 import { NicoPlayer } from './nicoPlayer';
+import { attachPlayerDocHooks } from './playerDocHooks';
 import { renderQueue } from './playlist';
 import { RoomConnection } from './roomConnection';
 import { createPresence } from './presence';
@@ -78,8 +74,7 @@ const player = new NicoPlayer(playerEl, (videoId, playerId) => {
 
 setupViewport();
 
-player.onTag(searchFor);
-player.onLink(openExternal);
+attachPlayerDocHooks(player.iframe, { onTag: searchFor, onLink: openExternal });
 watchErrors(player.iframe);
 for (const ev of ['load', 'play', 'pause', 'ended'] as const) player.on(ev, () => devlog(`player ${ev}`));
 

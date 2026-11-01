@@ -1,4 +1,5 @@
-import { reorder, type PlaybackState, type QueueItem, type RepeatMode } from '../../shared/protocol';
+import { reorder } from '../../shared/playlist';
+import type { PlaybackState, QueueItem, RepeatMode } from '../../shared/protocol';
 import { $, bodyEl, countsMeta, noteEl, thumbEl } from './dom';
 import { setupNavPreview, type NavKind, type NavPreview } from './navPreview';
 import { PLAY_ICON, TRASH_ICON } from './icons';

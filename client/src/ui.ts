@@ -1,12 +1,6 @@
-import {
-  parseVideoId,
-  type Member,
-  type PlaybackState,
-  type QueueItem,
-  type RepeatMode,
-  type SearchResult,
-  type SearchSort,
-} from '../../shared/protocol';
+import type { Member, PlaybackState, QueueItem, RepeatMode } from '../../shared/protocol';
+import type { SearchResult, SearchSort } from '../../shared/search';
+import { parseVideoId } from '../../shared/video';
 import { $, markSeg, onSeg } from './dom';
 import { APP_VERSION } from './env';
 import { applyI18n, onLangChange, t } from './i18n';
