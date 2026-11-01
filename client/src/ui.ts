@@ -147,6 +147,12 @@ export function mountUi(root: HTMLElement, h: UiHandlers): HTMLElement {
         <ol class="queue" id="results"></ol>
       </div>
     </aside>
+    <div class="loading" id="loading" role="status">
+      <img class="loading-icon" src="/img/icon-256.png" alt="" />
+      <div class="spinner" aria-hidden="true"></div>
+      <!-- 普段は文字を出さない。接続に時間がかかっているときだけ、slowLoading() で案内を出す -->
+      <div id="loading-text"></div>
+    </div>
   `;
   applyI18n(root);
   // 再生リスト欄の最小幅などが UI サイズで変わるので、保存されている設定を最初に当てておく
@@ -212,6 +218,21 @@ function setupTabs() {
   onSeg('side-tabs', 'tab', show);
   show('list');
   return show;
+}
+
+/**
+ * 最初に部屋に入れるまで、画面全体を覆う表示を出している。入れたら外す。
+ * 途中で接続が切れたときは出さない（動画の再生中に覆ってしまうため）
+ */
+export function hideLoading() {
+  // 再接続のたびに呼ばれるので、すでに無いときは何もしない
+  document.getElementById('loading')?.remove();
+}
+
+/** 接続に時間がかかっているときの文言に変える */
+export function slowLoading() {
+  const text = document.getElementById('loading-text');
+  if (text) text.textContent = t('loadingSlow');
 }
 
 export function renderState(s: PlaybackState) {

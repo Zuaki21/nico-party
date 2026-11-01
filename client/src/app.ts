@@ -17,7 +17,17 @@ import { createPresence } from './presence';
 import { isPresenceEnabled } from './settings';
 import { setupViewport } from './viewport';
 import { SyncEngine } from './sync';
-import { mountUi, renderConnecting, renderMembers, renderState, searchFor, setCompact, showError } from './ui';
+import {
+  hideLoading,
+  mountUi,
+  renderConnecting,
+  renderMembers,
+  renderState,
+  searchFor,
+  setCompact,
+  showError,
+  slowLoading,
+} from './ui';
 
 /** Discord 内では iframe から外のページへ移れないので、Discord の「外部リンクを開く」を使う */
 function openExternal(url: string) {
@@ -97,6 +107,11 @@ function applyMembers(members: Member[]) {
 function onMessage(msg: ServerMsg) {
   switch (msg.t) {
     case 'welcome':
+      hideLoading();
+      if (loginFailed) {
+        loginFailed = false;
+        showError(t('loginRequired'));
+      }
       engine.setClockOffset(conn!.clock.offset);
       renderQueue(msg.queue, msg.history);
       applyMembers(msg.members);
@@ -122,7 +137,14 @@ function onMessage(msg: ServerMsg) {
   }
 }
 
+/** Discord にログインできなかった（通行証がない）。部屋に入れたときに案内を出す */
+let loginFailed = false;
+
+/** 部屋に入るまでこれ以上かかったら、時間がかかっていると伝える */
+const SLOW_CONNECT_MS = 10_000;
+
 function connect(roomId: string, name: string, pass?: string) {
+  setTimeout(slowLoading, SLOW_CONNECT_MS);
   conn = new RoomConnection({ roomId, name, clientId, pass, onMessage, onWaiting: renderConnecting });
   conn.start();
 }
@@ -151,13 +173,15 @@ async function main() {
     devlog(`authenticate failed: ${describeError(e)}`);
   }
   // 通行証がないと、動画の読み込みと検索ができない
-  if (!nicoPass) showError(t('loginRequired'));
+  // （起動中は画面全体を覆う表示の下になって読めないので、部屋に入れてから出す）
+  loginFailed = !nicoPass;
   watchLayout(discord, setCompact);
   devlog(`ready as ${name} (instance ${discord.instanceId})`);
   connect(discord.instanceId, name, pass);
 }
 
 main().catch((e) => {
+  hideLoading();
   devlog(`main failed: ${describeError(e)}`);
   showError(t('startFailed', { msg: e instanceof Error ? e.message : String(e) }));
 });

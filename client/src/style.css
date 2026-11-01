@@ -1040,3 +1040,42 @@ button.add.done:hover {
 .queue li.current .actions {
   background: linear-gradient(to right, transparent, color-mix(in srgb, var(--panel), var(--accent) 22%) 1.7143rem);
 }
+
+/* 最初に部屋に入れるまで、画面全体を覆うローディング表示 */
+.loading {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.1429rem;
+  background: var(--bg);
+  color: var(--muted);
+  text-align: center;
+  padding: 1.1429rem;
+}
+
+.loading-icon {
+  width: 7.1429rem;
+  height: 7.1429rem;
+  /* 画像は白い背景つきなので、角を丸めて、明るい・暗いどちらの背景でもカードのように見せる */
+  border-radius: 1.7143rem;
+  background: #fff;
+}
+
+.spinner {
+  width: 2.2857rem;
+  height: 2.2857rem;
+  border-radius: 50%;
+  border: 0.2857rem solid var(--border);
+  border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
