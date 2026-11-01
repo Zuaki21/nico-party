@@ -1,6 +1,6 @@
-import { HEARTBEAT, type ClientMsg, type ServerMsg } from '../../shared/protocol';
+import { HEARTBEAT, type ClientMsg, type ServerMsg } from '../../../shared/protocol';
 import { ClockSync } from './clock';
-import { proxied } from './env';
+import { proxied } from '../core/env';
 
 /**
  * 接続の生存確認の間隔。何も流れない WebSocket は途中で切られることがあるので送っておく。

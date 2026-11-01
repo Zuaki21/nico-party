@@ -1,6 +1,6 @@
 import { Common, type DiscordSDK } from '@discord/embedded-app-sdk';
-import { describeError, devlog } from './devlog';
-import { proxied } from './env';
+import { describeError, devlog } from '../core/devlog';
+import { proxied } from '../core/env';
 
 /**
  * Discord にログインしてもらい、表示名を取得する。

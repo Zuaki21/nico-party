@@ -1,4 +1,4 @@
-import type { PlaybackState, QueueItem } from '../../shared/protocol';
+import type { PlaybackState, QueueItem } from '../../../shared/protocol';
 import { initialState } from './state';
 
 export type LoadFailed = { itemId: string; ids: string[] };

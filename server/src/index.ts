@@ -1,9 +1,9 @@
-import { handleNico } from './nico';
-import { searchVideos } from './nicoApi';
+import { handleNico } from './nico/nico';
+import { searchVideos } from './nico/nicoApi';
 import { issuePass, sha256Hex, verifyPass, withinRateLimit } from './pass';
 import { VERIFIED_NAME_HEADER, VERIFIED_UID_HEADER, type Env } from './env';
 
-export { Room } from './room';
+export { Room } from './room/room';
 
 /** 1 人が 1 分間にできる検索の回数 */
 const SEARCH_LIMIT_PER_MIN = 30;

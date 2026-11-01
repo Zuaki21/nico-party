@@ -1,8 +1,8 @@
-import type { Member, PlaybackState, QueueItem, RepeatMode } from '../../shared/protocol';
-import type { SearchResult, SearchSort } from '../../shared/search';
-import { parseVideoId } from '../../shared/video';
+import type { Member, PlaybackState, QueueItem, RepeatMode } from '../../../shared/protocol';
+import type { SearchResult, SearchSort } from '../../../shared/search';
+import { parseVideoId } from '../../../shared/video';
 import { $, markSeg, onSeg } from './dom';
-import { applyI18n, onLangChange, t } from './i18n';
+import { applyI18n, onLangChange, t } from '../core/i18n';
 import { LIST_ICON, NEXT_ICON, PREV_ICON, REPEAT_ICON, SETTINGS_ICON, SHUFFLE_ICON } from './icons';
 import { renderPlaylist, setPlayback, setupPlaylist } from './playlist';
 import { setupSearch } from './search';

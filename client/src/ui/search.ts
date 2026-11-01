@@ -1,6 +1,6 @@
-import { SEARCH_MAX_OFFSET, SEARCH_PAGE_SIZE, type SearchItem, type SearchSort } from '../../shared/search';
+import { SEARCH_MAX_OFFSET, SEARCH_PAGE_SIZE, type SearchItem, type SearchSort } from '../../../shared/search';
 import { $, bodyEl, countsMeta, markSeg, noteEl, onSeg, thumbEl } from './dom';
-import { formatDate, getLang, t, unplayableReason } from './i18n';
+import { formatDate, getLang, t, unplayableReason } from '../core/i18n';
 import { TRASH_ICON } from './icons';
 import { findAddedItem, isInPlaylist, onPlaylistChange } from './playlist';
 import type { UiHandlers } from './ui';

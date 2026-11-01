@@ -1,4 +1,4 @@
-import type { PlaybackState } from '../../shared/protocol';
+import type { PlaybackState } from '../../../shared/protocol';
 
 export function initialState(): PlaybackState {
   return {

@@ -1,4 +1,4 @@
-import type { ErrorCode, Member, ServerMsg } from '../../shared/protocol';
+import type { ErrorCode, Member, ServerMsg } from '../../../shared/protocol';
 
 export interface Attachment extends Member {
   joined: boolean;

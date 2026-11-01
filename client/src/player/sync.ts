@@ -1,4 +1,4 @@
-import type { ClientMsg, PlaybackState } from '../../shared/protocol';
+import type { ClientMsg, PlaybackState } from '../../../shared/protocol';
 import type { NicoPlayer } from './nicoPlayer';
 
 /** 自分が操作した直後に発火するイベントを「ユーザー操作」と誤認しない時間 */

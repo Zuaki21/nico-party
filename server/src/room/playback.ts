@@ -1,4 +1,4 @@
-import type { PlaybackState, QueueItem } from '../../shared/protocol';
+import type { PlaybackState, QueueItem } from '../../../shared/protocol';
 
 /**
  * 再生リスト全体（視聴済み + 再生中 + これから再生）の上限。

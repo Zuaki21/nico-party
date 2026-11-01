@@ -1,20 +1,20 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import type { ClientMsg, Member, PlaybackState, ServerMsg } from '../../shared/protocol';
 import type { SearchResult } from '../../shared/search';
-import { authenticate, watchLayout } from './discord';
-import { describeError, devlog, watchErrors } from './devlog';
-import { inDiscord, proxied } from './env';
-import { getLang, serverErrorText, t } from './i18n';
-import { NicoPlayer } from './nicoPlayer';
-import { attachPlayerDocHooks } from './playerDocHooks';
-import { renderQueue } from './playlist';
-import { RoomConnection } from './roomConnection';
-import { createPresence } from './presence';
-import { isPresenceEnabled } from './settings';
-import { setupViewport } from './viewport';
-import { SyncEngine } from './sync';
-import { hideLoading, setCompact, setPlayerCover, showError, slowLoading } from './overlays';
-import { mountUi } from './ui';
+import { authenticate, watchLayout } from './net/discord';
+import { describeError, devlog, watchErrors } from './core/devlog';
+import { inDiscord, proxied } from './core/env';
+import { getLang, serverErrorText, t } from './core/i18n';
+import { NicoPlayer } from './player/nicoPlayer';
+import { attachPlayerDocHooks } from './player/playerDocHooks';
+import { renderQueue } from './ui/playlist';
+import { RoomConnection } from './net/roomConnection';
+import { createPresence } from './core/presence';
+import { isPresenceEnabled } from './ui/settings';
+import { setupViewport } from './ui/viewport';
+import { SyncEngine } from './player/sync';
+import { hideLoading, setCompact, setPlayerCover, showError, slowLoading } from './ui/overlays';
+import { mountUi } from './ui/ui';
 
 /** Discord 内では iframe から外のページへ移れないので、Discord の「外部リンクを開く」を使う */
 function openExternal(url: string) {
@@ -56,7 +56,7 @@ const player = new NicoPlayer(ui.player, (videoId, playerId) => {
   // Discord 内（中継経由）では、プレイヤーはこれを元に postMessage の宛先オリジンを決める（無いと 'null//null' になる）。
   // ローカル確認用の直接埋め込みでは逆に付けるとニコニコに 403 で拒否される
   if (inDiscord) params.set('referer', location.href);
-  // Discord 内では埋め込み HTML を自前サーバーで書き換えて配信する (server/src/nico.ts)
+  // Discord 内では埋め込み HTML を自前サーバーで書き換えて配信する (server/src/nico/nico.ts)
   return inDiscord
     ? `/.proxy/nico/${nicoPass ?? 'none'}/nico-embed/${videoId}?${params}`
     : `https://embed.nicovideo.jp/watch/${videoId}?${params}`;

@@ -1,4 +1,4 @@
-import type { Room } from './room';
+import type { Room } from './room/room';
 
 /** Worker の環境（wrangler.toml の設定と、`wrangler secret put` で登録した秘密） */
 export interface Env {

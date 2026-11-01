@@ -1,9 +1,9 @@
-import { reorder } from '../../shared/playlist';
-import type { PlaybackState, QueueItem, RepeatMode } from '../../shared/protocol';
+import { reorder } from '../../../shared/playlist';
+import type { PlaybackState, QueueItem, RepeatMode } from '../../../shared/protocol';
 import { $, bodyEl, countsMeta, noteEl, thumbEl } from './dom';
 import { setupNavPreview, type NavKind, type NavPreview } from './navPreview';
 import { PLAY_ICON, TRASH_ICON } from './icons';
-import { t } from './i18n';
+import { t } from '../core/i18n';
 import type { UiHandlers } from './ui';
 
 const REPEAT_LABEL = { off: 'repeatOff', all: 'repeatAll', one: 'repeatOne' } as const;

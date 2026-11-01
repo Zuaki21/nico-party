@@ -1,5 +1,5 @@
-import { externalUrl } from './env';
-import { formatCount } from './i18n';
+import { externalUrl } from '../core/env';
+import { formatCount } from '../core/i18n';
 
 /** id から要素を取る。無ければすぐ分かるよう例外にする（id の付け間違いが、あとで別の場所で壊れる形で出ないように） */
 export const $ = <T extends HTMLElement>(id: string): T => {

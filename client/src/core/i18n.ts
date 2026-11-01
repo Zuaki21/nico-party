@@ -4,7 +4,7 @@
  * あとから描く部分は t() で組み立てて、言語が変わったら描き直す（onLangChange）
  */
 
-import type { ErrorCode } from '../../shared/protocol';
+import type { ErrorCode } from '../../../shared/protocol';
 import { load, save } from './storage';
 
 export type Lang = 'ja' | 'en';

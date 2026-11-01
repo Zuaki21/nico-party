@@ -1,4 +1,4 @@
-import { devlog } from './devlog';
+import { devlog } from '../core/devlog';
 
 export interface PlayerDocHandlers {
   /** プレイヤーの上に出ているタグがクリックされた */

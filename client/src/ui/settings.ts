@@ -1,7 +1,7 @@
-import { APP_VERSION } from './env';
+import { APP_VERSION } from '../core/env';
 import { $, markSeg, onSeg } from './dom';
-import { getLang, setLang } from './i18n';
-import { load, save } from './storage';
+import { getLang, setLang } from '../core/i18n';
+import { load, save } from '../core/storage';
 import type { UiHandlers } from './ui';
 
 type Theme = 'light' | 'dark';

@@ -1,7 +1,7 @@
 import { $ } from './dom';
-import { t } from './i18n';
+import { t } from '../core/i18n';
 import { getUiScale } from './settings';
-import { load, save } from './storage';
+import { load, save } from '../core/storage';
 
 /** 横に広いときは再生リスト欄を右、狭いときは下に置く（style.css の media query と揃える） */
 const wideQuery = window.matchMedia('(min-width: 900px)');

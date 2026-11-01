@@ -1,11 +1,11 @@
 import { DurableObject } from 'cloudflare:workers';
-import { jumpTo, reorder } from '../../shared/playlist';
-import { HEARTBEAT, type ClientMsg, type PlaybackState, type QueueItem } from '../../shared/protocol';
-import { parseVideoId } from '../../shared/video';
+import { jumpTo, reorder } from '../../../shared/playlist';
+import { HEARTBEAT, type ClientMsg, type PlaybackState, type QueueItem } from '../../../shared/protocol';
+import { parseVideoId } from '../../../shared/video';
 import { EnqueueQueue } from './enqueue';
-import { VERIFIED_NAME_HEADER, VERIFIED_UID_HEADER, type Env } from './env';
-import { fetchEmbedError, fetchVideoInfo } from './nicoApi';
-import { sha256Hex } from './pass';
+import { VERIFIED_NAME_HEADER, VERIFIED_UID_HEADER, type Env } from '../env';
+import { fetchEmbedError, fetchVideoInfo } from '../nico/nicoApi';
+import { sha256Hex } from '../pass';
 import { advance, AUTO_NEXT_GUARD_MS, LIST_LIMIT, newItemId, START_DELAY_MS, takeNext, trimHistory } from './playback';
 import { RoomStore } from './roomStore';
 import { MessageLimiter, send, sendError, Sockets, type Attachment } from './sockets';

@@ -1,4 +1,4 @@
-import type { ClientMsg } from '../../shared/protocol';
+import type { ClientMsg } from '../../../shared/protocol';
 
 const str = (v: unknown, max: number): v is string => typeof v === 'string' && v.length <= max;
 const num = (v: unknown, max: number): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= max;

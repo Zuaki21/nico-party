@@ -1,7 +1,7 @@
-import type { QueueItem } from '../../shared/protocol';
+import type { QueueItem } from '../../../shared/protocol';
 import { $ } from './dom';
-import { externalUrl } from './env';
-import { t } from './i18n';
+import { externalUrl } from '../core/env';
+import { t } from '../core/i18n';
 
 /** 前へ・次へのボタンに乗せたときに出す内容。item=動画 / text=動画が決まっていないときの説明 */
 export type NavPreview = { item: QueueItem } | { text: string } | null;

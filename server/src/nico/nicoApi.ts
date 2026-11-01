@@ -3,7 +3,7 @@
  * （埋め込みプレイヤーの中継は nico.ts）
  */
 
-import { SEARCH_MAX_OFFSET, SEARCH_PAGE_SIZE, type SearchResult, type SearchSort } from '../../shared/search';
+import { SEARCH_MAX_OFFSET, SEARCH_PAGE_SIZE, type SearchResult, type SearchSort } from '../../../shared/search';
 
 /** User-Agent が無いとニコニコの CDN に 403 で弾かれるので、サーバーから問い合わせるときに付ける */
 export const DEFAULT_UA =

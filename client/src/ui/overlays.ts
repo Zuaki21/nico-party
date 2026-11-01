@@ -1,5 +1,5 @@
 import { $ } from './dom';
-import { t } from './i18n';
+import { t } from '../core/i18n';
 
 /**
  * 最初に部屋に入れるまで、画面全体を覆う表示を出している。入れたら外す。

@@ -11,8 +11,8 @@
  * Copyright (c) 2024 sevenc7c — MIT License（THIRD_PARTY_NOTICES.md）
  */
 
-import type { Env } from './env';
-import { verifyPass, withinRateLimit } from './pass';
+import type { Env } from '../env';
+import { verifyPass, withinRateLimit } from '../pass';
 import { DEFAULT_UA } from './nicoApi';
 
 /** ニコニコへの問い合わせを待つ上限（応答しない相手で、リクエストが溜まり続けないように） */
