@@ -7,6 +7,7 @@ import {
   END_MARGIN,
   ERROR_RELOAD_MAX,
   ERROR_RELOAD_MS,
+  ERROR_RESET_MS,
   LOAD_TIMEOUT_MS,
   LOCAL_DEBOUNCE_MS,
   NEXT_RESEND_MS,
@@ -58,6 +59,8 @@ export class SyncEngine {
   private pendingMode: ApplyMode = 'normal';
   private errorReloads = 0;
   private errorTimer: number | undefined;
+  /** 読み込めてからしばらくエラーが出なければ、再試行の回数を戻すタイマー */
+  private errorResetTimer: number | undefined;
   private disposed = false;
 
   private suppress = new SuppressWindow();
@@ -114,7 +117,9 @@ export class SyncEngine {
     on('load', () => {
       clearTimeout(this.loadTimer);
       this.clearErrorTimer();
-      this.errorReloads = 0;
+      // すぐ戻すと、読み込めた直後にまたエラーになる動画で、読み込み直しが終わらなくなる
+      clearTimeout(this.errorResetTimer);
+      this.errorResetTimer = window.setTimeout(() => (this.errorReloads = 0), ERROR_RESET_MS);
       // 読み込めなかったと伝えた後で読み込めたら取り消す
       if (this.reportedFailFor === this.loadedItemId) this.resendLoadReport();
       this.apply(APPLY_THRESHOLD, 'afterLoad');
@@ -278,6 +283,7 @@ export class SyncEngine {
    * 少し待って読み込み直し、それでも直らなければ読み込めなかったと伝える
    */
   private clearErrorTimer() {
+    clearTimeout(this.errorResetTimer);
     clearTimeout(this.errorTimer);
     this.errorTimer = undefined;
   }
@@ -287,14 +293,16 @@ export class SyncEngine {
     this.local.releaseHold();
     this.gate.reset();
     this.catchUp.cancel();
+    clearTimeout(this.errorResetTimer);
     const item = this.state?.current;
     if (!item || item.id !== this.loadedItemId) return;
     if (this.errorReloads >= ERROR_RELOAD_MAX) {
+      // 報告は 1 回だけ（エラーが続いても送り直さない）
       if (this.reportedFailFor !== item.id) {
         this.onLoadFailed();
         this.reportedFailFor = item.id;
+        this.resendLoadReport();
       }
-      this.resendLoadReport();
       return;
     }
     // 読み込み直しを待っている間に届いた error は数えない（回数を使い切らないように）

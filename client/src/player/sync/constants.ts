@@ -26,3 +26,5 @@ export const NEXT_RESEND_MS = 4000;
 /** プレイヤーがエラー画面になったとき、読み込み直す回数と、その間隔 */
 export const ERROR_RELOAD_MAX = 3;
 export const ERROR_RELOAD_MS = 2000;
+/** 読み込めてからこの間エラーが出なければ、読み込み直しの回数を数え直す */
+export const ERROR_RESET_MS = 10000;

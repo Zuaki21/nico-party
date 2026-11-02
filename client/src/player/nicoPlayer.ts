@@ -160,6 +160,13 @@ export class NicoPlayer {
     // エラー画面の間に届く再生状態・位置の通知は捨てる（0 秒などの値で他の人の位置を巻き戻さないため）。
     // ただし、位置が進み続けるなら直ったとみなす（「プレーヤーを更新」で loadComplete が来ない場合に備える）
     if (this.errored && msg.eventName !== 'loadComplete' && msg.eventName !== 'error') {
+      // 復帰したときに状態がずれないよう、通知は通知せずに覚えておく
+      if (msg.eventName === 'playerStatusChange' && Number(data.playerStatus) > 0) {
+        this.status = Number(data.playerStatus) as PlayerStatus;
+      }
+      if (msg.eventName === 'playerMetadataChange' && typeof data.duration === 'number' && data.duration > 0) {
+        this.duration = data.duration / 1000;
+      }
       if (msg.eventName === 'playerMetadataChange' && typeof data.currentTime === 'number') {
         const a = this.errorAdvance;
         a.count = data.currentTime > a.time && a.time >= 0 ? a.count + 1 : 0;
