@@ -113,7 +113,8 @@ export class SyncEngine {
     on('seeked', onLocal);
     on('load', () => {
       clearTimeout(this.loadTimer);
-      clearTimeout(this.errorTimer);
+      this.clearErrorTimer();
+      this.errorReloads = 0;
       // 読み込めなかったと伝えた後で読み込めたら取り消す
       if (this.reportedFailFor === this.loadedItemId) this.resendLoadReport();
       this.apply(APPLY_THRESHOLD, 'afterLoad');
@@ -130,7 +131,7 @@ export class SyncEngine {
     clearTimeout(this.localTimer);
     clearTimeout(this.loadTimer);
     clearTimeout(this.holdRetryTimer);
-    clearTimeout(this.errorTimer);
+    this.clearErrorTimer();
     this.gate.reset();
     this.catchUp.cancel();
     this.local.dispose();
@@ -151,7 +152,7 @@ export class SyncEngine {
       this.catchUp.cancel();
       this.reportedFailFor = null;
       this.errorReloads = 0;
-      clearTimeout(this.errorTimer);
+      this.clearErrorTimer();
       const sameVideo = !!item && item.videoId === this.loadedVideoId && this.player.ready();
       this.loadedItemId = item?.id ?? null;
       this.loadedVideoId = item?.videoId ?? null;
@@ -163,19 +164,25 @@ export class SyncEngine {
       clearTimeout(this.loadTimer);
       if (item) {
         this.player.load(item.videoId);
-        this.loadTimer = window.setTimeout(() => {
-          if (this.loadedItemId === item.id && !this.player.ready()) {
-            this.onLoadFailed();
-            this.reportedFailFor = item.id;
-            this.resendLoadReport();
-          }
-        }, LOAD_TIMEOUT_MS);
+        this.startLoadTimer(item.id);
       } else {
         this.player.unload();
       }
       return; // 読み込み完了 (load) 後に apply する
     }
     this.apply(APPLY_THRESHOLD);
+  }
+
+  /** 読み込みが終わらなければ、読み込めなかったと伝えるタイマーを（張り直して）始める */
+  private startLoadTimer(itemId: string) {
+    clearTimeout(this.loadTimer);
+    this.loadTimer = window.setTimeout(() => {
+      if (this.loadedItemId === itemId && !this.player.ready()) {
+        this.onLoadFailed();
+        this.reportedFailFor = itemId;
+        this.resendLoadReport();
+      }
+    }, LOAD_TIMEOUT_MS);
   }
 
   /**
@@ -270,6 +277,11 @@ export class SyncEngine {
    * プレイヤーがエラー画面になった。この間は ready() が false なので、何も部屋に送らない。
    * 少し待って読み込み直し、それでも直らなければ読み込めなかったと伝える
    */
+  private clearErrorTimer() {
+    clearTimeout(this.errorTimer);
+    this.errorTimer = undefined;
+  }
+
   private onPlayerError() {
     clearTimeout(this.localTimer);
     this.local.releaseHold();
@@ -285,10 +297,14 @@ export class SyncEngine {
       this.resendLoadReport();
       return;
     }
-    this.errorReloads++;
-    clearTimeout(this.errorTimer);
+    // 読み込み直しを待っている間に届いた error は数えない（回数を使い切らないように）
+    if (this.errorTimer !== undefined) return;
     this.errorTimer = window.setTimeout(() => {
-      if (this.loadedItemId === item.id && !this.player.ready()) this.player.load(item.videoId);
+      this.errorTimer = undefined;
+      if (this.loadedItemId !== item.id || this.player.ready()) return;
+      this.errorReloads++;
+      this.player.load(item.videoId);
+      this.startLoadTimer(item.id);
     }, ERROR_RELOAD_MS);
   }
 

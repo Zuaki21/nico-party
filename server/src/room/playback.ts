@@ -108,7 +108,9 @@ export function control(
   d: Deps,
 ): PlaybackState | null {
   if (!s.current || s.current.id !== msg.itemId) return null;
-  return stamp({ ...s, playing: msg.playing, position: Math.max(0, msg.position) }, by, d.now);
+  // 動画の長さを超える位置は、長さに丸める（壊れたプレイヤーの値で、位置が飛ばないように）
+  const max = s.current.length && s.current.length > 0 ? s.current.length : Infinity;
+  return stamp({ ...s, playing: msg.playing, position: Math.min(max, Math.max(0, msg.position)) }, by, d.now);
 }
 
 /** リピート・シャッフルの切り替え。再生位置の基準 (updatedAt) は変えない。何も変わらないなら null */

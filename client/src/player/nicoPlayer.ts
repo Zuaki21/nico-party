@@ -22,12 +22,16 @@ type PlayerEvent = 'load' | 'play' | 'pause' | 'ended' | 'seeked' | 'progress' |
 type Handler = () => void;
 
 const PLAYER_ID = 'nico-party';
+/** エラー画面の間に、位置の通知がこれだけ続けて進んだら、直ったとみなす */
+const RECOVER_ADVANCES = 4;
 
 export class NicoPlayer {
   readonly iframe: HTMLIFrameElement;
   private status: PlayerStatus = PlayerStatus.Loading;
   private loaded = false;
   private errored = false;
+  /** エラー画面の間に、位置が進み続けた回数（iframe 内の「プレーヤーを更新」で直ったことを見分ける） */
+  private errorAdvance = { time: -1, count: 0 };
   private duration = 0;
   /** 最後に通知された再生位置 (秒) と、その受信時刻 */
   private time = 0;
@@ -53,6 +57,7 @@ export class NicoPlayer {
   private resetPlayback() {
     this.loaded = false;
     this.errored = false;
+    this.errorAdvance = { time: -1, count: 0 };
     this.status = PlayerStatus.Loading;
     this.time = 0;
     this.timeAt = 0;
@@ -74,10 +79,6 @@ export class NicoPlayer {
 
   ready() {
     return this.loaded && !this.errored;
-  }
-
-  hasError() {
-    return this.errored;
   }
 
   play() {
@@ -143,20 +144,38 @@ export class NicoPlayer {
     );
   }
 
+  /** エラー画面の間は、操作や再生位置を部屋に送らない（ready() が false になる） */
+  private enterError() {
+    this.errored = true;
+    this.errorAdvance = { time: -1, count: 0 };
+    this.status = PlayerStatus.Loading;
+    this.emit('error');
+  }
+
   private onMessage = (e: MessageEvent) => {
     if (e.source !== this.iframe.contentWindow) return;
     const msg = e.data;
     if (!msg || typeof msg !== 'object') return;
     const data = msg.data ?? {};
-    // エラー画面の間に届く再生状態・位置の通知は捨てる（0 秒などの値で他の人の位置を巻き戻さないため）
-    if (this.errored && msg.eventName !== 'loadComplete' && msg.eventName !== 'error') return;
+    // エラー画面の間に届く再生状態・位置の通知は捨てる（0 秒などの値で他の人の位置を巻き戻さないため）。
+    // ただし、位置が進み続けるなら直ったとみなす（「プレーヤーを更新」で loadComplete が来ない場合に備える）
+    if (this.errored && msg.eventName !== 'loadComplete' && msg.eventName !== 'error') {
+      if (msg.eventName === 'playerMetadataChange' && typeof data.currentTime === 'number') {
+        const a = this.errorAdvance;
+        a.count = data.currentTime > a.time && a.time >= 0 ? a.count + 1 : 0;
+        a.time = data.currentTime;
+        if (a.count >= RECOVER_ADVANCES) {
+          this.errored = false;
+          this.loaded = true;
+          this.emit('load');
+        }
+      }
+      return;
+    }
 
     switch (msg.eventName) {
       case 'error':
-        // エラー画面の間は、操作や再生位置を部屋に送らない（ready() が false になる）
-        this.errored = true;
-        this.status = PlayerStatus.Loading;
-        this.emit('error');
+        this.enterError();
         return;
 
       case 'loadComplete':
@@ -198,6 +217,11 @@ export class NicoPlayer {
         }
         if (typeof data.muted === 'boolean') this.muted = data.muted;
         return;
+
+      default:
+        // 名前の分からないエラー通知に備える（エラー画面で実際に届く名前を、コンソールから確認できる）
+        console.debug('[nico-party] 未知のプレイヤー通知', msg.eventName, data);
+        if (/error/i.test(String(msg.eventName))) this.enterError();
     }
   };
 }
