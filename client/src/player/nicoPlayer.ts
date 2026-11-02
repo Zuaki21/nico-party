@@ -14,9 +14,10 @@ export const enum PlayerStatus {
 
 /**
  * load: 動画の読み込みが終わり操作できるようになった /
- * progress: 再生位置の通知（約 0.25 秒ごと）で位置が進んだ。再生開始の通知が来ないときでも分かる
+ * progress: 再生位置の通知（約 0.25 秒ごと）で位置が進んだ。再生開始の通知が来ないときでも分かる /
+ * error: プレイヤーが「エラーが発生しました」の画面になった（この間は操作も位置の通知も信用しない）
  */
-type PlayerEvent = 'load' | 'play' | 'pause' | 'ended' | 'seeked' | 'progress';
+type PlayerEvent = 'load' | 'play' | 'pause' | 'ended' | 'seeked' | 'progress' | 'error';
 
 type Handler = () => void;
 
@@ -26,6 +27,7 @@ export class NicoPlayer {
   readonly iframe: HTMLIFrameElement;
   private status: PlayerStatus = PlayerStatus.Loading;
   private loaded = false;
+  private errored = false;
   private duration = 0;
   /** 最後に通知された再生位置 (秒) と、その受信時刻 */
   private time = 0;
@@ -50,6 +52,7 @@ export class NicoPlayer {
   /** 読み込み前の状態に戻す（ミュートは別。load では保つ） */
   private resetPlayback() {
     this.loaded = false;
+    this.errored = false;
     this.status = PlayerStatus.Loading;
     this.time = 0;
     this.timeAt = 0;
@@ -70,7 +73,11 @@ export class NicoPlayer {
   }
 
   ready() {
-    return this.loaded;
+    return this.loaded && !this.errored;
+  }
+
+  hasError() {
+    return this.errored;
   }
 
   play() {
@@ -141,9 +148,19 @@ export class NicoPlayer {
     const msg = e.data;
     if (!msg || typeof msg !== 'object') return;
     const data = msg.data ?? {};
+    // エラー画面の間に届く再生状態・位置の通知は捨てる（0 秒などの値で他の人の位置を巻き戻さないため）
+    if (this.errored && msg.eventName !== 'loadComplete' && msg.eventName !== 'error') return;
 
     switch (msg.eventName) {
+      case 'error':
+        // エラー画面の間は、操作や再生位置を部屋に送らない（ready() が false になる）
+        this.errored = true;
+        this.status = PlayerStatus.Loading;
+        this.emit('error');
+        return;
+
       case 'loadComplete':
+        this.errored = false;
         this.loaded = true;
         this.duration = Number(data.videoInfo?.lengthInSeconds) || 0;
         this.emit('load');

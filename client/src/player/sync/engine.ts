@@ -5,6 +5,8 @@ import {
   APPLY_THRESHOLD,
   DRIFT_THRESHOLD,
   END_MARGIN,
+  ERROR_RELOAD_MAX,
+  ERROR_RELOAD_MS,
   LOAD_TIMEOUT_MS,
   LOCAL_DEBOUNCE_MS,
   NEXT_RESEND_MS,
@@ -54,6 +56,8 @@ export class SyncEngine {
   private holdRetryTimer: number | undefined;
   /** 保留している同期の種類（保護の間に別の同期が来ても、読み込み直後の同期を通常のものに置き換えない） */
   private pendingMode: ApplyMode = 'normal';
+  private errorReloads = 0;
+  private errorTimer: number | undefined;
   private disposed = false;
 
   private suppress = new SuppressWindow();
@@ -109,11 +113,13 @@ export class SyncEngine {
     on('seeked', onLocal);
     on('load', () => {
       clearTimeout(this.loadTimer);
+      clearTimeout(this.errorTimer);
       // 読み込めなかったと伝えた後で読み込めたら取り消す
       if (this.reportedFailFor === this.loadedItemId) this.resendLoadReport();
       this.apply(APPLY_THRESHOLD, 'afterLoad');
     });
     on('ended', () => this.requestAutoNext());
+    on('error', () => this.onPlayerError());
     this.tickTimer = window.setInterval(() => this.onTick(), 1000);
   }
 
@@ -124,6 +130,7 @@ export class SyncEngine {
     clearTimeout(this.localTimer);
     clearTimeout(this.loadTimer);
     clearTimeout(this.holdRetryTimer);
+    clearTimeout(this.errorTimer);
     this.gate.reset();
     this.catchUp.cancel();
     this.local.dispose();
@@ -143,6 +150,8 @@ export class SyncEngine {
       this.nextSentUntil = 0;
       this.catchUp.cancel();
       this.reportedFailFor = null;
+      this.errorReloads = 0;
+      clearTimeout(this.errorTimer);
       const sameVideo = !!item && item.videoId === this.loadedVideoId && this.player.ready();
       this.loadedItemId = item?.id ?? null;
       this.loadedVideoId = item?.videoId ?? null;
@@ -255,6 +264,32 @@ export class SyncEngine {
       this.suppress.extend();
       p.pause();
     }
+  }
+
+  /**
+   * プレイヤーがエラー画面になった。この間は ready() が false なので、何も部屋に送らない。
+   * 少し待って読み込み直し、それでも直らなければ読み込めなかったと伝える
+   */
+  private onPlayerError() {
+    clearTimeout(this.localTimer);
+    this.local.releaseHold();
+    this.gate.reset();
+    this.catchUp.cancel();
+    const item = this.state?.current;
+    if (!item || item.id !== this.loadedItemId) return;
+    if (this.errorReloads >= ERROR_RELOAD_MAX) {
+      if (this.reportedFailFor !== item.id) {
+        this.onLoadFailed();
+        this.reportedFailFor = item.id;
+      }
+      this.resendLoadReport();
+      return;
+    }
+    this.errorReloads++;
+    clearTimeout(this.errorTimer);
+    this.errorTimer = window.setTimeout(() => {
+      if (this.loadedItemId === item.id && !this.player.ready()) this.player.load(item.videoId);
+    }, ERROR_RELOAD_MS);
   }
 
   /** ユーザーがプレイヤーを操作した */
