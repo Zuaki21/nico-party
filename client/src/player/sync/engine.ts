@@ -49,6 +49,8 @@ export class SyncEngine {
   private loadTimer: number | undefined;
   /** 読み込めなかったとサーバーに伝えたキュー項目（再接続したら送り直し、遅れて読み込めたら取り消す） */
   private reportedFailFor: string | null = null;
+  /** loadFailed を最後に送ったキュー項目（loadOk を送ったら外す。復帰したあとにまた読み込めなくなったとき、もう一度報告するため） */
+  private failSentFor: string | null = null;
   private ticks = 0;
   private tickTimer: number | undefined;
   /** この時刻までは、自動送りの要求を送り直さない */
@@ -121,7 +123,10 @@ export class SyncEngine {
       clearTimeout(this.errorResetTimer);
       this.errorResetTimer = window.setTimeout(() => (this.errorReloads = 0), ERROR_RESET_MS);
       // 読み込めなかったと伝えた後で読み込めたら取り消す
-      if (this.reportedFailFor === this.loadedItemId) this.resendLoadReport();
+      if (this.reportedFailFor === this.loadedItemId) {
+        this.resendLoadReport();
+        this.failSentFor = null;
+      }
       this.apply(APPLY_THRESHOLD, 'afterLoad');
     });
     on('ended', () => this.requestAutoNext());
@@ -156,6 +161,7 @@ export class SyncEngine {
       this.nextSentUntil = 0;
       this.catchUp.cancel();
       this.reportedFailFor = null;
+      this.failSentFor = null;
       this.errorReloads = 0;
       this.clearErrorTimer();
       const sameVideo = !!item && item.videoId === this.loadedVideoId && this.player.ready();
@@ -185,6 +191,7 @@ export class SyncEngine {
       if (this.loadedItemId === itemId && !this.player.ready()) {
         this.onLoadFailed();
         this.reportedFailFor = itemId;
+        this.failSentFor = itemId;
         this.resendLoadReport();
       }
     }, LOAD_TIMEOUT_MS);
@@ -298,9 +305,10 @@ export class SyncEngine {
     if (!item || item.id !== this.loadedItemId) return;
     if (this.errorReloads >= ERROR_RELOAD_MAX) {
       // 報告は 1 回だけ（エラーが続いても送り直さない）
-      if (this.reportedFailFor !== item.id) {
+      if (this.failSentFor !== item.id) {
         this.onLoadFailed();
         this.reportedFailFor = item.id;
+        this.failSentFor = item.id;
         this.resendLoadReport();
       }
       return;

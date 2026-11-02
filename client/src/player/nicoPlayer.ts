@@ -174,6 +174,9 @@ export class NicoPlayer {
         if (a.count >= RECOVER_ADVANCES) {
           this.errored = false;
           this.loaded = true;
+          // 位置の補間の基準も、復帰した時点のものにする
+          this.time = data.currentTime / 1000;
+          this.timeAt = performance.now();
           this.emit('load');
         }
       }
