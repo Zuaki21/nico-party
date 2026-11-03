@@ -1,6 +1,6 @@
 # NicoParty
 
-ボイスチャンネルのメンバーでニコニコ動画を同時視聴する Discord Activity。
+ボイスチャンネルのメンバーでニコニコ動画を同時視聴する Discord Activity
 
 - インストール: [Discord に追加](https://discord.com/oauth2/authorize?client_id=1563868455646531737)（サーバーか、自分のアカウントに追加できます）
 - 使い方・案内: https://nico-party.zuaki.dev
@@ -63,11 +63,11 @@ scripts/      確認用のスクリプトの共通部分（TypeScript を変換�
 
 ## ライセンス
 
-[MIT License](LICENSE)。
+[MIT License](LICENSE)
 
 ## クレジット
 
 - ニコニコ埋め込みプレイヤーの中継は [kikoune](https://github.com/sevenc-nanashi/kikoune)（MIT License）の方式を移植したもの
 - 再生数・コメント数のアイコンは [Lucide](https://lucide.dev)（ISC License）
 
-ライセンス本文は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照。
+ライセンス本文は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照

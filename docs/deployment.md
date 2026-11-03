@@ -11,7 +11,8 @@
 
 ## 反映の手順
 
-1. `client/package.json` の `version` を進める（設定画面と読み込み画面の左下に「ver x.x.x」と出るので、反映できたかはそれで確かめる）
+1. Activity の画面や動作を変えるときは、`client/package.json` の `version` を進める（設定画面と読み込み画面の左下に「ver x.x.x」と出るので、反映できたかはそれで確かめる）。
+   案内・利用規約・プライバシーポリシーの文面だけを変えるときは、進めなくてよい（ページを開いて確かめる）
 2. [確認用のコマンド](development.md#確認用のコマンド) を通す
 3. main に push する
 4. **画面**: `cd client && npm run deploy`（ビルドして `wrangler deploy`）

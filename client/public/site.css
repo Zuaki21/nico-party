@@ -367,32 +367,17 @@ a {
   padding-left: 1.3em;
 }
 
-/* フッター: 左にロゴ、右にリンク。狭い画面では中央に縦並び */
+/* フッター: リンクを中央に並べる */
 .site-footer {
   margin-top: 48px;
   padding-top: 20px;
   border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   flex-wrap: wrap;
   gap: 12px 24px;
   font-size: 0.88em;
-}
-
-.footer-brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text);
-  text-decoration: none;
-  font-weight: 700;
-}
-
-.footer-brand img {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
 }
 
 .footer-links {
@@ -409,14 +394,4 @@ a {
 .footer-links a:hover {
   color: var(--brand);
   text-decoration: underline;
-}
-
-@media (max-width: 560px) {
-  .site-footer {
-    flex-direction: column;
-    justify-content: center;
-  }
-  .footer-links {
-    justify-content: center;
-  }
 }
