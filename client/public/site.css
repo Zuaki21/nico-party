@@ -367,7 +367,7 @@ a {
   padding-left: 1.3em;
 }
 
-/* フッター: リンクを中央に並べる */
+/* フッター: 左に GitHub、右にリンク。狭い画面では中央に縦並び */
 .site-footer {
   margin-top: 48px;
   padding-top: 20px;
@@ -378,6 +378,19 @@ a {
   flex-wrap: wrap;
   gap: 12px 24px;
   font-size: 0.88em;
+}
+
+.footer-github {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.footer-github:hover {
+  color: var(--brand);
 }
 
 .footer-links {
@@ -394,4 +407,14 @@ a {
 .footer-links a:hover {
   color: var(--brand);
   text-decoration: underline;
+}
+
+@media (max-width: 560px) {
+  .site-footer {
+    flex-direction: column;
+    justify-content: center;
+  }
+  .footer-links {
+    justify-content: center;
+  }
 }
