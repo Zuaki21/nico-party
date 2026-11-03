@@ -181,8 +181,9 @@ input.switch:checked::after {
 
 .report-id {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.7143rem;
+  gap: 0.4286rem 0.7143rem;
 }
 
 .report-id code {
