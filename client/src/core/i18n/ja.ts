@@ -85,7 +85,7 @@ export const ja = {
   sizeNormal: '標準',
   sizeLarge: '大',
   sizeXLarge: '特大',
-  presence: 'Discord に視聴中の動画を表示',
+  presence: 'ステータスに視聴中の動画を表示',
   presenceDesc: 'プロフィールやメンバー一覧に、見ている動画のタイトルを表示します',
   noticeSeek: '{name} が {time} にシークしました',
   noticeSwitch: '{name} が「{title}」に切り替えました',

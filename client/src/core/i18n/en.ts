@@ -87,7 +87,7 @@ export const en: Record<Key, string> = {
   sizeNormal: 'M',
   sizeLarge: 'L',
   sizeXLarge: 'XL',
-  presence: 'Show what you’re watching on Discord',
+  presence: 'Show what you’re watching in your status',
   presenceDesc: 'Shows the video title on your profile and in the member list',
   noticeSeek: '{name} seeked to {time}',
   noticeSwitch: '{name} switched to “{title}”',
