@@ -48,6 +48,23 @@ test('接続: 入室すると welcome が届く。生存確認 hb には、部�
   assert.deepEqual(await host.stats(), { rooms: 1, connections: 1 });
 });
 
+test('接続: 部屋の準備を待っている間に届いた join も取りこぼさない。待っている間に切れた接続は、部屋に残らない', async () => {
+  const host = new RoomHost();
+  const raw = fakeRaw();
+  const joining = host.join('r1', raw, who('u1'));
+  message(raw, { t: 'join', name: 'x', clientId: 'client-abcdefgh-1' });
+  assert.equal(await joining, true);
+  await tick();
+  assert.ok(msgs(raw).some((m) => m.t === 'welcome'));
+
+  const gone = fakeRaw();
+  const p = host.join('r1', gone, who('u2'));
+  gone.close(1000, 'bye');
+  await p;
+  await tick();
+  assert.deepEqual(await host.stats(), { rooms: 1, connections: 1 });
+});
+
 test('部屋: 部屋の状態は、ほかの接続にも配信される（同じ ID の部屋は共有、違う部屋は別）', async () => {
   const host = new RoomHost();
   const a = fakeRaw();

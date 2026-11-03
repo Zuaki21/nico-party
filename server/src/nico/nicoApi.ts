@@ -16,8 +16,8 @@ const EMBED_READ_LIMIT = 80_000;
 const SEARCH_CACHE_MAX = 500;
 const searchCache = new Map<string, { at: number; body: string }>();
 
-/** 検索結果をキャッシュする時間。スナップショット検索のデータは 1 日 1 回の更新なので短すぎなくてよい */
-const SEARCH_CACHE_SECONDS = 600;
+/** 検索結果を覚えておく時間。スナップショット検索のデータは 1 日 1 回の更新なので短すぎなくてよい */
+const SEARCH_CACHE_MS = 600_000;
 
 export interface VideoInfo {
   title: string;
@@ -84,8 +84,7 @@ export async function fetchVideoInfo(videoId: string): Promise<VideoInfo | null>
  * getthumbinfo の embeddable が 1 でも再生できないことがあるので、実際の埋め込みページで確かめる
  */
 export async function fetchEmbedError(videoId: string): Promise<string | null> {
-  // 動画ごとの判定はキャッシュしない。Workers 無料プランのサブリクエスト上限（1 回の処理で 50）に
-  // キャッシュの読み書きも数えられ、検索 20 件分だと超えてしまうため（検索結果全体は 10 分キャッシュしている）
+  // 動画ごとの判定は覚えておかない（検索結果全体は 10 分覚えている。動画を追加するときは、最新の状態で確かめたい）
   try {
     const res = await fetch(`https://embed.nicovideo.jp/watch/${videoId}`, {
       headers: { 'user-agent': DEFAULT_UA, 'accept-language': 'ja-JP,ja;q=0.9' },
@@ -129,19 +128,20 @@ const SORT_FIELD: Record<SearchSort, string> = {
  * ニコニコのスナップショット検索 API（公式）でキーワード検索する。
  * データは 1 日 1 回の更新なので、投稿されたばかりの動画は出てこない。
  * https://site.nicovideo.jp/search-api-docs/snapshot
+ * @param params 画面から届いた q・sort・offset
+ * @returns 検索結果の JSON。ニコニコに問い合わせられなければ null
  */
-export async function searchVideos(req: Request): Promise<Response> {
-  const url = new URL(req.url);
-  const q = (url.searchParams.get('q') ?? '').trim().slice(0, 100);
-  const sortParam = url.searchParams.get('sort');
+export async function searchVideos(params: URLSearchParams): Promise<string | null> {
+  const q = (params.get('q') ?? '').trim().slice(0, 100);
+  const sortParam = params.get('sort');
   const sort: SearchSort = sortParam === 'new' || sortParam === 'likes' ? sortParam : 'popular';
-  const offset = Math.max(0, Math.min(SEARCH_MAX_OFFSET, Math.trunc(Number(url.searchParams.get('offset'))) || 0));
-  if (!q) return Response.json({ total: 0, items: [] } satisfies SearchResult);
+  const offset = Math.max(0, Math.min(SEARCH_MAX_OFFSET, Math.trunc(Number(params.get('offset'))) || 0));
+  if (!q) return JSON.stringify({ total: 0, items: [] } satisfies SearchResult);
 
   // 同じ検索は覚えておいて返す（ニコニコへの問い合わせを抑える）
   const cacheKey = JSON.stringify([q, sort, offset]);
   const hit = searchCache.get(cacheKey);
-  if (hit && Date.now() - hit.at < SEARCH_CACHE_SECONDS * 1000) return searchResponse(hit.body);
+  if (hit && Date.now() - hit.at < SEARCH_CACHE_MS) return hit.body;
 
   const api = new URL('https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search');
   api.search = new URLSearchParams({
@@ -157,7 +157,7 @@ export async function searchVideos(req: Request): Promise<Response> {
     headers: { 'user-agent': 'nico-party (https://nico-party.zuaki.dev)' },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   }).catch(() => null);
-  if (!res?.ok) return Response.json({ error: 'search failed' }, { status: 502 });
+  if (!res?.ok) return null;
 
   const json = (await res.json().catch(() => null)) as {
     meta?: { totalCount?: number };
@@ -171,7 +171,7 @@ export async function searchVideos(req: Request): Promise<Response> {
       startTime?: string;
     }[];
   } | null;
-  if (!json?.meta) return Response.json({ error: 'search failed' }, { status: 502 });
+  if (!json?.meta) return null;
   const data = json.data ?? [];
   // 再生できない動画（センシティブ・外部再生禁止など）は、選べないよう事前に印を付ける
   const errors = await Promise.all(data.map((d) => fetchEmbedError(d.contentId)));
@@ -196,10 +196,5 @@ export async function searchVideos(req: Request): Promise<Response> {
     if (searchCache.size <= SEARCH_CACHE_MAX) break;
     searchCache.delete(key);
   }
-  return searchResponse(body);
+  return body;
 }
-
-const searchResponse = (body: string) =>
-  new Response(body, {
-    headers: { 'content-type': 'application/json', 'cache-control': `public, max-age=${SEARCH_CACHE_SECONDS}` },
-  });

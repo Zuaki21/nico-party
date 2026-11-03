@@ -118,9 +118,8 @@ export class SyncEngine {
     on('seeked', onLocal);
     on('load', () => {
       clearTimeout(this.loadTimer);
-      this.clearErrorTimer();
+      this.clearErrorTimers();
       // すぐ戻すと、読み込めた直後にまたエラーになる動画で、読み込み直しが終わらなくなる
-      clearTimeout(this.errorResetTimer);
       this.errorResetTimer = window.setTimeout(() => (this.errorReloads = 0), ERROR_RESET_MS);
       // 読み込めなかったと伝えた後で読み込めたら取り消す
       if (this.reportedFailFor === this.loadedItemId) {
@@ -141,7 +140,7 @@ export class SyncEngine {
     clearTimeout(this.localTimer);
     clearTimeout(this.loadTimer);
     clearTimeout(this.holdRetryTimer);
-    this.clearErrorTimer();
+    this.clearErrorTimers();
     this.gate.reset();
     this.catchUp.cancel();
     this.local.dispose();
@@ -163,7 +162,7 @@ export class SyncEngine {
       this.reportedFailFor = null;
       this.failSentFor = null;
       this.errorReloads = 0;
-      this.clearErrorTimer();
+      this.clearErrorTimers();
       const sameVideo = !!item && item.videoId === this.loadedVideoId && this.player.ready();
       this.loadedItemId = item?.id ?? null;
       this.loadedVideoId = item?.videoId ?? null;
@@ -285,16 +284,17 @@ export class SyncEngine {
     }
   }
 
-  /**
-   * プレイヤーがエラー画面になった。この間は ready() が false なので、何も部屋に送らない。
-   * 少し待って読み込み直し、それでも直らなければ読み込めなかったと伝える
-   */
-  private clearErrorTimer() {
+  /** エラーからの読み込み直しの予約と、読み込み直しの回数を戻す予約を、両方取り消す */
+  private clearErrorTimers() {
     clearTimeout(this.errorResetTimer);
     clearTimeout(this.errorTimer);
     this.errorTimer = undefined;
   }
 
+  /**
+   * プレイヤーがエラー画面になった。この間は ready() が false なので、何も部屋に送らない。
+   * 少し待って読み込み直し、それでも直らなければ読み込めなかったと伝える
+   */
   private onPlayerError() {
     clearTimeout(this.localTimer);
     this.local.releaseHold();

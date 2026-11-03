@@ -1,5 +1,5 @@
 import { jumpTo, reorder } from '../../../shared/playlist';
-import type { PlaybackState, QueueItem, RepeatMode } from '../../../shared/protocol';
+import type { Member, PlaybackState, QueueItem, RepeatMode } from '../../../shared/protocol';
 
 /**
  * 再生リスト全体（視聴済み + 再生中 + これから再生）の上限。
@@ -21,13 +21,8 @@ export interface Snapshot {
   history: QueueItem[];
 }
 
-/** 操作した人 */
-export interface Actor {
-  id: string;
-  name: string;
-  /** アイコンの URL */
-  avatar?: string;
-}
+/** 操作した人（部屋のメンバー） */
+export type Actor = Member;
 
 /**
  * 状態遷移の結果。変わったものだけが入る。

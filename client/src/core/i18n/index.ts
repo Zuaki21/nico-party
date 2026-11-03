@@ -97,17 +97,31 @@ export function applyI18n(root: ParentNode = document) {
   }
 }
 
+/** 12345 → 12,345（桁区切りは言語に合わせる） */
+export function formatNumber(n: number) {
+  return n.toLocaleString(lang === 'ja' ? 'ja-JP' : 'en-US');
+}
+
 /** 12345 → 1.2万 / 12.3K のように短く表示する */
 export function formatCount(n: number) {
   const short = (v: number, unit: string) => `${v.toFixed(1).replace(/\.0$/, '')}${unit}`;
   if (lang === 'ja') {
     if (n >= 100_000_000) return short(n / 100_000_000, '億');
     if (n >= 10_000) return short(n / 10_000, '万');
-    return n.toLocaleString('ja-JP');
+  } else {
+    if (n >= 1_000_000) return short(n / 1_000_000, 'M');
+    if (n >= 1_000) return short(n / 1_000, 'K');
   }
-  if (n >= 1_000_000) return short(n / 1_000_000, 'M');
-  if (n >= 1_000) return short(n / 1_000, 'K');
-  return n.toLocaleString('en-US');
+  return formatNumber(n);
+}
+
+/** 秒 → 1:05 / 1:02:05（再生位置・動画の長さ。言語によらない） */
+export function formatTime(sec: number) {
+  const total = Math.max(0, Math.floor(sec));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const ss = String(total % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
 }
 
 /** 2024-05-01T12:00:00+09:00 → 2024/5/1 / May 1, 2024 */

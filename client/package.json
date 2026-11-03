@@ -11,6 +11,8 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "check:sync": "node scripts/sync-check/check.cjs",
+    "check:units": "node scripts/check-units.cjs",
+    "check": "npm run typecheck && npm run check:units && npm run check:sync",
     "deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {

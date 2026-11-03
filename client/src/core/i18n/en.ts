@@ -32,7 +32,6 @@ export const en: Record<Key, string> = {
   movedTo: 'Moved "{title}" to {n} of {total}',
   shuffleLabel: 'Shuffle',
   playingBadge: '▶ Playing',
-  addedBy: 'Added by {name}',
   playFromHere: 'Play from here',
   playItem: 'Play "{title}" from here',
   removeItem: 'Remove "{title}" from the playlist',

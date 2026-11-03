@@ -1,10 +1,10 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import type { ClientMsg, Member, PlaybackState, ServerMsg } from '../../shared/protocol';
 import { collectLog, describeError, devlog, watchErrors } from './core/devlog';
-import { APP_VERSION, backend, inDiscord } from './core/env';
+import { APP_VERSION, inDiscord } from './core/env';
 import { onLangChange, serverErrorText, t } from './core/i18n';
-import { searchNico, sendLog } from './net/api';
-import { authenticate, NotInActivityError, openExternal, watchLayout } from './net/discord';
+import { devLogin, NotInActivityError, searchNico, sendLog } from './net/api';
+import { authenticate, openExternal, watchLayout } from './net/discord';
 import { createPresence } from './net/presence';
 import { RoomConnection } from './net/roomConnection';
 import { nicoEmbedUrl } from './player/embedUrl';
@@ -86,6 +86,8 @@ function applyMembers(members: Member[]) {
   session.presence?.setMembers(members.length);
 }
 
+/** Discord の外（通常のブラウザ）で開いたときに入る部屋。全タブが同じ部屋に入る */
+const DEV_ROOM = 'local-dev';
 /** 通行証を取り直す間隔（有効期限 24 時間より十分に短く） */
 const PASS_REFRESH_MS = 6 * 60 * 60 * 1000;
 /** 取り直しに失敗したあと、次に試すまでの間隔 */
@@ -148,9 +150,9 @@ async function main() {
     // 通常のブラウザ（開発用）: 全タブ共通の部屋で動作確認できるようにする。
     // ローカルのサーバーが開発用のログインを許していれば、通行証をもらって検索や不具合の報告も使えるようにする
     const name = `ブラウザ${Math.floor(Math.random() * 100)}`;
-    const dev = await devLogin(name);
+    const dev = await devLogin(name, DEV_ROOM);
     session.nicoPass = dev?.nicoPass;
-    connect('local-dev', name, dev?.pass);
+    connect(DEV_ROOM, name, dev?.pass);
     return;
   }
   const discord = new DiscordSDK(import.meta.env.VITE_DISCORD_CLIENT_ID);
@@ -183,22 +185,6 @@ async function main() {
   scheduleRefresh(discord);
 }
 
-/** 開発用のログイン（server/src/devToken.ts）。使えなければ null（通行証なしで部屋に入る） */
-async function devLogin(name: string): Promise<{ pass: string; nicoPass: string } | null> {
-  try {
-    const res = await fetch(backend('/api/dev-token'), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name, room: 'local-dev' }),
-    });
-    if (!res.ok) return null;
-    devlog('dev login ok');
-    return (await res.json()) as { pass: string; nicoPass: string };
-  } catch {
-    return null;
-  }
-}
-
 /**
  * 通行証には有効期限（24 時間）があるので、開きっぱなしの間に取り直す。
  * 再接続のときに使う通行証と、次に読み込む動画の中継の通行証が新しくなる（読み込み済みの動画は、そのまま再生できる）
@@ -215,10 +201,11 @@ function scheduleRefresh(discord: DiscordSDK) {
     lastTriedAt = Date.now();
     try {
       // 応答しないまま止まっても、次の取り直しを妨げないよう、時間を区切る
+      let timer: number | undefined;
       const fresh = await Promise.race([
         authenticate(discord, false),
-        new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('refresh timed out')), PASS_REFRESH_TIMEOUT_MS)),
-      ]);
+        new Promise<never>((_, reject) => (timer = window.setTimeout(() => reject(new Error('refresh timed out')), PASS_REFRESH_TIMEOUT_MS))),
+      ]).finally(() => clearTimeout(timer));
       session.nicoPass = fresh.nicoPass;
       session.conn?.setPass(fresh.pass);
       lastSucceededAt = Date.now();

@@ -1,6 +1,7 @@
 import { SEARCH_MAX_OFFSET, SEARCH_PAGE_SIZE, type SearchItem, type SearchSort } from '../../../shared/search';
-import { $, bodyEl, countsMeta, markSeg, noteEl, onSeg, thumbEl } from './dom';
-import { formatDate, getLang, t, unplayableReason } from '../core/i18n';
+import { $, markSeg, noteEl, onSeg } from './dom';
+import { bodyEl, countsMeta, thumbEl } from './itemParts';
+import { formatDate, formatNumber, t, unplayableReason } from '../core/i18n';
 import { TRASH_ICON } from './icons';
 import { findAddedItem, isInPlaylist, onPlaylistChange } from './playlistStore';
 import type { UiHandlers } from './ui';
@@ -67,7 +68,7 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
     lastView = view;
     $('search-title').textContent =
       view === 'done'
-        ? t('searchCount', { q: query, n: total.toLocaleString(getLang() === 'ja' ? 'ja-JP' : 'en-US') })
+        ? t('searchCount', { q: query, n: formatNumber(total) })
         : t('searchQuery', { q: query });
     markSeg('search-sort', 'sort', sort);
     // 新しい検索になったときや作り直すときだけ全部を並べ直す。それ以外は後ろに足すだけで、スクロール位置も動かさない

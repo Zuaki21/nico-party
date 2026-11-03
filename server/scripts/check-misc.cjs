@@ -8,7 +8,8 @@ const load = loadTs([
   'server/src/room/validate.ts',
   'server/src/room/loadReport.ts',
   'server/src/room/limiter.ts',
-  'server/src/wsAuth.ts',
+  'server/src/auth.ts',
+  'server/src/body.ts',
   'server/src/token.ts',
   'server/src/devToken.ts',
   'server/src/room/enqueue.ts',
@@ -21,7 +22,7 @@ const load = loadTs([
 const { parseClientMsg } = load('server/src/room/validate.ts');
 const { reportLoad, everyoneFailed } = load('server/src/room/loadReport.ts');
 const { MessageLimiter } = load('server/src/room/limiter.ts');
-const { authorizeRoom } = load('server/src/wsAuth.ts');
+const { authorizeRoom, isLocalPeer } = load('server/src/auth.ts');
 const { checkParticipation } = load('server/src/instanceCheck.ts');
 const { exchangeToken } = load('server/src/token.ts');
 const { issueDevToken } = load('server/src/devToken.ts');
@@ -29,7 +30,7 @@ const { EnqueueQueue } = load('server/src/room/enqueue.ts');
 const { RoomStore } = load('server/src/room/roomStore.ts');
 const pass = load('server/src/pass.ts');
 const { withinRateLimit } = load('server/src/rateLimit.ts');
-const { readLimited, BodyTooLargeError } = load('server/src/body.ts');
+const { readLimited, readJson, BodyTooLargeError } = load('server/src/body.ts');
 const { matchRoute } = load('server/src/nico/nicoRoutes.ts');
 const { reorder, jumpTo } = load('shared/playlist.ts');
 const { parseVideoId } = load('shared/video.ts');
@@ -236,6 +237,15 @@ test('保存先: 何もなければ初期状態で始まる', async () => {
   assert.equal(store.getLoadFailed(), undefined);
 });
 
+test('保存先: 形の合わない保存内容（古い版のファイルなど）は、初期状態で始まる', async () => {
+  const store = await RoomStore.load(fakeStorage({ state: { current: 'x' }, queue: 'nope', history: null, loadFailed: { ids: 5 } }));
+  assert.equal(store.getState().version, 0);
+  assert.equal(store.getState().current, null);
+  assert.deepEqual(store.getQueue(), []);
+  assert.deepEqual(store.getHistory(), []);
+  assert.equal(store.getLoadFailed(), undefined);
+});
+
 test('保存先: commit は版を進めるが、渡した state は書き換えない。保存したものが戻る', async () => {
   const storage = fakeStorage();
   const store = await RoomStore.load(storage);
@@ -393,67 +403,72 @@ test('動画 ID: URL・ID・余計な文字', () => {
 });
 
 // ---- 部屋への接続の認可（node/main.ts の WebSocket の入口）
-const wsReq = (url, headers = {}) => new Request(url, { headers: { upgrade: 'websocket', ...headers } });
 const ENV = { PASS_SECRET: 'secret' };
 
-test('認可: 部屋の通行証があれば通り、確かめた名前とユーザー ID が部屋に渡る', async () => {
-  const p = await pass.issuePass('secret', 'ws', { u: 'u1', n: '太郎', r: 'roomA' });
-  const out = await authorizeRoom(wsReq(`http://x/ws/roomA?pass=${encodeURIComponent(p)}`), ENV, 'roomA');
-  assert.ok(out instanceof Request);
-  assert.equal(decodeURIComponent(out.headers.get('x-nico-party-verified-name')), '太郎');
-  assert.equal(out.headers.get('x-nico-party-verified-uid'), 'u1');
+test('認可: 部屋の通行証があれば通り、確かめた名前とユーザー ID・アイコンが部屋に渡る', async () => {
+  const avatar = 'https://cdn.discordapp.com/avatars/1/abc.png?size=64';
+  const p = await pass.issuePass('secret', 'ws', { u: 'u1', n: '太郎', r: 'roomA', a: avatar });
+  assert.deepEqual(await authorizeRoom(p, ENV, 'roomA', false), { uid: 'u1', name: '太郎', avatar });
 });
 
-test('開発用のログイン: ALLOW_ANON_WS=true でローカルの接続のときだけ、通行証を発行する。それ以外は 404', async () => {
-  const req = (ip) => new Request('http://x/api/dev-token', {
+test('手元からの接続: 接続元が自分自身で、プロキシやトンネルを通った印が無いときだけ', () => {
+  assert.equal(isLocalPeer('127.0.0.1', {}), true);
+  assert.equal(isLocalPeer('::ffff:127.0.0.1', {}), true);
+  assert.equal(isLocalPeer('::1', { host: 'localhost:5173' }), true);
+  assert.equal(isLocalPeer('172.18.0.3', {}), false, '別のコンテナ（本番の cloudflared）');
+  assert.equal(isLocalPeer(undefined, {}), false);
+  for (const h of ['cf-connecting-ip', 'x-forwarded-for', 'forwarded', 'x-real-ip']) {
+    assert.equal(isLocalPeer('127.0.0.1', { [h]: '127.0.0.1' }), false, `トンネル経由（${h}）`);
+  }
+});
+
+test('開発用のログイン: ALLOW_ANON_WS=true で手元からの接続のときだけ、通行証を発行する。それ以外は 404', async () => {
+  const req = (body = JSON.stringify({ name: 'ブラウザ1', room: 'local-dev' })) => new Request('http://x/api/dev-token', {
     method: 'POST',
-    headers: { 'cf-connecting-ip': ip, 'content-type': 'application/json' },
-    body: JSON.stringify({ name: 'ブラウザ1', room: 'local-dev' }),
+    headers: { 'content-type': 'application/json' },
+    body,
   });
-  const ok = await issueDevToken(req('127.0.0.1'), { PASS_SECRET: 'secret', ALLOW_ANON_WS: 'true' });
+  const on = { PASS_SECRET: 'secret', ALLOW_ANON_WS: 'true' };
+  const ok = await issueDevToken(req(), on, true);
   assert.equal(ok.status, 200);
   const { pass: wsPass, nicoPass } = await ok.json();
   const claims = await pass.verifyPass('secret', 'ws', wsPass);
   assert.equal(claims.n, 'ブラウザ1');
   assert.equal(claims.r, 'local-dev');
   assert.ok(await pass.verifyPass('secret', 'nico', nicoPass));
-  assert.equal((await issueDevToken(req('203.0.113.5'), { PASS_SECRET: 'secret', ALLOW_ANON_WS: 'true' })).status, 404, '外からの接続');
-  assert.equal((await issueDevToken(req('127.0.0.1'), { PASS_SECRET: 'secret' })).status, 404, 'ALLOW_ANON_WS なし');
+  assert.equal((await issueDevToken(req(), on, false)).status, 404, '外からの接続');
+  assert.equal((await issueDevToken(req(), { PASS_SECRET: 'secret' }, true)).status, 404, 'ALLOW_ANON_WS なし');
+  assert.equal((await issueDevToken(req('{}'), on, true)).status, 200, '名前・部屋は省略できる');
+  assert.equal((await issueDevToken(req('x'.repeat(2000)), on, true)).status, 413);
 });
 
-test('認可: 通行証なし・別の部屋・別の scope・名前なし・壊れたものは 401', async () => {
+test('認可: 通行証なし・別の部屋・別の scope・名前なし・壊れたものは null', async () => {
   const wsOther = await pass.issuePass('secret', 'ws', { u: 'u1', n: 'x', r: 'roomB' });
   const nico = await pass.issuePass('secret', 'nico', { u: 'u1' });
   const noName = await pass.issuePass('secret', 'ws', { u: 'u1', r: 'roomA' });
   for (const p of [null, wsOther, nico, noName, 'broken.pass']) {
-    const url = `http://x/ws/roomA${p ? '?pass=' + encodeURIComponent(p) : ''}`;
-    const out = await authorizeRoom(wsReq(url), ENV, 'roomA');
-    assert.ok(out instanceof Response && out.status === 401, String(p));
+    assert.equal(await authorizeRoom(p, ENV, 'roomA', false), null, String(p));
   }
 });
 
-test('認可: 外から来た確認済みのヘッダーは信用しない（通行証がなければ素通りさせない）', async () => {
-  const forged = { 'x-nico-party-verified-name': 'admin', 'x-nico-party-verified-uid': 'root' };
-  const out = await authorizeRoom(wsReq('http://x/ws/roomA', forged), ENV, 'roomA');
-  assert.ok(out instanceof Response && out.status === 401);
-  const p = await pass.issuePass('secret', 'ws', { u: 'u1', n: 'ほんもの', r: 'roomA' });
-  const ok = await authorizeRoom(wsReq(`http://x/ws/roomA?pass=${encodeURIComponent(p)}`, forged), ENV, 'roomA');
-  assert.equal(ok.headers.get('x-nico-party-verified-uid'), 'u1');
-});
-
-test('認可: 通行証なしの接続は、ALLOW_ANON_WS と接続元がローカルのときだけ通る', async () => {
-  const anon = (env, ip) => authorizeRoom(wsReq('http://x/ws/roomA', ip ? { 'cf-connecting-ip': ip } : {}), env, 'roomA');
+test('認可: 通行証なしの接続は、ALLOW_ANON_WS と手元からの接続のときだけ、名前なしで通る', async () => {
   const on = { ...ENV, ALLOW_ANON_WS: 'true' };
-  assert.ok((await anon(on, '127.0.0.1')) instanceof Request);
-  assert.ok((await anon(on, '::1')) instanceof Request);
-  assert.equal((await anon(on, '203.0.113.5')).status, 401, '本番の接続元では、フラグがあっても通さない');
-  assert.equal((await anon(on, null)).status, 401);
-  assert.equal((await anon({ ...ENV, ALLOW_ANON_WS: 'false' }, '127.0.0.1')).status, 401);
-  assert.equal((await anon(ENV, '127.0.0.1')).status, 401);
+  assert.deepEqual(await authorizeRoom(null, on, 'roomA', true), { uid: null, name: null });
+  assert.equal(await authorizeRoom(null, on, 'roomA', false), null, '外からの接続では、フラグがあっても通さない');
+  assert.equal(await authorizeRoom(null, { ...ENV, ALLOW_ANON_WS: 'false' }, 'roomA', true), null);
+  assert.equal(await authorizeRoom(null, ENV, 'roomA', true), null);
 });
 
 test('認可: 鍵が未登録なら例外（鍵なしで通さない）', async () => {
-  await assert.rejects(() => authorizeRoom(wsReq('http://x/ws/roomA'), {}, 'roomA'), /PASS_SECRET/);
+  await assert.rejects(() => authorizeRoom(null, {}, 'roomA', true), /PASS_SECRET/);
+});
+
+test('JSON の本文: 読めれば中身、大きすぎれば 413、JSON でなければ 400', async () => {
+  const r = (body) => new Request('http://x/', { method: 'POST', body });
+  assert.deepEqual(await readJson(r('{"a":1}'), 100), { value: { a: 1 } });
+  assert.equal((await readJson(r('x'.repeat(200)), 100)).status, 413);
+  assert.equal((await readJson(r('not json'), 100)).status, 400);
+  assert.equal((await readJson(r(''), 100)).status, 400);
 });
 
 test('メッセージの量の制限: 他の制限に断られたときは、数えた分を戻せる', () => {

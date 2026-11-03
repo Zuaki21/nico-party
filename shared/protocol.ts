@@ -113,8 +113,7 @@ export type ServerMsg =
   | { t: 'pong'; clientTime: number; serverTime: number };
 
 /**
- * 接続の生存確認用のメッセージ。サーバーは Durable Object の自動応答で同じ文字列を返す
- * （部屋を起こさないので稼働時間がかからない）
+ * 接続の生存確認用のメッセージ。サーバーは部屋を通さずに、同じ文字列をすぐ返す（server/src/node/roomHost.ts）
  */
 export const HEARTBEAT = 'hb';
 

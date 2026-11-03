@@ -1,5 +1,8 @@
+import { flatten } from '../../../shared/playlist';
 import type { PlaybackState, QueueItem, RepeatMode } from '../../../shared/protocol';
-import { $, adderEl, announce, bodyEl, countsMeta, noteEl, thumbEl } from './dom';
+import { adderEl } from './avatar';
+import { $, announce, noteEl } from './dom';
+import { bodyEl, countsMeta, thumbEl } from './itemParts';
 import { setupNavPreview, type NavKind, type NavPreview } from './navPreview';
 import { PLAY_ICON, TRASH_ICON } from './icons';
 import { t } from '../core/i18n';
@@ -44,7 +47,7 @@ export function setupPlaylist(h: Pick<UiHandlers, 'remove' | 'jump' | 'skip' | '
   $('repeat').addEventListener('click', () => h.mode({ repeat: NEXT_REPEAT[lists.repeat] }));
   renderMode();
   reordering = setupReorder(h.move, renderList, (id, index, total) => {
-    const q = [...lists.history, ...(lists.current ? [lists.current] : []), ...lists.queue].find((x) => x.id === id);
+    const q = flatten(lists.history, lists.current, lists.queue).find((x) => x.id === id);
     if (q) announce(t('movedTo', { title: q.title, n: String(index + 1), total: String(total) }));
   });
   refreshNavPreview = setupNavPreview(navPreview);
@@ -175,7 +178,7 @@ function itemEl(q: QueueItem, kind: ItemKind) {
   ]);
 
   // 追加した人のアイコンは、サムネイルの左下に重ねる
-  thumb.append(adderEl(q.addedBy, q.addedByAvatar, true));
+  thumb.append(adderEl(q.addedBy, q.addedByAvatar));
   li.append(handle, thumb, body);
   // 「ここから再生」と「削除」。マウスを乗せたときだけ、動画情報の右端に重ねて出す
   // （再生中の動画は、すでに再生しているので「ここから再生」は出さない。削除すると次の動画へ進む）

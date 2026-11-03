@@ -1,6 +1,6 @@
 /**
  * 部屋（room.ts）が、動いている場所（node/roomHost.ts）に頼む窓口。
- * 部屋は、WebSocket・保存先・アラームだけをここ越しに使う。Node 以外で動かす（テストなど）ときも、これを満たせばよい。
+ * 部屋は、WebSocket・保存先・アラームだけをここ越しに使う。確認用のスクリプトは、これを満たす代用品で部屋を動かす。
  */
 
 /** 部屋につながっている 1 本の WebSocket */
@@ -9,9 +9,6 @@ export interface RoomSocket {
   readonly readyState: number;
   send(data: string): void;
   close(code?: number, reason?: string): void;
-  /** 接続ごとの情報（メンバーの ID・名前など）を、この接続に持たせる */
-  serializeAttachment(value: unknown): void;
-  deserializeAttachment(): unknown;
 }
 
 /** WebSocket の readyState が OPEN のときの値 */

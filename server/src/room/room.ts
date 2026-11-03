@@ -1,4 +1,5 @@
 import { CLOSE_EVICTED, type ClientMsg, type ErrorCode, type NoticeEvent, type PlaybackState, type QueueItem } from '../../../shared/protocol';
+import { flatten } from '../../../shared/playlist';
 import { parseVideoId } from '../../../shared/video';
 import { fetchEmbedError, fetchVideoInfo, UpstreamError } from '../nico/nicoApi';
 import { sha256Hex } from '../hash';
@@ -26,7 +27,7 @@ import {
 import { RoomStore } from './roomStore';
 import { MessageLimiter } from './limiter';
 import { log } from '../log';
-import { send, sendError, Sockets, type Attachment } from './sockets';
+import { send, sendError, Sockets, toMember, type Attachment } from './sockets';
 import { parseClientMsg } from './validate';
 
 /**
@@ -119,8 +120,7 @@ export class Room {
       ...(verifiedName !== null && uid !== null ? { uid } : {}),
       ...(verifiedName !== null && who.avatar ? { avatar: who.avatar } : {}),
     };
-    ws.serializeAttachment(attachment);
-    this.ctx.acceptWebSocket(ws);
+    this.sockets.accept(ws, attachment);
     // 入室しないまま居座る接続を、時間がたったら切る（すでにアラームがあれば、そのときに一緒に掃除する）。
     // 接続の情報を持たない接続が、await の間に見えることがないよう、アラームはあとで設定する
     if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + JOIN_TIMEOUT_MS + 1000);
@@ -148,8 +148,10 @@ export class Room {
 
   async webSocketMessage(ws: RoomSocket, raw: string | ArrayBuffer): Promise<void> {
     if (typeof raw !== 'string' || raw.length > MAX_MESSAGE_LENGTH) return;
-    const attachment = this.sockets.attachment(ws);
-    if (!this.rawLimiter.take(attachment.uid ?? attachment.id)) return;
+    const a = this.sockets.attachment(ws);
+    // 量の制限は、ログインした人ならユーザーごと（接続を何本つないでも増やせない）。そうでなければ接続ごと
+    const limitKey = a.uid ?? a.id;
+    if (!this.rawLimiter.take(limitKey)) return;
     let msg: ClientMsg | null;
     try {
       msg = parseClientMsg(JSON.parse(raw));
@@ -157,9 +159,6 @@ export class Room {
       return;
     }
     if (!msg) return;
-    const a = this.sockets.attachment(ws);
-    // 量の制限は、ログインした人ならユーザーごと（接続を何本つないでも増やせない）。そうでなければ接続ごと
-    const limitKey = a.uid ?? a.id;
     if (msg.t === 'ping') {
       if (this.pingLimiter.take(limitKey)) send(ws, { t: 'pong', clientTime: msg.clientTime, serverTime: Date.now() });
       return;
@@ -169,21 +168,20 @@ export class Room {
     if (!this.limiter.take(limitKey)) return;
     // 部屋全体の制限に断られたときは、その人の分は数えない（ほかの人の連投で、自分の枠が減らないように）
     if (!this.roomLimiter.take('room')) return this.limiter.refund(limitKey);
-    const by: Actor = { id: a.id, name: a.name, ...(a.avatar ? { avatar: a.avatar } : {}) };
+    const by = toMember(a);
 
     switch (msg.t) {
       case 'join': {
         // 入室済みのソケットから届いた join で、ID や名前が途中で変わらないようにする
         if (a.joined) return;
         // 確かめられた名前はそのまま使う。ログインできなかった人は、他の人の名前を名乗れないよう定型のゲスト名だけ受け付ける
-        if (!a.uid) a.name = GUEST_NAMES.includes(msg.name) ? msg.name : 'guest';
+        const name = a.uid ? a.name : GUEST_NAMES.includes(msg.name) ? msg.name : 'guest';
         // 確かめられた人は、再接続しても同じメンバーとして扱えるよう、ユーザー ID と接続元の ID から決めた ID にする
         // （どちらかが分からないと作れないので、他の人の ID は名乗れない）。ログインしていない人は、毎回新しい ID
-        if (a.uid && msg.clientId) a.id = (await sha256Hex(`${a.uid}:${msg.clientId}`)).slice(0, 16);
-        // ID を作っている間に、同じ接続から 2 通目の join が届いていないか確かめ直す
-        if (this.sockets.attachment(ws).joined) return;
-        a.joined = true;
-        ws.serializeAttachment(a);
+        const id = a.uid && msg.clientId ? (await sha256Hex(`${a.uid}:${msg.clientId}`)).slice(0, 16) : a.id;
+        // ID を作っている間に、同じ接続から届いた 2 通目の join が先に入室していたら、何もしない
+        if (a.joined) return;
+        Object.assign(a, { id, name, joined: true });
         const snap = this.snapshot();
         send(ws, {
           t: 'welcome',
@@ -221,7 +219,7 @@ export class Room {
 
       case 'remove': {
         const snap = this.snapshot();
-        const removed = [...snap.history, ...(snap.state.current ? [snap.state.current] : []), ...snap.queue].find((q) => q.id === msg.id);
+        const removed = flatten(snap.history, snap.state.current, snap.queue).find((q) => q.id === msg.id);
         await this.apply((s, d) => removeItem(s, msg.id, by, d));
         if (removed) this.notify(by, { k: 'remove', title: removed.title });
         return;
@@ -264,11 +262,8 @@ export class Room {
     }
   }
 
+  /** 接続が切れた（閉じた・エラーになった） */
   async webSocketClose(ws: RoomSocket): Promise<void> {
-    await this.onLeave(ws);
-  }
-
-  async webSocketError(ws: RoomSocket): Promise<void> {
     await this.onLeave(ws);
   }
 
@@ -327,7 +322,7 @@ export class Room {
   /** 操作した本人以外に、操作を知らせる（本人の画面には出さない。クライアントが by.id で見分ける） */
   private notify(by: Actor, ev: NoticeEvent) {
     log('notice', { room: this.ctx.id, member: by.id, ev: ev.k });
-    this.sockets.broadcast({ t: 'notice', by: { id: by.id, name: by.name, ...(by.avatar ? { avatar: by.avatar } : {}) }, ev });
+    this.sockets.broadcast({ t: 'notice', by, ev });
   }
 
   private async onLeave(ws: RoomSocket) {
@@ -347,7 +342,7 @@ export class Room {
     }
     this.sockets.broadcastMembers(ws);
     // まだ報告していなかった人が抜けて、残りが全員「読み込めなかった」になったかもしれない
-    await this.skipIfNobodyLoaded({ id: leaver.id, name: leaver.name }, ws);
+    await this.skipIfNobodyLoaded(toMember(leaver), ws);
   }
 
   /**

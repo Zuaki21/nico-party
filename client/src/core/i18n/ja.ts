@@ -30,7 +30,6 @@ export const ja = {
   movedTo: '「{title}」を {n} / {total} 番目に移動しました',
   shuffleLabel: 'シャッフル',
   playingBadge: '▶ 再生中',
-  addedBy: '追加: {name}',
   playFromHere: 'ここから再生',
   playItem: '「{title}」をここから再生',
   removeItem: '「{title}」を再生リストから削除',

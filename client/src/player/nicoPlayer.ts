@@ -12,6 +12,31 @@ export const enum PlayerStatus {
   Ended = 4,
 }
 
+/** 知っている再生状態（1〜4）なら、その値。それ以外は null */
+function toStatus(v: unknown): PlayerStatus | null {
+  const n = Number(v);
+  return Number.isInteger(n) && n >= PlayerStatus.Loading && n <= PlayerStatus.Ended ? (n as PlayerStatus) : null;
+}
+
+/**
+ * 埋め込みプレイヤーから postMessage で届く通知（非公式の API）。
+ * 中身はプレイヤーの版で変わりうるので、どの項目も、使う前に型を確かめる
+ */
+interface PlayerMessage {
+  eventName?: unknown;
+  data?: PlayerEventData;
+}
+interface PlayerEventData {
+  playerStatus?: unknown;
+  seekStatus?: unknown;
+  /** ミリ秒 */
+  currentTime?: unknown;
+  /** ミリ秒 */
+  duration?: unknown;
+  muted?: unknown;
+  videoInfo?: { lengthInSeconds?: unknown } | null;
+}
+
 /**
  * load: 動画の読み込みが終わり操作できるようになった /
  * progress: 再生位置の通知（約 0.25 秒ごと）で位置が進んだ。再生開始の通知が来ないときでも分かる /
@@ -154,16 +179,15 @@ export class NicoPlayer {
 
   private onMessage = (e: MessageEvent) => {
     if (e.source !== this.iframe.contentWindow) return;
-    const msg = e.data;
+    const msg = e.data as PlayerMessage | null;
     if (!msg || typeof msg !== 'object') return;
-    const data = msg.data ?? {};
+    const data: PlayerEventData = msg.data && typeof msg.data === 'object' ? msg.data : {};
     // エラー画面の間に届く再生状態・位置の通知は捨てる（0 秒などの値で他の人の位置を巻き戻さないため）。
     // ただし、位置が進み続けるなら直ったとみなす（「プレーヤーを更新」で loadComplete が来ない場合に備える）
     if (this.errored && msg.eventName !== 'loadComplete' && msg.eventName !== 'error') {
       // 復帰したときに状態がずれないよう、通知は通知せずに覚えておく
-      if (msg.eventName === 'playerStatusChange' && Number(data.playerStatus) > 0) {
-        this.status = Number(data.playerStatus) as PlayerStatus;
-      }
+      const status = toStatus(data.playerStatus);
+      if (msg.eventName === 'playerStatusChange' && status !== null) this.status = status;
       if (msg.eventName === 'playerMetadataChange' && typeof data.duration === 'number' && data.duration > 0) {
         this.duration = data.duration / 1000;
       }
@@ -196,8 +220,8 @@ export class NicoPlayer {
         return;
 
       case 'playerStatusChange': {
-        const s = Number(data.playerStatus) as PlayerStatus;
-        if (s === this.status) return;
+        const s = toStatus(data.playerStatus);
+        if (s === null || s === this.status) return;
         // 補間の基準を切り替え時点に更新しておく
         this.time = this.getTime();
         this.timeAt = performance.now();

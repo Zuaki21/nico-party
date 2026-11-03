@@ -7,10 +7,10 @@
  * 動画セグメント本体は Discord のプロキシが直接ニコニコから取得するので、ここは通らない。
  */
 
-import { BodyTooLargeError } from '../body';
+import { requireNicoPass } from '../auth';
+import { BodyTooLargeError, readLimited } from '../body';
 import type { Env } from '../env';
-import { ConfigError, passSecret, verifyPass } from '../pass';
-import { withinRateLimit } from '../rateLimit';
+import { ConfigError } from '../pass';
 import { DEFAULT_UA } from './nicoApi';
 import { rewriter } from './nicoRewrite';
 import { matchRoute, type Upstream } from './nicoRoutes';
@@ -52,11 +52,19 @@ const relayCache = new Map<string, { at: number; result: Promise<Relayed> }>();
 
 /**
  * ニコニコからの応答を、本文だけ書き換える。上流のステータス（404・500 など）はそのまま伝える
- * （伝えないと、エラーの応答がプレイヤーには成功として届いてしまう）
+ * （伝えないと、エラーの応答がプレイヤーには成功として届いてしまう）。
+ * 想定外に大きな応答は、全部は読み込まずに null にする
  */
-async function readRelayed(res: Response, up: Upstream): Promise<Relayed> {
-  const body = NULL_BODY_STATUS.includes(res.status) ? null : (up.rewrite ?? ((b: string) => b))(await res.text());
-  return { status: res.status, body, type: up.type };
+async function readRelayed(res: Response, up: Upstream): Promise<Relayed | null> {
+  if (NULL_BODY_STATUS.includes(res.status)) return { status: res.status, body: null, type: up.type };
+  let text: string;
+  try {
+    text = await readLimited(res, RESPONSE_MAX);
+  } catch (e) {
+    if (e instanceof BodyTooLargeError) return null;
+    throw e;
+  }
+  return { status: res.status, body: (up.rewrite ?? ((b: string) => b))(text), type: up.type };
 }
 
 /** @param pass 覚えておいた応答（PASS_MARK 入り）に差し込む、その人の通行証 */
@@ -68,10 +76,11 @@ function toResponse(r: Relayed, pass?: string): Response {
 /** /nico/* を処理する。path は `/nico` を除いた残り。上流に繋がらない・時間がかかりすぎるときは 502・504 を返す */
 export async function handleNico(req: Request, env: NicoRouteEnv, path: string): Promise<Response> {
   try {
-    return await route(req, env, path);
+    return await relay(req, env, path);
   } catch (e) {
     // 秘密の未登録など、設定の不備は、上流の不調（502）にせず、外側の 500 に任せる
     if (e instanceof ConfigError) throw e;
+    // POST の本文（nicoRoutes.ts が読む）が大きすぎた
     if (e instanceof BodyTooLargeError) return new Response('Payload too large', { status: 413 });
     const timedOut = e instanceof Error && e.name === 'TimeoutError';
     if (!timedOut) console.error('nico relay failed', e);
@@ -79,19 +88,17 @@ export async function handleNico(req: Request, env: NicoRouteEnv, path: string):
   }
 }
 
-async function route(req: Request, env: NicoRouteEnv, path: string): Promise<Response> {
+async function relay(req: Request, env: NicoRouteEnv, path: string): Promise<Response> {
   // 中継先の URL に連結するので、パスをたどって別の場所へ行ける文字（.. や %）は受け付けない
   if (!/^[\w\-./]*$/.test(path) || path.split('/').includes('..')) {
     return new Response('Not found', { status: 404 });
   }
   // 先頭の部分が通行証。ログインしていない人・回数が多すぎる人には中継しない
-  const passed = path.match(/^\/([\w-]+\.[\w-]+)(\/.*)?$/);
-  const claims = passed && (await verifyPass(passSecret(env), 'nico', passed[1]));
-  if (!passed || !claims) return new Response('Unauthorized', { status: 401 });
-  if (!withinRateLimit(`nico:${claims.u}`, NICO_LIMIT_PER_MIN, 60_000)) {
-    return new Response('Too many requests', { status: 429 });
-  }
-  const matched = matchRoute(req.method, passed[2] ?? '');
+  const [, pass, rest = ''] = path.match(/^\/([\w-]+\.[\w-]+)(\/.*)?$/) ?? [];
+  if (!pass) return new Response('Unauthorized', { status: 401 });
+  const claims = await requireNicoPass(pass, env, 'nico', NICO_LIMIT_PER_MIN);
+  if (claims instanceof Response) return claims;
+  const matched = matchRoute(req.method, rest);
   if (!matched) return new Response('Not found', { status: 404 });
 
   const host = `https://${env.DISCORD_CLIENT_ID}.discordsays.com`;
@@ -99,22 +106,19 @@ async function route(req: Request, env: NicoRouteEnv, path: string): Promise<Res
   const ua = req.headers.get('user-agent') ?? DEFAULT_UA;
   const query = new URL(req.url).search;
 
-  /** ニコニコから取って、書き換える。取れなければ null */
-  const fetchRelayed = async (pass: string): Promise<Relayed | null> => {
-    const up = await matched.route.upstream(matched.m, { req, query, rewrite: rewriter(host, pass) });
+  /**
+   * ニコニコから取って、書き換える。取れなければ null
+   * @param passInBody 書き換えた URL に入れる通行証（覚えておく応答では、目印の PASS_MARK）
+   */
+  const fetchRelayed = async (passInBody: string): Promise<Relayed | null> => {
+    const up = await matched.route.upstream(matched.m, { req, query, rewrite: rewriter(host, passInBody) });
     const res = await fetchUpstream(up, ua);
-    if (!res) return null;
-    // 想定外に大きな応答は、全部読み込まずに断る
-    if (Number(res.headers.get('content-length') ?? 0) > RESPONSE_MAX) {
-      await res.body?.cancel().catch(() => {});
-      return null;
-    }
-    return readRelayed(res, up);
+    return res && readRelayed(res, up);
   };
 
   const cacheKey = matched.route.cacheKey?.(matched.m);
   if (cacheKey === undefined) {
-    const r = await fetchRelayed(passed[1]!);
+    const r = await fetchRelayed(pass);
     return r ? toResponse(r) : new Response('Bad gateway', { status: 502 });
   }
 
@@ -138,11 +142,11 @@ async function route(req: Request, env: NicoRouteEnv, path: string): Promise<Res
     }
   }
   try {
-    return toResponse(await entry.result, passed[1]);
+    return toResponse(await entry.result, pass);
   } catch (e) {
     if (!(e instanceof RelayNotCached)) throw e;
     // 覚えなかった応答（404 など）は、そのまま伝える
-    return e.relayed ? toResponse(e.relayed, passed[1]) : new Response('Bad gateway', { status: 502 });
+    return e.relayed ? toResponse(e.relayed, pass) : new Response('Bad gateway', { status: 502 });
   }
 }
 

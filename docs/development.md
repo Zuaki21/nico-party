@@ -35,7 +35,7 @@ cd client && npm run dev   # 画面（http://127.0.0.1:5173。/api・/ws・/nico
 ブラウザで http://localhost:5173 を開きます。タブを複数開くと、全タブが同じ部屋（`local-dev`）に入り、別の人として扱われます。
 
 - 開くと、サーバーが開発用の通行証を発行します（`/api/dev-token`）。これで検索と不具合の報告も使えます。
-  発行するのは `ALLOW_ANON_WS=true` で、しかも接続元が自分自身（127.0.0.1）のときだけです。本番では 404 になります
+  発行するのは `ALLOW_ANON_WS=true` で、しかも手元から直接つないだとき（トンネルやプロキシを通っていない、127.0.0.1 からの接続）だけです。本番では 404 になります
 - 動画は、中継を通さずにニコニコの埋め込みをそのまま使います（中継の動きは、Discord の中で確かめます）
 - アイコン、ステータス表示、PiP など Discord に頼る部分は動きません
 - `localhost` で開けないときは http://127.0.0.1:5173 を使ってください。ただし `127.0.0.1` では、ニコニコの埋め込みがエラーになることがあります
@@ -109,7 +109,7 @@ cloudflared tunnel --protocol http2 --url http://127.0.0.1:5173
 | `server/src/node/main.ts` → `routes.ts` | サーバーの入口と、HTTP の振り分け |
 | `server/src/room/room.ts` | 部屋。届いたメッセージごとの処理。再生の状態遷移そのものは `playback.ts` |
 | `server/src/nico/` | ニコニコの埋め込みプレイヤーの中継と、動画情報・検索の取得 |
-| `server/src/pass.ts` | 通行証（Discord でログインした人であることを示す、署名つきの文字列） |
+| `server/src/pass.ts`・`auth.ts` | 通行証（Discord でログインした人であることを示す、署名つきの文字列）と、それを使った認可 |
 
 ## 確認用のコマンド
 
@@ -118,16 +118,18 @@ Discord の中でしか起きない動きを、手元で確かめるためのも
 リポジトリの一番上で実行します。
 
 ```sh
-(cd client && npm run typecheck && npm run check:sync)
+(cd client && npm run check)
 (cd server && npm run check)
 ```
 
 GitHub でも、push と Pull Request のたびに同じものが自動で流れます（`.github/workflows/check.yml`）。
 
-- `check:sync`（`client/src/player/sync`）: 偽のプレイヤー・偽の時計で、途中参加・開始待ち・ユーザー操作・動画の切り替え・
-  読み込み失敗・時計のずれ・プレイヤーの癖（再生通知が来ない・シークが効かない）など 47 の場面を流し、プレイヤーとサーバーへの呼び出しを
-  時刻つきで記録（`client/scripts/sync-check/expected.json`）と比べます。どの場面も、終わったあとにミュートが戻り、覆いが外れ、タイマーが残らないことも確かめます。
-  同期の挙動を意図して変えたときは `npm run check:sync -- --update` で記録を作り直し、その差分も一緒に送ってください
+- `client` の `npm run check`: 型と、次の確認をまとめて実行します
+  - `check:units`: 時計のずれの推定（`client/src/net/clock.ts`）と、プレイヤーの中のリンクを本当の URL に戻す処理（`client/src/core/urls.ts`）
+  - `check:sync`（`client/src/player/sync`）: 偽のプレイヤー・偽の時計で、途中参加・開始待ち・ユーザー操作・動画の切り替え・
+    読み込み失敗・時計のずれ・プレイヤーの癖（再生通知が来ない・シークが効かない）など 47 の場面を流し、プレイヤーとサーバーへの呼び出しを
+    時刻つきで記録（`client/scripts/sync-check/expected.json`）と比べます。どの場面も、終わったあとにミュートが戻り、覆いが外れ、タイマーが残らないことも確かめます。
+    同期の挙動を意図して変えたときは `npm run check:sync -- --update` で記録を作り直し、その差分も一緒に送ってください
 - `server` の `npm run check`: 型と、次の単体テストをまとめて実行します
   - `check-playback.cjs`: 次へ・前へ・ジャンプ・リピート・シャッフル・削除・追加などの状態遷移（`server/src/room/playback.ts`）
   - `check-nico.cjs`: 中継の書き換えルール。書き換えた URL に、必ず通行証が入ること

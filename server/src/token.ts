@@ -1,13 +1,12 @@
-import { BodyTooLargeError, readLimited } from './body';
+import { asRecord, readJson } from './body';
 import type { Env } from './env';
 import { avatarUrl, exchangeCode, fetchMe } from './discord';
 import { sha256Hex } from './hash';
 import { checkParticipation } from './instanceCheck';
 import { ConfigError, issuePass, passSecret } from './pass';
 import { withinRateLimit } from './rateLimit';
-import { ROOM_ID } from './wsAuth';
+import { ROOM_PATTERN } from './auth';
 
-const ROOM_PATTERN = new RegExp(`^${ROOM_ID}$`);
 /** /api/token の入力の上限（認可コードや部屋 ID は短い文字列。大きな本文は読まずに断る） */
 const TOKEN_BODY_MAX = 2048;
 const CODE_PATTERN = /^[\w.-]{1,512}$/;
@@ -30,13 +29,9 @@ export async function exchangeToken(request: Request, env: Env): Promise<Respons
     warnedNoBotToken = true;
     console.warn('DISCORD_BOT_TOKEN is not set: skipping the check that the user is in the activity instance');
   }
-  let body: { code?: unknown; room?: unknown } = {};
-  try {
-    body = JSON.parse(await readLimited(request, TOKEN_BODY_MAX));
-  } catch (e) {
-    if (e instanceof BodyTooLargeError) return Response.json({ error: 'too large' }, { status: 413 });
-  }
-  const { code, room } = body ?? {};
+  const body = await readJson(request, TOKEN_BODY_MAX);
+  if (body instanceof Response) return body;
+  const { code, room } = asRecord(body.value);
   if (typeof code !== 'string' || !CODE_PATTERN.test(code)) {
     return Response.json({ error: 'code is required' }, { status: 400 });
   }

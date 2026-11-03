@@ -14,7 +14,7 @@ GitHub の Issue から、テンプレートに沿って書いてください。
 3. 送る前に、確認用のコマンドが通ることを確かめてください
 
    ```sh
-   (cd client && npm run typecheck && npm run check:sync)
+   (cd client && npm run check)
    (cd server && npm run check)
    ```
 

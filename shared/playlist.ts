@@ -1,7 +1,7 @@
 import type { QueueItem } from './protocol';
 
 /** 視聴済み → 再生中 → キューの順に並べた1本のリスト（画面の再生リストと同じ並び） */
-function flatten(history: QueueItem[], current: QueueItem | null, queue: QueueItem[]) {
+export function flatten(history: QueueItem[], current: QueueItem | null, queue: QueueItem[]) {
   return [...history, ...(current ? [current] : []), ...queue];
 }
 

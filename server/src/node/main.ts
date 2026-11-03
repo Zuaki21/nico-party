@@ -1,8 +1,7 @@
 import { createServer, type IncomingMessage } from 'node:http';
 import { Readable } from 'node:stream';
 import { WebSocketServer } from 'ws';
-import { ROOM_ID, authorizeRoom } from '../wsAuth';
-import { VERIFIED_AVATAR_HEADER, VERIFIED_NAME_HEADER, VERIFIED_UID_HEADER } from '../env';
+import { authorizeRoom, isLocalPeer, WS_PATH_PATTERN } from '../auth';
 import { loadEnv } from './env';
 import { savedRooms, saveRooms } from './persist';
 import { RoomHost } from './roomHost';
@@ -18,33 +17,22 @@ const HOST = process.env.HOST ?? '127.0.0.1';
 const ROOMS_FILE = process.env.ROOMS_FILE ?? './data/rooms.json';
 /** サーバーが再起動するときに、接続を閉じるコード（Service Restart。クライアントは繋ぎ直す） */
 const CLOSE_RESTART = 1012;
-/** 受け付けるメッセージの大きさの上限（正規のメッセージは数百バイト。room.ts にも同じ上限がある） */
+/** 受け付けるメッセージの大きさの上限（正規のメッセージは数百バイト。部屋（room.ts）は、さらに小さい上限で捨てる） */
 const WS_MAX_PAYLOAD = 8192;
 
 const host = new RoomHost(savedRooms(ROOMS_FILE));
 const wss = new WebSocketServer({ noServer: true, maxPayload: WS_MAX_PAYLOAD });
 
-/**
- * 接続元の IP。Cloudflare Tunnel を通ったものは、cloudflared が CF-Connecting-IP に実際の IP を入れる。
- * 通っていない直接の接続（ローカル開発）は、接続元のアドレスを入れる（ローカルの確認用の判定に使う。wsAuth.ts）
- */
-function remoteIp(req: IncomingMessage): string {
-  const header = req.headers['cf-connecting-ip'];
-  // IPv4 の接続は、::ffff:127.0.0.1 の形で届くことがある
-  return ((Array.isArray(header) ? header[0] : header) ?? req.socket.remoteAddress ?? '').replace(/^::ffff:/, '');
-}
-
 /** Node のリクエストを、Web 標準の Request にする */
-function toRequest(req: IncomingMessage, withBody: boolean): Request {
+function toRequest(req: IncomingMessage): Request {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
   const headers = new Headers();
   for (const [k, v] of Object.entries(req.headers)) {
     if (v === undefined) continue;
     for (const one of Array.isArray(v) ? v : [v]) headers.append(k, one);
   }
-  headers.set('cf-connecting-ip', remoteIp(req));
   const method = req.method ?? 'GET';
-  const hasBody = withBody && method !== 'GET' && method !== 'HEAD';
+  const hasBody = method !== 'GET' && method !== 'HEAD';
   return new Request(url, {
     method,
     headers,
@@ -54,7 +42,7 @@ function toRequest(req: IncomingMessage, withBody: boolean): Request {
 
 const server = createServer(async (req, res) => {
   try {
-    const response = await route(toRequest(req, true), env);
+    const response = await route(toRequest(req), env, isLocalPeer(req.socket.remoteAddress, req.headers));
     const headers: Record<string, string> = {};
     response.headers.forEach((v, k) => (headers[k] = v));
     res.writeHead(response.status, headers);
@@ -71,18 +59,14 @@ server.on('upgrade', async (req, socket, head) => {
     socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
   };
   try {
-    const match = new URL(req.url ?? '/', 'http://x').pathname.match(new RegExp(`^/ws/(${ROOM_ID})$`));
-    if (!match) return reject(404, 'Not Found');
-    const authorized = await authorizeRoom(toRequest(req, false), env, match[1]!);
-    if (authorized instanceof Response) return reject(authorized.status, 'Unauthorized');
-    const name = authorized.headers.get(VERIFIED_NAME_HEADER);
-    const identity = {
-      uid: authorized.headers.get(VERIFIED_UID_HEADER),
-      name: name === null ? null : decodeURIComponent(name),
-      avatar: authorized.headers.get(VERIFIED_AVATAR_HEADER),
-    };
+    const url = new URL(req.url ?? '/', 'http://x');
+    const roomId = url.pathname.match(WS_PATH_PATTERN)?.[1];
+    if (!roomId) return reject(404, 'Not Found');
+    const local = isLocalPeer(req.socket.remoteAddress, req.headers);
+    const identity = await authorizeRoom(url.searchParams.get('pass'), env, roomId, local);
+    if (!identity) return reject(401, 'Unauthorized');
     wss.handleUpgrade(req, socket, head, (raw) => {
-      host.join(match[1]!, raw, identity).then((ok) => {
+      host.join(roomId, raw, identity).then((ok) => {
         if (!ok) raw.close(1013, 'Room is full');
       }, (e) => {
         console.error('join failed', e);

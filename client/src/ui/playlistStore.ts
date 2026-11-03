@@ -1,14 +1,15 @@
 import { reorder } from '../../../shared/playlist';
 import type { PlaybackState, QueueItem, RepeatMode } from '../../../shared/protocol';
 
-/** 再生リスト欄に並べる内容（画面の再生リストの状態）。サーバーから届くたびに書き換わる */
-export const lists = {
+const state = {
   history: [] as QueueItem[],
   current: null as QueueItem | null,
   queue: [] as QueueItem[],
   repeat: 'off' as RepeatMode,
   shuffle: false,
 };
+/** 再生リスト欄に並べる内容（画面の再生リストの状態）。サーバーから届くたびに、このファイルの関数が書き換える */
+export const lists: Readonly<typeof state> = state;
 
 /** 再生リストが変わったときに呼ぶ関数（検索結果の「追加済み」の表示を更新するため） */
 const changeListeners: (() => void)[] = [];
@@ -20,15 +21,15 @@ function notifyPlaylistChange() {
 }
 
 export function setPlaybackState(s: PlaybackState) {
-  lists.current = s.current;
-  lists.repeat = s.repeat ?? 'off';
-  lists.shuffle = s.shuffle ?? false;
+  state.current = s.current;
+  state.repeat = s.repeat ?? 'off';
+  state.shuffle = s.shuffle ?? false;
   notifyPlaylistChange();
 }
 
 export function setLists(queue: QueueItem[], history: QueueItem[]) {
-  lists.queue = queue;
-  lists.history = history;
+  state.queue = queue;
+  state.history = history;
   notifyPlaylistChange();
 }
 

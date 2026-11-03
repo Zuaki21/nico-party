@@ -6,7 +6,8 @@ type Saved = Record<string, Record<string, unknown>>;
 
 function read(file: string): Saved {
   try {
-    return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as Saved) : {};
+    const saved: unknown = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
+    return typeof saved === 'object' && saved !== null && !Array.isArray(saved) ? (saved as Saved) : {};
   } catch (e) {
     console.error('rooms file unreadable', e);
     return {};
@@ -34,7 +35,7 @@ export function savedRooms(file: string): TakeSaved {
   return (roomId) => {
     const all = read(file);
     const mine = all[roomId];
-    if (!mine) return undefined;
+    if (typeof mine !== 'object' || mine === null) return undefined;
     delete all[roomId];
     saveRooms(file, all);
     return mine;

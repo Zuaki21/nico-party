@@ -1,6 +1,7 @@
 import type { Member, NoticeEvent } from '../../../shared/protocol';
-import { t } from '../core/i18n';
-import { $, announce, formatTime, initialEl } from './dom';
+import { formatTime, t } from '../core/i18n';
+import { avatarOrInitial } from './avatar';
+import { $, announce } from './dom';
 
 /** 通知を出しておく時間と、同時に出す数（古いものから消す） */
 const NOTICE_MS = 4000;
@@ -26,16 +27,7 @@ export function showNotice(by: Member, ev: NoticeEvent) {
   const item = document.createElement('div');
   item.className = 'notice';
   // 操作した人は、名前ではなくアイコンで示す（アイコンが無い・読み込めないときは名前の頭文字）
-  if (by.avatar) {
-    const img = document.createElement('img');
-    img.src = by.avatar;
-    img.alt = '';
-    img.referrerPolicy = 'no-referrer';
-    img.addEventListener('error', () => img.replaceWith(initialEl(by.name)));
-    item.append(img);
-  } else {
-    item.append(initialEl(by.name));
-  }
+  item.append(avatarOrInitial(by.name, by.avatar));
   const span = document.createElement('span');
   span.textContent = message;
   item.append(span);

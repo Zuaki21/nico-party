@@ -31,13 +31,20 @@ export class RoomStore {
     private data: { state: PlaybackState; queue: QueueItem[]; history: QueueItem[]; failed: LoadFailed | undefined },
   ) {}
 
+  /**
+   * 保存先から読み込む。形の合わないもの（古い版が書いたファイルなど）は、初期状態にする
+   * （中身の細部までは確かめない。部屋が壊れて誰も入れなくなるのを避けるための、最低限の確認）
+   */
   static async load(storage: RoomStorage): Promise<RoomStore> {
     const got = await storage.get([STATE_KEY, QUEUE_KEY, HISTORY_KEY, LOAD_FAILED_KEY]);
+    const state = got.get(STATE_KEY) as Partial<PlaybackState> | undefined;
+    const failed = got.get(LOAD_FAILED_KEY) as Partial<LoadFailed> | undefined;
+    const list = (v: unknown) => (Array.isArray(v) ? (v as QueueItem[]) : []);
     return new RoomStore(storage, {
-      state: (got.get(STATE_KEY) as PlaybackState | undefined) ?? initialState(),
-      queue: (got.get(QUEUE_KEY) as QueueItem[] | undefined) ?? [],
-      history: (got.get(HISTORY_KEY) as QueueItem[] | undefined) ?? [],
-      failed: got.get(LOAD_FAILED_KEY) as LoadFailed | undefined,
+      state: typeof state?.version === 'number' ? (state as PlaybackState) : initialState(),
+      queue: list(got.get(QUEUE_KEY)),
+      history: list(got.get(HISTORY_KEY)),
+      failed: typeof failed?.itemId === 'string' && Array.isArray(failed.ids) ? (failed as LoadFailed) : undefined,
     });
   }
 

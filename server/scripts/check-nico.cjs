@@ -143,6 +143,17 @@ const ok = (text, init = {}) => new Response(text, { status: 200, ...init });
     assert.equal(calls.length, 0);
   });
 
+  await run('中継: 上流の応答が大きすぎれば、content-length が無くても読み切らずに 502', async () => {
+    const chunk = new Uint8Array(1024 * 1024);
+    let pulled = 0;
+    const huge = () => new Response(new ReadableStream({
+      pull(c) { pulled++; c.enqueue(chunk); if (pulled > 100) c.close(); },
+    }));
+    const { res } = await relayWith(huge);
+    assert.equal(res.status, 502);
+    assert.ok(pulled <= 12, `読んだのは ${pulled} MB`);
+  });
+
   await run('中継: 知らない経路・パスをたどる入力は 404', async () => {
     assert.equal((await relayWith(() => ok('x'), { path: '/nope' })).res.status, 404);
     assert.equal((await relayWith(() => ok('x'), { path: '/nico-embed/../x' })).res.status, 404);

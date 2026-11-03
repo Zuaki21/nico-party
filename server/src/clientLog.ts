@@ -1,10 +1,9 @@
 import { appendFileSync, mkdirSync, renameSync, statSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { BodyTooLargeError, readLimited } from './body';
-import { log } from './log';
-import { passSecret, verifyPass } from './pass';
-import { withinRateLimit } from './rateLimit';
+import { requireNicoPass } from './auth';
+import { asRecord, readJson } from './body';
 import type { Env } from './env';
+import { log } from './log';
 
 /** 受け取るログの大きさの上限（クライアントが貯める数百行で、数十 KB） */
 const LOG_BODY_MAX = 96 * 1024;
@@ -35,20 +34,12 @@ function save(line: string) {
  * 受け取ったら報告 ID を返す。利用者がその ID を伝えると、ファイルと標準出力から該当のログを探せる
  */
 export async function receiveClientLog(request: Request, env: Env): Promise<Response> {
-  const claims = await verifyPass(passSecret(env), 'nico', request.headers.get('x-nico-pass'));
-  if (!claims) return new Response('Unauthorized', { status: 401 });
-  if (!withinRateLimit(`clientlog:${claims.u}`, LOG_LIMIT_PER_MIN, 60_000)) {
-    return new Response('Too many requests', { status: 429 });
-  }
-  let body: { text?: unknown; version?: unknown; room?: unknown; reason?: unknown; note?: unknown };
-  try {
-    body = JSON.parse(await readLimited(request, LOG_BODY_MAX));
-  } catch (e) {
-    return new Response(e instanceof BodyTooLargeError ? 'Payload Too Large' : 'Bad Request', {
-      status: e instanceof BodyTooLargeError ? 413 : 400,
-    });
-  }
-  if (typeof body?.text !== 'string') return new Response('Bad Request', { status: 400 });
+  const claims = await requireNicoPass(request.headers.get('x-nico-pass'), env, 'clientlog', LOG_LIMIT_PER_MIN);
+  if (claims instanceof Response) return claims;
+  const json = await readJson(request, LOG_BODY_MAX);
+  if (json instanceof Response) return json;
+  const body = asRecord(json.value);
+  if (typeof body.text !== 'string') return new Response('Bad Request', { status: 400 });
   const id = crypto.randomUUID().slice(0, 8).toUpperCase();
   const short = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : undefined);
   const entry = {

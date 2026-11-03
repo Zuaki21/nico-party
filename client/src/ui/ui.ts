@@ -2,7 +2,8 @@ import type { Member, NoticeEvent, PlaybackState, QueueItem, RepeatMode } from '
 import type { SearchResult, SearchSort } from '../../../shared/search';
 import { parseVideoId } from '../../../shared/video';
 import { APP_VERSION } from '../core/env';
-import { $, adderTagEl, onSeg, setupAdderTip } from './dom';
+import { adderTagEl, setupAdderTip } from './avatar';
+import { $, onSeg } from './dom';
 import { applyI18n, onLangChange, t } from '../core/i18n';
 import { LIST_ICON, NEXT_ICON, PREV_ICON, REPEAT_ICON, SETTINGS_ICON, SHUFFLE_ICON } from './icons';
 import { renderPlaylist, setPlayback, setupPlaylist } from './playlist';

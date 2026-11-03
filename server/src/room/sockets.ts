@@ -13,14 +13,23 @@ export interface Attachment extends Member {
 }
 
 /** 他のメンバーに見せる項目だけにする */
-function toMember(a: Attachment): Member {
+export function toMember(a: Attachment): Member {
   const { joined: _joined, connectedAt: _connectedAt, uid: _uid, ...member } = a;
   return member;
 }
 
 /** 部屋につながっている WebSocket の一覧と、メンバー情報（各接続の attachment）・配信 */
 export class Sockets {
+  /** 接続ごとの情報。書き換えると、そのまま反映される */
+  private attachments = new WeakMap<RoomSocket, Attachment>();
+
   constructor(private ctx: RoomContext) {}
+
+  /** 接続を、その情報と一緒に部屋に受け入れる */
+  accept(ws: RoomSocket, attachment: Attachment) {
+    this.attachments.set(ws, attachment);
+    this.ctx.acceptWebSocket(ws);
+  }
 
   open(exclude?: RoomSocket): RoomSocket[] {
     return this.ctx
@@ -28,8 +37,9 @@ export class Sockets {
       .filter((ws) => ws !== exclude && ws.readyState === SOCKET_OPEN);
   }
 
+  /** 接続の情報（accept で受け入れた接続には、必ずある） */
   attachment(ws: RoomSocket): Attachment {
-    return ws.deserializeAttachment() as Attachment;
+    return this.attachments.get(ws)!;
   }
 
   /** 入室済みの接続 */

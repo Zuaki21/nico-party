@@ -1,17 +1,34 @@
 import { appendFileSync, readFileSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vite';
 
-/** 開発用: Activity 内のログを POST /__log で受けて dev.log に追記する */
+/** /__log で受け取る 1 回分の上限（画面は 1 行ずつ送る） */
+const REMOTE_LOG_MAX = 16 * 1024;
+
+/**
+ * 開発用: Activity 内のログを POST /__log で受けて dev.log に追記する（Discord の中では開発者ツールを開きにくいため）。
+ * トンネル越しに外から届くこともあるので、大きすぎる本文は書かない
+ */
 function remoteLog(): Plugin {
   return {
     name: 'remote-log',
     configureServer(server) {
       server.middlewares.use('/__log', (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
         let body = '';
-        req.on('data', (c) => (body += c));
+        let tooLarge = false;
+        req.on('data', (c: Buffer) => {
+          if (tooLarge) return;
+          body += c;
+          if (body.length > REMOTE_LOG_MAX) tooLarge = true;
+        });
         req.on('end', () => {
-          appendFileSync('dev.log', body + '\n');
-          res.end('ok');
+          if (!tooLarge) appendFileSync('dev.log', body + '\n');
+          res.statusCode = tooLarge ? 413 : 200;
+          res.end();
         });
       });
     },

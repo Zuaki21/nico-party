@@ -17,11 +17,8 @@ function fakeWs() {
     readyState: 1,
     sent: [],
     closed: null,
-    att: null,
     send(data) { this.sent.push(JSON.parse(data)); },
     close(code, reason) { this.readyState = 2; this.closed = { code, reason }; },
-    serializeAttachment(a) { this.att = structuredClone(a); },
-    deserializeAttachment() { return structuredClone(this.att); },
   };
 }
 
@@ -52,11 +49,7 @@ async function makeRoom(preset = {}) {
   const ctx = {
     storage,
     getWebSockets: () => sockets,
-    // 本物は、accept の時点で接続の情報（attachment）が設定済みでなければ、部屋が壊れる
-    acceptWebSocket: (ws) => {
-      if (ws.att === null) throw new Error('accepted a socket without its attachment');
-      sockets.push(ws);
-    },
+    acceptWebSocket: (ws) => sockets.push(ws),
   };
   const { Room } = load('server/src/room/room.ts');
   const room = await Room.create(ctx);

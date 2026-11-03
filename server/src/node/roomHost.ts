@@ -55,13 +55,12 @@ export class MemoryStorage implements RoomStorage {
   }
 }
 
-/** ws の WebSocket を、部屋が使う形にしたもの（接続ごとの情報を持つ） */
+/** ws の WebSocket を、部屋が使う形にしたもの */
 export interface NodeSocket extends RoomSocket {
   readonly raw: import('ws').WebSocket;
 }
 
 export function wrapSocket(raw: import('ws').WebSocket): NodeSocket {
-  let attachment: unknown = null;
   return {
     raw,
     get readyState() {
@@ -69,12 +68,11 @@ export function wrapSocket(raw: import('ws').WebSocket): NodeSocket {
     },
     send: (data) => raw.send(data),
     close: (code, reason) => raw.close(code, reason),
-    serializeAttachment: (v) => {
-      attachment = structuredClone(v);
-    },
-    deserializeAttachment: () => structuredClone(attachment),
   };
 }
+
+/** 部屋の準備ができるまでに届いたメッセージを、溜めておく数の上限（正規のクライアントは join の 1 通だけ） */
+const MAX_EARLY_MESSAGES = 8;
 
 interface Entry {
   room: Room;
@@ -102,7 +100,9 @@ export class RoomHost {
 
   private async create(roomId: string): Promise<Entry> {
     const sockets = new Set<NodeSocket>();
-    const storage = new MemoryStorage(() => void this.onAlarm(roomId), this.takeSaved(roomId));
+    // アラームは、作った保存先ごとに結びつける（部屋が破棄されたあとに古い保存先のアラームが鳴っても、
+    // 同じ ID で作り直された新しい部屋には効かないように）
+    const storage: MemoryStorage = new MemoryStorage(() => void this.onAlarm(roomId, storage), this.takeSaved(roomId));
     const ctx: RoomContext = {
       id: roomId,
       storage,
@@ -112,9 +112,9 @@ export class RoomHost {
     return { room: await Room.create(ctx), storage, sockets };
   }
 
-  private async onAlarm(roomId: string) {
+  private async onAlarm(roomId: string, storage: MemoryStorage) {
     const e = await this.rooms.get(roomId);
-    if (!e) return;
+    if (!e || e.storage !== storage) return;
     try {
       await e.room.alarm();
     } catch (err) {
@@ -124,11 +124,25 @@ export class RoomHost {
     if (!e.room.hasConnections() && e.storage.data.size === 0) this.rooms.delete(roomId);
   }
 
-  /** 認可された接続を、部屋に入れる。入れなかったら（部屋がいっぱい）false */
+  /**
+   * 認可された接続を、部屋に入れる。入れなかったら（部屋がいっぱい）false。
+   * 受け取りの準備は、部屋の準備を待つ前に済ませる（待っている間に届いた join や切断を、取りこぼさないように）
+   */
   async join(roomId: string, raw: import('ws').WebSocket, who: Identity): Promise<boolean> {
-    const e = await this.entry(roomId);
     const ws = wrapSocket(raw);
-    if (!(await e.room.connect(ws, who))) return false;
+    /** 部屋に入ったら、その部屋。入るまでに届いたメッセージは early に溜めておく */
+    let entered: Entry | null = null;
+    const early: string[] = [];
+    let left = false;
+    const deliver = (e: Entry, text: string) => {
+      e.room.webSocketMessage(ws, text).catch((err) => console.error('room message failed', err));
+    };
+    const leaveRoom = (e: Entry) => {
+      e.room
+        .webSocketClose(ws)
+        .catch((err) => console.error('room close failed', err))
+        .finally(() => e.sockets.delete(ws));
+    };
     raw.on('message', (data, isBinary) => {
       if (isBinary) return;
       const text = data.toString();
@@ -137,19 +151,25 @@ export class RoomHost {
         raw.send(HEARTBEAT);
         return;
       }
-      e.room.webSocketMessage(ws, text).catch((err) => console.error('room message failed', err));
+      if (entered) deliver(entered, text);
+      else if (early.length < MAX_EARLY_MESSAGES) early.push(text);
     });
-    let left = false;
     const leave = () => {
       if (left) return;
       left = true;
-      e.room
-        .webSocketClose(ws)
-        .catch((err) => console.error('room close failed', err))
-        .finally(() => e.sockets.delete(ws));
+      if (entered) leaveRoom(entered);
     };
     raw.on('close', leave);
     raw.on('error', leave);
+
+    const e = await this.entry(roomId);
+    // 部屋の準備を待っている間に切れていたら、入れない
+    if (left) return true;
+    if (!(await e.room.connect(ws, who))) return false;
+    entered = e;
+    // 部屋に入る処理の間に切れていたら、すぐ出す
+    if (left) leaveRoom(e);
+    else for (const text of early.splice(0)) deliver(e, text);
     return true;
   }
 

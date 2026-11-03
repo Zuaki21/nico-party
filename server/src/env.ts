@@ -14,15 +14,8 @@ export interface Env {
    */
   DISCORD_BOT_TOKEN?: string;
   /**
-   * 'true' のときだけ、通行証のない WebSocket 接続を受け付ける（ローカル確認用。server/.env に書く）。
-   * 本番では設定しない。誤って設定されても、localhost への接続でしか効かない
+   * 'true' のときだけ、通行証のない WebSocket 接続と開発用のログインを受け付ける（ローカル確認用。server/.dev.vars に書く）。
+   * 本番では設定しない。誤って設定されても、手元からの直接の接続（auth.ts の isLocalPeer）でしか効かない
    */
   ALLOW_ANON_WS?: string;
 }
-
-/** index.ts が通行証を確かめたとき、その名前（URL エンコード済み）を部屋に渡すヘッダー */
-export const VERIFIED_NAME_HEADER = 'x-nico-party-verified-name';
-/** 同じく、確かめられた Discord のユーザー ID を渡すヘッダー */
-export const VERIFIED_UID_HEADER = 'x-nico-party-verified-uid';
-/** 同じく、確かめられたアイコンの URL を渡すヘッダー */
-export const VERIFIED_AVATAR_HEADER = 'x-nico-party-verified-avatar';
