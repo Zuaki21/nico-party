@@ -96,6 +96,47 @@ const ok = (text, init = {}) => new Response(text, { status: 200, ...init });
     try { await fn(); passed++; } catch (e) { console.error('失敗:', name); throw e; }
   };
 
+  await run('キャッシュ: プレイヤーの JS は、人が違っても取得は 1 回。通行証は、その人のものが入る', async () => {
+    const js = () => ok('fetch("https://stella.nicovideo.jp/v1")');
+    const a = await relayWith(js, { path: '/watch/watch_ja_cache1', pass: await issuePass('secret', 'nico', { u: 'cache-a' }) });
+    const passA = a.calls.length;
+    assert.equal(passA, 1);
+    const userB = await issuePass('secret', 'nico', { u: 'cache-b' });
+    const b = await relayWith(js, { path: '/watch/watch_ja_cache1', pass: userB });
+    assert.equal(b.calls.length, 0, '2 人目は、ニコニコに問い合わせない');
+    const text = await b.res.text();
+    assert.ok(text.includes(`/.proxy/srv/nico/${userB}/stella/v1`), '2 人目の通行証が入る');
+    assert.ok(!text.includes('cachedpass'), '目印が残らない');
+    assert.ok(!(await (await relayWith(js, { path: '/watch/watch_ja_cache1' })).res.text()).includes(userB), '他の人の通行証は入らない');
+  });
+
+  await run('キャッシュ: 同時に取りに来ても、取得は 1 回', async () => {
+    let n = 0;
+    const slow = async () => { n++; await new Promise((r) => setTimeout(r, 30)); return ok('x'); };
+    const results = await Promise.all(Array.from({ length: 5 }, () => relayWith(slow, { path: '/watch/watch_ja_cache2' })));
+    assert.equal(n, 1);
+    for (const r of results) assert.equal(r.res.status, 200);
+  });
+
+  await run('キャッシュ: 404 や失敗は覚えない。次の人は、もう一度取りに行く', async () => {
+    const notFound = () => new Response('missing', { status: 404 });
+    const a = await relayWith(notFound, { path: '/watch/watch_ja_cache3' });
+    assert.equal(a.res.status, 404);
+    const b = await relayWith(() => ok('fixed'), { path: '/watch/watch_ja_cache3' });
+    assert.equal(b.calls.length, 1);
+    assert.equal(b.res.status, 200);
+    const down = await relayWith(() => { throw new Error('network'); }, { path: '/watch/watch_ja_cache4' });
+    assert.equal(down.res.status, 502);
+    const retry = await relayWith(() => ok('up'), { path: '/watch/watch_ja_cache4' });
+    assert.equal(retry.res.status, 200);
+  });
+
+  await run('キャッシュ: 埋め込みの HTML など、覚えない経路は毎回取りに行く', async () => {
+    const a = await relayWith(() => ok('<html></html>'), { path: '/nico-embed/sm9' });
+    const b = await relayWith(() => ok('<html></html>'), { path: '/nico-embed/sm9' });
+    assert.equal(a.calls.length + b.calls.length, 2);
+  });
+
   await run('中継: 通行証がなければ 401。問い合わせは出さない', async () => {
     const { res, calls } = await relayWith(() => ok('x'), { pass: 'bad.pass' });
     assert.equal(res.status, 401);

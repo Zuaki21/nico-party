@@ -100,9 +100,9 @@ test('接続: 追い出すときは、入室待ちの接続を、入室済みの
   assert.equal(sixth.readyState, 1);
 });
 
-test('接続: 部屋の接続数が上限(60)なら 503', async () => {
+test('接続: 部屋の接続数が上限(150)なら 503', async () => {
   const { room } = await makeRoom();
-  for (let i = 0; i < 60; i++) await connect(room, 'u' + i);
+  for (let i = 0; i < 150; i++) await connect(room, 'u' + i);
   const res = await connect(room, 'extra');
   assert.equal(res.status, 503);
 });
@@ -242,7 +242,7 @@ test('量の制限: 部屋全体の制限に断られても、そのユーザー
   const a = await connect(room, 'u1');
   await join(room, a);
   // 部屋全体の枠を使い切る
-  for (let i = 0; i < 300; i++) room.roomLimiter.take('room');
+  for (let i = 0; i < 500; i++) room.roomLimiter.take('room');
   const before = room.limiter.buckets.get('u1').tokens;
   await send(room, a, { t: 'mode', shuffle: true });
   assert.equal(a.sent.filter((m) => m.t === 'state').length, 0);

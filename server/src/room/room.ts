@@ -35,8 +35,11 @@ import { parseClientMsg } from './validate';
 const GUEST_NAMES = ['ゲスト', 'Guest'];
 /** 全員が退出してから部屋を消すまでの猶予。通信が一瞬切れただけで再生リストが消えないように */
 const EMPTY_ROOM_TTL_MS = 60_000;
-/** 1 つの部屋につながれる接続の数（ほかの部屋や本番の動きに影響しないよう、極端な接続を断る） */
-const MAX_CONNECTIONS = 60;
+/**
+ * 1 つの部屋につながれる接続の数（ほかの部屋に影響しないよう、極端な接続を断る）。
+ * Activity の最大人数（Developer Portal の設定。今は 50 人）の 3 倍。再接続の直後は、古い接続が残って 1 人で 2 本になることがある
+ */
+const MAX_CONNECTIONS = 150;
 /**
  * 1 人（ログインしたユーザー）がつなげる接続の数。再接続の直前の古い接続が残っていても足りるようにしてある。
  * 超えたら、古い接続から切る（1 人が部屋の枠や処理量を占有できないように）
@@ -65,7 +68,8 @@ export class Room {
   private limiter = new MessageLimiter(20, 40);
   private pingLimiter = new MessageLimiter(4, 10);
   /** 部屋全体の操作の量の制限（人数が多くても、保存と配信が増えすぎないように） */
-  private roomLimiter = new MessageLimiter(100, 200);
+  // 50 人が一斉に入室・操作しても取りこぼさない量にしてある（入室だけで 50 件、動画の終了で 50 件が一度に来る）
+  private roomLimiter = new MessageLimiter(200, 400);
   /** 届いたメッセージの量の制限。解析する前にかける（壊れたメッセージを大量に送られても、解析と処理を重ねないため） */
   private rawLimiter = new MessageLimiter(60, 120);
   private enqueues = new EnqueueQueue();

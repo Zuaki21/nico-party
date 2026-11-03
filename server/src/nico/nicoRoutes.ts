@@ -34,6 +34,11 @@ interface Route {
   /** 通行証を除いたパスに当てる */
   path: RegExp;
   upstream(m: RegExpMatchArray, c: RouteContext): Upstream | Promise<Upstream>;
+  /**
+   * 誰が取っても同じ内容になる応答の、覚えておくときの名前（無ければ覚えない）。
+   * 内容が公開されている変わらないもの（ファイル名に版が入ったプレイヤーの JS）だけにする
+   */
+  cacheKey?: (m: RegExpMatchArray) => string;
 }
 
 /** リクエストヘッダーのうち指定したものだけを引き継ぐ（無いものは送らない） */
@@ -77,6 +82,7 @@ const ROUTES: Route[] = [
   {
     method: 'GET',
     path: /^\/watch\/(.+)$/,
+    cacheKey: (m) => `js:${m[1]}`,
     upstream: (m, c) => ({
       url: `https://assets.embed.res.nimg.jp/js/${m[1]}.js`,
       type: 'application/javascript',

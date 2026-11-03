@@ -31,16 +31,38 @@ type NicoRouteEnv = Pick<Env, 'DISCORD_CLIENT_ID' | 'PASS_SECRET'>;
 /** 本文を持てない応答のステータス（本文を付けて Response を作ると例外になる） */
 const NULL_BODY_STATUS = [101, 204, 205, 304];
 
+/** 書き換えたあとの応答 */
+interface Relayed {
+  status: number;
+  /** 書き換えた本文 */
+  body: string | null;
+  type: string;
+}
+
 /**
- * ニコニコからの応答を、本文だけ書き換えて返す。上流のステータス（404・500 など）はそのまま伝える
+ * 覚えておく応答は、通行証の代わりにこの目印を入れて書き換える（通行証は人ごとに違うので、返すときに差し込む）。
+ * 通行証と同じ形（英数字と . だけ）で、プレイヤーの JS などには現れない文字列にする
+ */
+const PASS_MARK = 'cachedpass.cachedpass';
+/** 覚えておく時間と数（プレイヤーの JS は数 MB あるので、数を絞る） */
+const RELAY_CACHE_TTL_MS = 60 * 60 * 1000;
+const RELAY_CACHE_MAX = 20;
+/** 取得中のものも入れておく。同時に何人が取りに来ても、ニコニコへの問い合わせと書き換えは 1 回になる */
+const relayCache = new Map<string, { at: number; result: Promise<Relayed> }>();
+
+/**
+ * ニコニコからの応答を、本文だけ書き換える。上流のステータス（404・500 など）はそのまま伝える
  * （伝えないと、エラーの応答がプレイヤーには成功として届いてしまう）
  */
-async function relay(res: Response, up: Upstream): Promise<Response> {
+async function readRelayed(res: Response, up: Upstream): Promise<Relayed> {
   const body = NULL_BODY_STATUS.includes(res.status) ? null : (up.rewrite ?? ((b: string) => b))(await res.text());
-  return new Response(body, {
-    status: res.status,
-    headers: { 'content-type': `${up.type}; charset=utf-8` },
-  });
+  return { status: res.status, body, type: up.type };
+}
+
+/** @param pass 覚えておいた応答（PASS_MARK 入り）に差し込む、その人の通行証 */
+function toResponse(r: Relayed, pass?: string): Response {
+  const body = r.body !== null && pass !== undefined ? r.body.replaceAll(PASS_MARK, pass) : r.body;
+  return new Response(body, { status: r.status, headers: { 'content-type': `${r.type}; charset=utf-8` } });
 }
 
 /** /nico/* を処理する。path は `/nico` を除いた残り。上流に繋がらない・時間がかかりすぎるときは 502・504 を返す */
@@ -72,18 +94,63 @@ async function route(req: Request, env: NicoRouteEnv, path: string): Promise<Res
   const matched = matchRoute(req.method, passed[2] ?? '');
   if (!matched) return new Response('Not found', { status: 404 });
 
-  const rewrite = rewriter(`https://${env.DISCORD_CLIENT_ID}.discordsays.com`, passed[1]);
-  const up = await matched.route.upstream(matched.m, { req, query: new URL(req.url).search, rewrite });
+  const host = `https://${env.DISCORD_CLIENT_ID}.discordsays.com`;
   // User-Agent が無いとニコニコの CDN に 403 で弾かれるので、視聴者のものを引き継ぐ
   const ua = req.headers.get('user-agent') ?? DEFAULT_UA;
-  const res = await fetchUpstream(up, ua);
-  if (!res) return new Response('Bad gateway', { status: 502 });
-  // 想定外に大きな応答は、全部読み込まずに断る
-  if (Number(res.headers.get('content-length') ?? 0) > RESPONSE_MAX) {
-    await res.body?.cancel().catch(() => {});
-    return new Response('Bad gateway', { status: 502 });
+  const query = new URL(req.url).search;
+
+  /** ニコニコから取って、書き換える。取れなければ null */
+  const fetchRelayed = async (pass: string): Promise<Relayed | null> => {
+    const up = await matched.route.upstream(matched.m, { req, query, rewrite: rewriter(host, pass) });
+    const res = await fetchUpstream(up, ua);
+    if (!res) return null;
+    // 想定外に大きな応答は、全部読み込まずに断る
+    if (Number(res.headers.get('content-length') ?? 0) > RESPONSE_MAX) {
+      await res.body?.cancel().catch(() => {});
+      return null;
+    }
+    return readRelayed(res, up);
+  };
+
+  const cacheKey = matched.route.cacheKey?.(matched.m);
+  if (cacheKey === undefined) {
+    const r = await fetchRelayed(passed[1]!);
+    return r ? toResponse(r) : new Response('Bad gateway', { status: 502 });
   }
-  return relay(res, up);
+
+  // 誰が取っても同じ応答は、覚えておいて返す（部屋の全員が同時に同じ動画を始めても、取得と書き換えは 1 回）
+  let entry = relayCache.get(cacheKey);
+  if (!entry || Date.now() - entry.at > RELAY_CACHE_TTL_MS) {
+    const result = fetchRelayed(PASS_MARK).then((r) => {
+      // 成功したものだけ覚える（失敗や 404 を、長い間返し続けない）
+      if (!r || r.status !== 200) throw new RelayNotCached(r);
+      return r;
+    });
+    const mine = { at: Date.now(), result };
+    entry = mine;
+    relayCache.set(cacheKey, mine);
+    result.catch(() => {
+      if (relayCache.get(cacheKey) === mine) relayCache.delete(cacheKey);
+    });
+    for (const key of relayCache.keys()) {
+      if (relayCache.size <= RELAY_CACHE_MAX) break;
+      relayCache.delete(key);
+    }
+  }
+  try {
+    return toResponse(await entry.result, passed[1]);
+  } catch (e) {
+    if (!(e instanceof RelayNotCached)) throw e;
+    // 覚えなかった応答（404 など）は、そのまま伝える
+    return e.relayed ? toResponse(e.relayed, passed[1]) : new Response('Bad gateway', { status: 502 });
+  }
+}
+
+/** 覚えない応答（失敗・200 以外）。待っている全員に、そのまま伝える */
+class RelayNotCached extends Error {
+  constructor(readonly relayed: Relayed | null) {
+    super('not cached');
+  }
 }
 
 const REDIRECT_STATUS = [301, 302, 303, 307, 308];
