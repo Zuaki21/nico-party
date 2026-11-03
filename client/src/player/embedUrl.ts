@@ -1,4 +1,4 @@
-import { inDiscord } from '../core/env';
+import { inDiscord, SERVER_PREFIX } from '../core/env';
 
 /**
  * ニコニコの埋め込みプレイヤーの URL。
@@ -17,6 +17,6 @@ export function nicoEmbedUrl(videoId: string, playerId: string, nicoPass: string
   // ローカル確認用の直接埋め込みでは逆に付けるとニコニコに 403 で拒否される
   if (inDiscord) params.set('referer', location.href);
   return inDiscord
-    ? `/.proxy/nico/${nicoPass ?? 'none'}/nico-embed/${videoId}?${params}`
+    ? `${SERVER_PREFIX}/nico/${nicoPass ?? 'none'}/nico-embed/${videoId}?${params}`
     : `https://embed.nicovideo.jp/watch/${videoId}?${params}`;
 }

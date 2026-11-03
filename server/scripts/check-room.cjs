@@ -1,11 +1,10 @@
-// Room クラス（Durable Object）の単体テスト。Workers の外でも動くよう、'cloudflare:workers'・保存先・WebSocket を代用品にして動かす。
+// Room クラスの単体テスト。保存先・WebSocket を代用品にして動かす。
 //   接続数の上限と追い出し・入室しない接続の掃除・アラーム・入室・退出・配信の順序・メッセージ量の制限
 //   cd server && npm run check:room
 const assert = require('node:assert/strict');
-const { loadTs, stubCloudflareWorkers } = require('./_load.cjs');
+const { loadTs } = require('./_load.cjs');
 
-stubCloudflareWorkers();
-const load = loadTs(['server/src/index.ts', 'server/src/room/room.ts', 'server/src/nico/nicoApi.ts']);
+const load = loadTs(['server/src/node/routes.ts', 'server/src/room/room.ts', 'server/src/nico/nicoApi.ts']);
 
 // ---- 代用品
 const realDateNow = Date.now;
@@ -13,7 +12,6 @@ let now = 1_000_000;
 Date.now = () => now;
 const advance = (ms) => (now += ms);
 
-globalThis.WebSocketRequestResponsePair = class {};
 function fakeWs() {
   return {
     readyState: 1,
@@ -25,14 +23,6 @@ function fakeWs() {
     serializeAttachment(a) { this.att = structuredClone(a); },
     deserializeAttachment() { return structuredClone(this.att); },
   };
-}
-globalThis.WebSocketPair = class {
-  constructor() { this[0] = fakeWs(); this[1] = fakeWs(); }
-};
-// Node の Response は status 101 を作れないので、Room.fetch が返すものだけ差し替える
-const RealResponse = globalThis.Response;
-class FakeResponse {
-  constructor(body, init = {}) { this.body = body; this.status = init.status; this.webSocket = init.webSocket; }
 }
 
 /** put を遅らせられる保存先 */
@@ -58,7 +48,6 @@ function fakeStorage() {
 async function makeRoom() {
   const storage = fakeStorage();
   const sockets = [];
-  let ready;
   const ctx = {
     storage,
     getWebSockets: () => sockets,
@@ -67,26 +56,17 @@ async function makeRoom() {
       if (ws.att === null) throw new Error('accepted a socket without its attachment');
       sockets.push(ws);
     },
-    blockConcurrencyWhile: (fn) => { ready = fn(); },
-    setWebSocketAutoResponse: () => {},
   };
   const { Room } = load('server/src/room/room.ts');
-  const room = new Room(ctx, {});
-  await ready;
+  const room = await Room.create(ctx);
   return { room, storage, sockets };
 }
 
-/** 接続を 1 本受ける（uid があればログイン済みの接続） */
+/** 接続を 1 本受ける（uid があればログイン済みの接続）。受け入れられたら接続、断られたら { status: 503 } */
 async function connect(room, uid) {
-  const headers = { upgrade: 'websocket', ...(uid ? { 'x-nico-party-verified-name': encodeURIComponent('名前' + uid), 'x-nico-party-verified-uid': uid } : {}) };
-  globalThis.Response = FakeResponse;
-  try {
-    const res = await room.fetch(new Request('http://x/ws/r', { headers }));
-    // 部屋が持っている側（サーバー側）の接続を返す
-    return res.status === 101 ? room.ctx.getWebSockets().at(-1) : res;
-  } finally {
-    globalThis.Response = RealResponse;
-  }
+  const ws = fakeWs();
+  const ok = await room.connect(ws, uid ? { uid, name: '名前' + uid } : { uid: null, name: null });
+  return ok ? ws : { status: 503 };
 }
 const send = (room, ws, msg) => room.webSocketMessage(ws, JSON.stringify(msg));
 const join = async (room, ws, clientId = 'client-abcdefgh-1') => { await send(room, ws, { t: 'join', name: 'x', clientId }); };
@@ -310,33 +290,33 @@ test('追加: 待っている間に全員が退出して部屋が破棄された
   assert.equal(storage.alarm, now + 60_000);
 });
 
-// ---- Worker の入口（index.ts）
+// ---- HTTP の入口（node/routes.ts）
 test('入口: 秘密が未登録なら、原因をログに残して 500。ログイン前の呼び出しも同じ', async () => {
-  const worker = load('server/src/index.ts').default;
+  const { route } = load('server/src/node/routes.ts');
   const logged = [];
   const realError = console.error;
   console.error = (...a) => logged.push(a);
   try {
-    for (const url of ['http://x/api/search?q=a', 'http://x/nico/p.q/nico-embed/sm9', 'http://x/ws/room1']) {
-      const res = await worker.fetch(new Request(url, { headers: { upgrade: 'websocket' } }), {}, {});
+    for (const url of ['http://x/api/search?q=a', 'http://x/nico/p.q/nico-embed/sm9']) {
+      const res = await route(new Request(url), {});
       assert.equal(res.status, 500, url);
     }
-    assert.ok(logged.length >= 3);
+    assert.ok(logged.length >= 2);
   } finally {
     console.error = realError;
   }
 });
 
 test('入口: /api/token は POST だけが交換に届く。GET は 404', async () => {
-  const worker = load('server/src/index.ts').default;
+  const { route } = load('server/src/node/routes.ts');
   const realError = console.error;
   console.error = () => {};
   try {
     const env = { PASS_SECRET: 's', DISCORD_CLIENT_SECRET: 'x', DISCORD_CLIENT_ID: 'a' };
-    const post = await worker.fetch(new Request('http://x/api/token', { method: 'POST', body: '{}' }), env, {});
+    const post = await route(new Request('http://x/api/token', { method: 'POST', body: '{}' }), env);
     assert.equal(post.status, 400, '交換まで届いて、入力の検証で断られる（Discord へは出ない）');
-    assert.equal((await worker.fetch(new Request('http://x/api/token'), env, {})).status, 404);
-    assert.equal((await worker.fetch(new Request('http://x/api/token', { method: 'PUT', body: '{}' }), env, {})).status, 404);
+    assert.equal((await route(new Request('http://x/api/token'), env)).status, 404);
+    assert.equal((await route(new Request('http://x/api/token', { method: 'PUT', body: '{}' }), env)).status, 404);
   } finally {
     console.error = realError;
   }
@@ -356,16 +336,13 @@ test('入室: メンバーの ID は 16 桁。同じユーザーと接続元な�
   assert.notEqual(c.sent.find((m) => m.t === 'welcome').id, first);
 });
 
-test('入口: 通行証がなければ 401、知らない経路は 404、/ は案内ページ（frame_id があれば本体）', async () => {
-  const worker = load('server/src/index.ts').default;
-  const asset = [];
-  const env = { PASS_SECRET: 'secret', ASSETS: { fetch: async (req) => { asset.push(new URL(req.url).pathname); return new Response('ok'); } } };
-  assert.equal((await worker.fetch(new Request('http://x/api/search?q=a'), env, {})).status, 401);
-  assert.equal((await worker.fetch(new Request('http://x/ws/room1', { headers: { upgrade: 'websocket' } }), env, {})).status, 401);
-  assert.equal((await worker.fetch(new Request('http://x/nope'), env, {})).status, 404);
-  await worker.fetch(new Request('http://x/'), env, {});
-  await worker.fetch(new Request('http://x/?frame_id=1'), env, {});
-  assert.deepEqual(asset, ['/landing', '/']);
+test('入口: 通行証がなければ 401、知らない経路は 404、/healthz は 200', async () => {
+  const { route } = load('server/src/node/routes.ts');
+  const env = { PASS_SECRET: 'secret' };
+  assert.equal((await route(new Request('http://x/api/search?q=a'), env)).status, 401);
+  assert.equal((await route(new Request('http://x/nope'), env)).status, 404);
+  assert.equal((await route(new Request('http://x/'), env)).status, 404);
+  assert.equal((await route(new Request('http://x/healthz'), env)).status, 200);
 });
 
 (async () => {

@@ -21,14 +21,14 @@ function test(name, fn) {
 test('HLS のプレイリストの URL は、通行証つきの中継を通す', () => {
   assert.equal(
     replace('https://delivery.domand.nicovideo.jp/hlsext/abc/master.m3u8'),
-    `${HOST}/.proxy/nico/${PASS}/delivery-domand-nicovideo-jp/hlsext/abc/master.m3u8`,
+    `${HOST}/.proxy/srv/nico/${PASS}/delivery-domand-nicovideo-jp/hlsext/abc/master.m3u8`,
   );
 });
 
 test('プレイヤーの JS の URL は、通行証つきの中継を通す', () => {
   assert.equal(
     replace('https://assets.embed.res.nimg.jp/js/watch_ja_abc123.js'),
-    `/nico/${PASS}/watch/watch_ja_abc123`,
+    `/.proxy/srv/nico/${PASS}/watch/watch_ja_abc123`,
   );
   // `.js` の . は文字どおりの . だけ（任意の 1 文字ではない）
   assert.ok(!replace('https://assets.embed.res.nimg.jp/js/xjs').includes('/watch/'));
@@ -37,11 +37,11 @@ test('プレイヤーの JS の URL は、通行証つきの中継を通す', ()
 test('stella・users・v1/v4 の watch は、通行証つきの中継を通す', () => {
   // stella の /v1/watch/ は、stella の規則のあとに /v1/watch/ の規則も当たって、パスが崩れる（今までの挙動。
   // stella は視聴の記録を送るだけの呼び出しで、届かなくても再生には影響しない。変えるときは、この期待値も直す）
-  assert.equal(replace('https://stella.nicovideo.jp/v1/watch/sm9'), `/.proxy/nico/${PASS}/stella/../../nico/${PASS}/v1-watch/sm9`);
-  assert.equal(replace('https://stella.nicovideo.jp/v1/other'), `/.proxy/nico/${PASS}/stella/v1/other`);
-  assert.equal(replace('/users/123'), `/../../nico/${PASS}/users/123`);
-  assert.equal(replace('/v1/watch/sm9/access-rights/hls'), `/../../nico/${PASS}/v1-watch/sm9/access-rights/hls`);
-  assert.equal(replace('/v4/watch/sm9'), `/../../nico/${PASS}/v4-watch/sm9`);
+  assert.equal(replace('https://stella.nicovideo.jp/v1/watch/sm9'), `/.proxy/srv/nico/${PASS}/stella/../../srv/nico/${PASS}/v1-watch/sm9`);
+  assert.equal(replace('https://stella.nicovideo.jp/v1/other'), `/.proxy/srv/nico/${PASS}/stella/v1/other`);
+  assert.equal(replace('/users/123'), `/../../srv/nico/${PASS}/users/123`);
+  assert.equal(replace('/v1/watch/sm9/access-rights/hls'), `/../../srv/nico/${PASS}/v1-watch/sm9/access-rights/hls`);
+  assert.equal(replace('/v4/watch/sm9'), `/../../srv/nico/${PASS}/v4-watch/sm9`);
 });
 
 test('nonce のつく /v1/watch/non… は書き換えない', () => {
@@ -59,8 +59,8 @@ test('ニコニコ以外のドメインは書き換えない', () => {
 });
 
 test('プレイヤーの JS だけにある書き換え: api-watch と recommend も通行証つき', () => {
-  assert.equal(replaceJs('fetch("/api/watch/sm9")'), `fetch("/.proxy/nico/${PASS}/api-watch/sm9")`);
-  assert.equal(replaceJs('"/v1/recommend?x=1"'), `"/../../nico/${PASS}/nvapi-recommend?x=1"`);
+  assert.equal(replaceJs('fetch("/api/watch/sm9")'), `fetch("/.proxy/srv/nico/${PASS}/api-watch/sm9")`);
+  assert.equal(replaceJs('"/v1/recommend?x=1"'), `"/../../srv/nico/${PASS}/nvapi-recommend?x=1"`);
 });
 
 test('書き換えた結果に、通行証のない中継の URL が残らない', () => {
@@ -70,7 +70,7 @@ test('書き換えた結果に、通行証のない中継の URL が残らない
   ].join('\n');
   const out = replaceJs(sample);
   for (const line of out.split('\n')) {
-    if (/nico\//.test(line)) assert.ok(line.includes(`nico/${PASS}/`), `通行証が無い: ${line}`);
+    if (/nico\//.test(line)) assert.ok(line.includes(`srv/nico/${PASS}/`), `通行証が無い: ${line}`);
   }
 });
 
@@ -110,7 +110,7 @@ const ok = (text, init = {}) => new Response(text, { status: 200, ...init });
   await run('中継: 上流のステータスはそのまま伝える。本文は書き換える', async () => {
     const { res } = await relayWith(() => new Response('https://stella.nicovideo.jp/x', { status: 404 }));
     assert.equal(res.status, 404);
-    assert.match(await res.text(), /\/\.proxy\/nico\//);
+    assert.match(await res.text(), /\/\.proxy\/srv\/nico\//);
   });
 
   await run('中継: リダイレクトの先がニコニコ以外なら、問い合わせずに 502', async () => {

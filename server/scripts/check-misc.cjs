@@ -390,7 +390,7 @@ test('動画 ID: URL・ID・余計な文字', () => {
   assert.equal(parseVideoId(''), null);
 });
 
-// ---- 部屋への接続の認可（index.ts の WebSocket の入口）
+// ---- 部屋への接続の認可（node/main.ts の WebSocket の入口）
 const wsReq = (url, headers = {}) => new Request(url, { headers: { upgrade: 'websocket', ...headers } });
 const ENV = { PASS_SECRET: 'secret' };
 

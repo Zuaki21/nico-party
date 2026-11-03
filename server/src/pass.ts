@@ -40,9 +40,9 @@ const fromBase64Url = (s: string) =>
   Uint8Array.from(atob(s.replaceAll('-', '+').replaceAll('_', '/')), (c) => c.charCodeAt(0));
 
 /** 中継の 1 回ごとに鍵を作り直さないよう、取り込んだ鍵は覚えておく */
-const keys = new Map<string, Promise<CryptoKey>>();
+const keys = new Map<string, Promise<import('node:crypto').webcrypto.CryptoKey>>();
 
-function hmacKey(secret: string): Promise<CryptoKey> {
+function hmacKey(secret: string): Promise<import('node:crypto').webcrypto.CryptoKey> {
   let key = keys.get(secret);
   if (!key) {
     key = crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);

@@ -12,6 +12,10 @@ export const DEFAULT_UA =
 /** 埋め込みページを読む上限。エラーコードはこれより手前にある */
 const EMBED_READ_LIMIT = 80_000;
 
+/** 検索結果を覚えておく数の上限 */
+const SEARCH_CACHE_MAX = 500;
+const searchCache = new Map<string, { at: number; body: string }>();
+
 /** 検索結果をキャッシュする時間。スナップショット検索のデータは 1 日 1 回の更新なので短すぎなくてよい */
 const SEARCH_CACHE_SECONDS = 600;
 
@@ -126,10 +130,7 @@ const SORT_FIELD: Record<SearchSort, string> = {
  * データは 1 日 1 回の更新なので、投稿されたばかりの動画は出てこない。
  * https://site.nicovideo.jp/search-api-docs/snapshot
  */
-export async function searchVideos(
-  req: Request,
-  ctx: ExecutionContext,
-): Promise<Response> {
+export async function searchVideos(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const q = (url.searchParams.get('q') ?? '').trim().slice(0, 100);
   const sortParam = url.searchParams.get('sort');
@@ -137,13 +138,10 @@ export async function searchVideos(
   const offset = Math.max(0, Math.min(SEARCH_MAX_OFFSET, Math.trunc(Number(url.searchParams.get('offset'))) || 0));
   if (!q) return Response.json({ total: 0, items: [] } satisfies SearchResult);
 
-  // 同じ検索は Cloudflare のキャッシュから返す（ニコニコへの問い合わせとリクエスト数を抑える）
-  const cacheKey = new Request(
-    `https://nico-party.cache/search?${new URLSearchParams({ q, sort, offset: String(offset) })}`,
-  );
-  const cache = caches.default;
-  const hit = await cache.match(cacheKey);
-  if (hit) return hit;
+  // 同じ検索は覚えておいて返す（ニコニコへの問い合わせを抑える）
+  const cacheKey = JSON.stringify([q, sort, offset]);
+  const hit = searchCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < SEARCH_CACHE_SECONDS * 1000) return searchResponse(hit.body);
 
   const api = new URL('https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search');
   api.search = new URLSearchParams({
@@ -161,8 +159,8 @@ export async function searchVideos(
   }).catch(() => null);
   if (!res?.ok) return Response.json({ error: 'search failed' }, { status: 502 });
 
-  const json = await res.json<{
-    meta: { totalCount?: number };
+  const json = (await res.json().catch(() => null)) as {
+    meta?: { totalCount?: number };
     data?: {
       contentId: string;
       title: string;
@@ -172,7 +170,7 @@ export async function searchVideos(
       lengthSeconds?: number;
       startTime?: string;
     }[];
-  }>().catch(() => null);
+  } | null;
   if (!json?.meta) return Response.json({ error: 'search failed' }, { status: 502 });
   const data = json.data ?? [];
   // 再生できない動画（センシティブ・外部再生禁止など）は、選べないよう事前に印を付ける
@@ -190,9 +188,18 @@ export async function searchVideos(
       ...(errors[i] ? { unplayable: errors[i]! } : {}),
     })),
   };
-  const out = Response.json(result, {
-    headers: { 'cache-control': `public, max-age=${SEARCH_CACHE_SECONDS}` },
-  });
-  ctx.waitUntil(cache.put(cacheKey, out.clone()));
-  return out;
+  const body = JSON.stringify(result);
+  searchCache.delete(cacheKey);
+  searchCache.set(cacheKey, { at: Date.now(), body });
+  // 古いものから捨てる（Map は入れた順に並ぶ）
+  for (const key of searchCache.keys()) {
+    if (searchCache.size <= SEARCH_CACHE_MAX) break;
+    searchCache.delete(key);
+  }
+  return searchResponse(body);
 }
+
+const searchResponse = (body: string) =>
+  new Response(body, {
+    headers: { 'content-type': 'application/json', 'cache-control': `public, max-age=${SEARCH_CACHE_SECONDS}` },
+  });

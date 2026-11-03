@@ -5,8 +5,12 @@ export const APP_VERSION = __APP_VERSION__;
 /** Discord の Activity として開かれているか（通常のブラウザで開いたときはローカル確認用モード） */
 export const inDiscord = new URLSearchParams(location.search).has('frame_id');
 
-/** Discord 内では自分のサーバーへのリクエストも /.proxy 経由にする */
-export const proxied = (path: string) => (inDiscord ? `/.proxy${path}` : path);
+/**
+ * サーバー（OCI の Node。/api・/ws・/nico）への経路。Discord 内では URL Mapping の `/srv` 経由
+ * （`/.proxy/srv/api/token` は、サーバーの `/api/token` に届く）。ローカルでは Vite が同じパスをサーバーに中継する
+ */
+export const SERVER_PREFIX = inDiscord ? '/.proxy/srv' : '';
+export const backend = (path: string) => `${SERVER_PREFIX}${path}`;
 
 /**
  * ニコニコの画像などの URL を Discord 内から読めるようにする。

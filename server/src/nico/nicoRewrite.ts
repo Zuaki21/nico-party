@@ -13,18 +13,20 @@
  */
 
 /**
- * 中継のパスは /nico/<通行証>/... の形にする。書き換えで作る中継の URL にも、必ず同じ通行証を入れる
+ * 中継のパスは、Activity から見て /.proxy/srv/nico/<通行証>/... の形にする
+ * （Discord の URL Mapping の `/srv` が、このサーバーに繋がる。サーバー自身は /nico/<通行証>/... で受ける）。
+ * 書き換えで作る中継の URL にも、必ず同じ通行証を入れる
  * （通行証のない呼び出しは受け付けないため。通行証は英数字と - _ . だけなので、置換文字列の中でそのまま使える）
  */
 export function rewriter(host: string, pass: string) {
-  const nico = `nico/${pass}`;
+  const nico = `srv/nico/${pass}`;
   const replace = (src: string) =>
     src
       .replace(
         /https?:\/\/delivery\.domand\.nicovideo\.jp\/hlsext\/(.+?)\.m3u8/g,
         `${host}/.proxy/${nico}/delivery-domand-nicovideo-jp/hlsext/$1.m3u8`,
       )
-      .replace(/https?:\/\/assets\.embed\.res\.nimg\.jp\/js\/(.+?)\.js/g, `/${nico}/watch/$1`)
+      .replace(/https?:\/\/assets\.embed\.res\.nimg\.jp\/js\/(.+?)\.js/g, `/.proxy/${nico}/watch/$1`)
       .replace('https://stella.nicovideo.jp', `/.proxy/${nico}/stella`)
       .replace(/\/users/g, `/../../${nico}/users`)
       .replace(/\/v1\/watch\/(?!non)/g, `/../../${nico}/v1-watch/`)

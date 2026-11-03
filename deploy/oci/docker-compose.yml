@@ -1,0 +1,45 @@
+# OCI の VM（Coolify の docker-compose アプリ）で動かす構成。
+#   app         サーバー本体（Node。/api・/ws・/nico）
+#   cloudflared Cloudflare Tunnel。外向きにつなぐだけなので、ホストのポートは開けない
+# 値は Coolify の環境変数で渡す（秘密をリポジトリに入れない）。
+#   DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET / PASS_SECRET / DISCORD_BOT_TOKEN（任意）/ TUNNEL_TOKEN
+# Tunnel の公開ホスト名（nico-party-api.zuaki.dev）の転送先は http://app:8787
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    init: true
+    # 停止の合図を受けてから、全部屋をファイルに書き出して終わるまでの猶予
+    stop_grace_period: 20s
+    environment:
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
+      PASS_SECRET: ${PASS_SECRET}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+    volumes:
+      - rooms-data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    mem_limit: 1g
+    cpus: 1.0
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.7
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    depends_on:
+      app:
+        condition: service_healthy
+    mem_limit: 128m
+    cpus: 0.25
+
+volumes:
+  rooms-data:

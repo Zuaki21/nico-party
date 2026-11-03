@@ -1,0 +1,12 @@
+name = "nico-party"
+compatibility_date = "2025-09-01"
+
+# zuaki.dev のサブドメインで公開する（DNS と証明書は Cloudflare が自動で設定する）
+routes = [{ pattern = "nico-party.zuaki.dev", custom_domain = true }]
+workers_dev = false
+
+# フロント（vite build の成果物）を配信するだけ。サーバー処理（/api・/ws・/nico）は OCI（server/）が受け持つ。
+# 静的ファイルの配信は無料で、リクエスト数の上限もない
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"

@@ -1,10 +1,10 @@
 import { CLOSE_EVICTED, HEARTBEAT, type ClientMsg, type ServerMsg } from '../../../shared/protocol';
 import { ClockSync } from './clock';
-import { proxied } from '../core/env';
+import { backend } from '../core/env';
 
 /**
  * 接続の生存確認の間隔。何も流れない WebSocket は途中で切られることがあるので送っておく。
- * サーバー側は自動応答で返すので、部屋 (Durable Object) を起こさない
+ * サーバー側は部屋を通さずにすぐ返す
  */
 const HEARTBEAT_INTERVAL_MS = 30_000;
 /** これだけ何も届かなければ、半開きで死んだ接続とみなして張り直す（生存確認の応答も届くので、通常は 30 秒以内に何か届く） */
@@ -103,7 +103,7 @@ export class RoomConnection {
     const { roomId, name, clientId } = this.opts;
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
     const query = this.opts.pass ? `?pass=${encodeURIComponent(this.opts.pass)}` : '';
-    const sock = new WebSocket(`${scheme}://${location.host}${proxied(`/ws/${roomId}`)}${query}`);
+    const sock = new WebSocket(`${scheme}://${location.host}${backend(`/ws/${roomId}`)}${query}`);
     this.ws = sock;
     // つながらないまま止まったら、あきらめて繋ぎ直す（そうしないと、this.ws が残って、画面に戻っても繋ぎ直されない）
     this.connectTimer = window.setTimeout(() => {
@@ -117,7 +117,7 @@ export class RoomConnection {
       this.clock.reset();
       this.sendRaw({ t: 'join', name, clientId });
       // 時計のずれは接続直後に数回測るだけにする（短時間ではほとんど変わらないため）。
-      // 定期的に測り直すと部屋がずっと起きたままになり、Durable Objects の稼働時間がかさむ
+      // 定期的に測り直すと、サーバーへのメッセージが増え続ける
       this.pingTimers = [0, 1, 2, 3].map((i) => window.setTimeout(() => this.ping(), i * 300));
       this.heartbeatTimer = window.setInterval(() => {
         if (sock.readyState === WebSocket.OPEN) sock.send(HEARTBEAT);

@@ -1,6 +1,6 @@
 import { Common, type DiscordSDK } from '@discord/embedded-app-sdk';
 import { describeError, devlog } from '../core/devlog';
-import { proxied } from '../core/env';
+import { backend } from '../core/env';
 
 /** 通行証を発行してもらう部屋（Activity インスタンス）の参加者ではない */
 export class NotInActivityError extends Error {}
@@ -22,7 +22,7 @@ export async function authenticate(sdk: DiscordSDK, interactive = true): Promise
     });
   // 許可済みなら確認画面なしで通る。未許可・権限が増えた人は失敗するので、確認画面を出して取り直す
   const { code } = await (interactive ? authorize('none').catch(() => authorize()) : authorize('none'));
-  const res = await fetch(proxied('/api/token'), {
+  const res = await fetch(backend('/api/token'), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     // room: 通行証は、この部屋（Activity の instanceId）のものとして発行してもらう（別の部屋への使い回しを防ぐ）

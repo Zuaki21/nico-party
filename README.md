@@ -12,19 +12,21 @@
 ## 構成
 
 ```
-client/   Vite + TypeScript。Activity の画面と同期処理
-server/   Cloudflare Worker + Durable Objects
-            /               Discord から（?frame_id 付きで）開かれたら Activity 本体、それ以外は案内ページ
+client/   Vite + TypeScript。Activity の画面と同期処理。Cloudflare Workers が静的ファイルとして配信する（client/wrangler.toml）
+server/   Node（OCI の VM で Docker + Coolify。Cloudflare Tunnel 経由で公開）
             /api/token      Discord OAuth のコードをトークンに交換
             /api/search     キーワード検索（スナップショット検索 API を 10 分キャッシュ）
-            /ws/:instanceId 部屋（= Activity のインスタンス）ごとの WebSocket
+            /ws/:instanceId 部屋（= Activity のインスタンス）ごとの WebSocket。部屋の状態はメモリに持ち、停止するときだけファイルに書き出す
             /nico/*         ニコニコ埋め込みプレイヤーの中継（URL を Discord プロキシ経由に書き換える）
+            /healthz        生存確認
 shared/   クライアントとサーバーで共有するメッセージ定義
+deploy/oci/   OCI にデプロイする docker-compose（サーバー本体 + cloudflared）
 ```
 
+Discord 内では、クライアントは `/`（Cloudflare）から読み込まれ、サーバーへは `/.proxy/srv/...`（URL Mapping の `/srv`）で届く。
 Activity 内では Discord のプロキシ以外への通信が CSP でブロックされる。
-そのため Worker が埋め込み HTML・プレイヤー JS・API の JSON・m3u8 を取得し、中の URL を `/.proxy/external/<host を -- で連結>` に書き換えて返す。
-動画のセグメントは Discord のプロキシが直接ニコニコから取得するので、Worker は通らない。
+そのためサーバーが埋め込み HTML・プレイヤー JS・API の JSON・m3u8 を取得し、中の URL を `/.proxy/external/<host を -- で連結>` に書き換えて返す。
+動画のセグメントは Discord のプロキシが直接ニコニコから取得するので、サーバーは通らない。
 
 ## セットアップ
 
@@ -38,7 +40,8 @@ Activity 内では Discord のプロキシ以外への通信が CSP でブロッ
 
 | PREFIX | TARGET |
 |---|---|
-| `/` | Worker のドメイン（開発中は cloudflared の URL） |
+| `/` | `nico-party.zuaki.dev`（Cloudflare。静的ファイル。開発中は cloudflared の URL） |
+| `/srv` | `nico-party-api.zuaki.dev`（OCI のサーバー。Cloudflare Tunnel。開発中は `/` と同じ cloudflared の URL でもよい） |
 | `/external/assets--embed--res--nimg--jp` | `assets.embed.res.nimg.jp` |
 | `/external/img--cdn--nimg--jp` | `img.cdn.nimg.jp` |
 | `/external/nicovideo--cdn--nimg--jp` | `nicovideo.cdn.nimg.jp` |
@@ -52,14 +55,13 @@ Activity 内では Discord のプロキシ以外への通信が CSP でブロッ
 ## 開発
 
 ```sh
-cd client && npx vite build          # wrangler dev が配信する dist を作っておく
-cd server && npx wrangler dev --ip 127.0.0.1 --port 8787
+cd server && npm run dev             # Node のサーバー（8787。server/.dev.vars を読む）
 cd client && npx vite                # /api, /ws, /nico は 8787 にプロキシされる
 cloudflared tunnel --protocol http2 --url http://127.0.0.1:5173
 ```
 
 - cloudflared は QUIC がタイムアウトする環境があるので `--protocol http2` を付けている
-- トンネルの URL を URL Mapping の `/` に登録して、Discord から Activity を起動する
+- トンネルの URL を URL Mapping の `/` と `/srv` に登録して、Discord から Activity を起動する（開発中の Vite は `/srv/...` を 8787 に中継する）
 - 開発中は Activity 内のログが `client/dev.log` に書き出される
 - 通常のブラウザで `http://127.0.0.1:5173` を開くと、全タブ共通の部屋で同期だけを確認できる
 
@@ -79,7 +81,8 @@ cd server && npm run check                   # 型・再生の状態遷移・中
 - `server/scripts/check-playback.cjs`: 次へ・前へ・ジャンプ・リピート・シャッフル・削除・追加などの状態遷移（`server/src/room/playback.ts`）。
   時刻・ID・乱数を固定して確かめる
 - `server/scripts/check-nico.cjs`: 中継の書き換えルール。書き換えた URL に、必ず通行証が入ることを確かめる
-- `server/scripts/check-room.cjs`: Room クラス（接続数の上限と追い出し・入室しない接続の掃除・アラーム・入室と退出・配信の順序・量の制限）。`cloudflare:workers` と保存先と WebSocket を代用品にして動かす
+- `server/scripts/check-room.cjs`: Room クラス（接続数の上限と追い出し・入室しない接続の掃除・アラーム・入室と退出・配信の順序・量の制限）。保存先と WebSocket を代用品にして動かす
+- `server/scripts/check-host.cjs`: 部屋の置き場（接続・生存確認・退出後の破棄）と、停止時の書き出し・起動後の読み込み
 - `server/scripts/check-misc.cjs`: メッセージの検証・通行証・読み込み失敗の記録・量の制限・保存先・本文の読み取り上限・中継の経路・並べ替え
 
 ローカルで WebSocket に通行証なしで入るには、`server/.dev.vars` に `ALLOW_ANON_WS=true` を書く（本番では設定しない）。
@@ -88,22 +91,26 @@ cd server && npm run check                   # 型・再生の状態遷移・中
 
 反映のたびに `client/package.json` の `version` を進める。設定画面の左下に「ver x.x.x」と出るので、反映できたかはそれで確認できる。
 
-```sh
-(cd client && npx vite build)
-# 初回は、先に秘密を登録する（登録前は、ログイン・検索・部屋がすべて 500 になる）
-cd server
-npx wrangler secret put DISCORD_CLIENT_SECRET   # 初回のみ
-npx wrangler secret put PASS_SECRET             # 初回のみ（通行証の署名の鍵。長いランダムな文字列。変えると発行済みの通行証が全部無効になる）
-npx wrangler secret put DISCORD_BOT_TOKEN       # 任意（Developer Portal の Bot のページで発行。部屋の参加者の確認に使う）
-npx wrangler deploy
-```
+- **フロント（Cloudflare）**: `cd client && npm run deploy`（ビルドして `wrangler deploy`）
+- **サーバー（OCI）**: main に push すると、Coolify が `deploy/oci/docker-compose.yml` をビルドして入れ替える。部屋は、停止するときに `/data/rooms.json` に書き出され、起動後に部屋へ最初に接続が来たときに読み込まれる
 
-デプロイ後、Developer Portal の URL Mapping の `/` を `nico-party.zuaki.dev`（`server/wrangler.toml` の `routes` のドメイン。workers.dev は使わない）にする。
+サーバーの秘密は、Coolify の環境変数に入れる（値をリポジトリに入れない）。
+
+| 名前 | 内容 |
+|---|---|
+| `DISCORD_CLIENT_ID` | Discord アプリの ID |
+| `DISCORD_CLIENT_SECRET` | OAuth2 のクライアントシークレット |
+| `PASS_SECRET` | 通行証の署名の鍵。長いランダムな文字列。変えると発行済みの通行証が全部無効になる |
+| `DISCORD_BOT_TOKEN` | 任意。部屋の参加者の確認に使う（Developer Portal の Bot のページで発行） |
+| `TUNNEL_TOKEN` | Cloudflare Tunnel のトークン（公開ホスト名 `nico-party-api.zuaki.dev` → `http://app:8787`） |
+
+未登録のままだと、ログイン・検索・部屋がすべて 500 になる。
+OCI へのデプロイの手順や、サーバーに入るときのルールは、`OCI_InstanceGet` プロジェクトの `docs/DEPLOY_GUIDE.md` に従う。
 
 ## セキュリティ上の前提
 
 - 部屋の通行証は、クライアントが申告した部屋（Activity の instanceId）に対して発行される。発行の前に、Discord の Activity インスタンス取得 API（ボットトークン `DISCORD_BOT_TOKEN` が要る）で、その人が参加者か確かめる。参加者でないと分かったときだけ 403。ボットトークンが未登録のとき・Discord に確かめられなかったときは確かめずに通す（Discord 側の事情で、正規の利用者がログインできなくなるのを避けるため）
-- デプロイ前に、本番の vars / secret に `ALLOW_ANON_WS` が入っていないことを確かめる（入っていても、接続元がローカルでなければ無効）
+- デプロイ前に、本番の環境変数に `ALLOW_ANON_WS` が入っていないことを確かめる（入っていても、接続元がローカルでなければ無効）
 - 通行証の有効期間は 24 時間。クライアントは 6 時間ごとに取り直す
 
 ## 制限

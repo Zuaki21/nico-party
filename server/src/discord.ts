@@ -18,7 +18,7 @@ export async function exchangeCode(opts: {
     }),
     signal: AbortSignal.timeout(8000),
   }).catch(() => null);
-  const data = await res?.json<{ access_token?: string }>().catch(() => null);
+  const data = (await res?.json().catch(() => null)) as { access_token?: string } | null | undefined;
   return data?.access_token ?? null;
 }
 
@@ -34,6 +34,6 @@ export function fetchMe(accessToken: string): Promise<DiscordUser | null> {
     headers: { authorization: `Bearer ${accessToken}` },
     signal: AbortSignal.timeout(5000),
   })
-    .then((r) => (r.ok ? r.json<DiscordUser>() : null))
+    .then((r) => (r.ok ? (r.json() as Promise<DiscordUser>) : null))
     .catch(() => null);
 }

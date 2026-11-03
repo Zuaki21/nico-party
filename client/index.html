@@ -5,6 +5,12 @@
     <!-- viewport-fit=cover: 画面端の安全領域を CSS で扱う -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>NicoParty</title>
+    <script>
+      // Discord の Activity として開かれていない（frame_id が無い）本番の URL には、案内ページを見せる
+      if (/(^|\.)zuaki\.dev$/.test(location.hostname) && !new URLSearchParams(location.search).has('frame_id')) {
+        location.replace('/landing');
+      }
+    </script>
     <link rel="icon" href="/img/favicon.png" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>

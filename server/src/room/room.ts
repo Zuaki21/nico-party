@@ -1,10 +1,9 @@
-import { DurableObject } from 'cloudflare:workers';
-import { CLOSE_EVICTED, HEARTBEAT, type ClientMsg, type QueueItem } from '../../../shared/protocol';
+import { CLOSE_EVICTED, type ClientMsg, type QueueItem } from '../../../shared/protocol';
 import { parseVideoId } from '../../../shared/video';
-import { VERIFIED_NAME_HEADER, VERIFIED_UID_HEADER, type Env } from '../env';
 import { fetchEmbedError, fetchVideoInfo, UpstreamError } from '../nico/nicoApi';
 import { sha256Hex } from '../hash';
 import { EnqueueQueue } from './enqueue';
+import type { RoomContext, RoomSocket } from './host';
 import { everyoneFailed, reportLoad } from './loadReport';
 import {
   addItem,
@@ -48,16 +47,19 @@ const JOIN_TIMEOUT_MS = 15_000;
 /** 受け付けるメッセージの大きさの上限（正規のメッセージは数百バイト） */
 const MAX_MESSAGE_LENGTH = 4096;
 
+/** 接続した人の、確かめられた身元（ログインできなかった人は null） */
+export interface Identity {
+  uid: string | null;
+  /** 確かめられた表示名（エンコードしていないもの） */
+  name: string | null;
+}
+
 /**
- * 1部屋 (= Activity の instanceId) = 1 Durable Object。
- * WebSocket Hibernation API を使うので、誰も操作していない間はメモリから退避される。
- * 退避されても復元できるよう、再生状態・キュー・視聴履歴は storage（roomStore.ts）、
- * メンバー情報は各 WebSocket の attachment（sockets.ts）に保持する。
+ * 1部屋 (= Activity の instanceId)。動いている場所（node/roomHost.ts）が、部屋ごとに 1 つ作る。
+ * 再生状態・キュー・視聴履歴は storage（roomStore.ts）、メンバー情報は各 WebSocket の attachment（sockets.ts）に保持する。
  * ここには、受け取ったメッセージごとの処理を置く。再生の状態遷移そのものは playback.ts の関数
  */
-export class Room extends DurableObject<Env> {
-  /** constructor の blockConcurrencyWhile で読み込む。読み込みが終わるまで、メッセージは処理されない */
-  private store!: RoomStore;
+export class Room {
   private sockets: Sockets;
   /** 再生の操作などのメッセージの量の制限（ユーザーごと）と、生存確認の ping の量の制限 */
   private limiter = new MessageLimiter(20, 40);
@@ -68,42 +70,45 @@ export class Room extends DurableObject<Env> {
   private rawLimiter = new MessageLimiter(60, 120);
   private enqueues = new EnqueueQueue();
 
-  constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
+  private constructor(
+    private ctx: RoomContext,
+    private store: RoomStore,
+  ) {
     this.sockets = new Sockets(ctx);
-    ctx.blockConcurrencyWhile(async () => {
-      this.store = await RoomStore.load(ctx.storage);
-    });
-    // 生存確認には部屋を起こさずに自動で返事をする
-    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(HEARTBEAT, HEARTBEAT));
   }
 
-  async fetch(request: Request): Promise<Response> {
-    if (request.headers.get('Upgrade') !== 'websocket') {
-      return new Response('Expected WebSocket', { status: 426 });
-    }
-    const uid = request.headers.get(VERIFIED_UID_HEADER);
+  /** 保存先から読み込んで、部屋を作る */
+  static async create(ctx: RoomContext): Promise<Room> {
+    return new Room(ctx, await RoomStore.load(ctx.storage));
+  }
+
+  /** 部屋に誰かがつながっているか */
+  hasConnections(): boolean {
+    return this.sockets.open().length > 0;
+  }
+
+  /**
+   * 接続を受け入れる。部屋がいっぱいなら受け入れず false を返す（呼び出し側が、接続を断る）
+   */
+  async connect(ws: RoomSocket, who: Identity): Promise<boolean> {
+    const uid = who.uid;
     this.closeStale(uid);
-    if (this.sockets.open().length >= MAX_CONNECTIONS) {
-      return new Response('Room is full', { status: 503 });
-    }
-    const pair = new WebSocketPair();
-    const [client, server] = Object.values(pair);
-    const verifiedName = request.headers.get(VERIFIED_NAME_HEADER);
+    if (this.sockets.open().length >= MAX_CONNECTIONS) return false;
+    const verifiedName = who.name;
     const attachment: Attachment = {
       // メンバーの ID はサーバーが決める（クライアントの申告にすると、他の人の ID を名乗れてしまう）
       id: crypto.randomUUID().slice(0, 16),
-      name: verifiedName !== null ? Array.from(decodeURIComponent(verifiedName)).slice(0, 32).join('') : 'guest',
+      name: verifiedName !== null ? Array.from(verifiedName).slice(0, 32).join('') : 'guest',
       joined: false,
       connectedAt: Date.now(),
       ...(verifiedName !== null && uid !== null ? { uid } : {}),
     };
-    server.serializeAttachment(attachment);
-    this.ctx.acceptWebSocket(server);
+    ws.serializeAttachment(attachment);
+    this.ctx.acceptWebSocket(ws);
     // 入室しないまま居座る接続を、時間がたったら切る（すでにアラームがあれば、そのときに一緒に掃除する）。
     // 接続の情報を持たない接続が、await の間に見えることがないよう、アラームはあとで設定する
     if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + JOIN_TIMEOUT_MS + 1000);
-    return new Response(null, { status: 101, webSocket: client });
+    return true;
   }
 
   /**
@@ -112,7 +117,7 @@ export class Room extends DurableObject<Env> {
    */
   private closeStale(uid: string | null) {
     const now = Date.now();
-    const mine: { ws: WebSocket; connectedAt: number; joined: boolean }[] = [];
+    const mine: { ws: RoomSocket; connectedAt: number; joined: boolean }[] = [];
     for (const ws of this.sockets.open()) {
       const a = this.sockets.attachment(ws);
       if (!a.joined && now - a.connectedAt > JOIN_TIMEOUT_MS) ws.close(1008, 'join timeout');
@@ -125,7 +130,7 @@ export class Room extends DurableObject<Env> {
     }
   }
 
-  async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
+  async webSocketMessage(ws: RoomSocket, raw: string | ArrayBuffer): Promise<void> {
     if (typeof raw !== 'string' || raw.length > MAX_MESSAGE_LENGTH) return;
     const attachment = this.sockets.attachment(ws);
     if (!this.rawLimiter.take(attachment.uid ?? attachment.id)) return;
@@ -231,11 +236,11 @@ export class Room extends DurableObject<Env> {
     }
   }
 
-  async webSocketClose(ws: WebSocket): Promise<void> {
+  async webSocketClose(ws: RoomSocket): Promise<void> {
     await this.onLeave(ws);
   }
 
-  async webSocketError(ws: WebSocket): Promise<void> {
+  async webSocketError(ws: RoomSocket): Promise<void> {
     await this.onLeave(ws);
   }
 
@@ -251,7 +256,7 @@ export class Room extends DurableObject<Env> {
   }
 
   /** 動画を 1 本、再生リストに追加する（enqueue の列から 1 件ずつ呼ばれる） */
-  private async enqueue(ws: WebSocket, by: Actor, url: string) {
+  private async enqueue(ws: RoomSocket, by: Actor, url: string) {
     const videoId = parseVideoId(url);
     if (!videoId) return sendError(ws, 'invalid_url');
     if (!hasRoom(this.snapshot())) return sendError(ws, 'queue_full');
@@ -276,7 +281,7 @@ export class Room extends DurableObject<Env> {
     if (this.sockets.joined().length === 0) await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
   }
 
-  private async onLeave(ws: WebSocket) {
+  private async onLeave(ws: RoomSocket) {
     try {
       ws.close(1000, 'bye');
     } catch {
@@ -299,7 +304,7 @@ export class Room extends DurableObject<Env> {
    * 部屋にいる全員が今の動画を読み込めなかったと報告していたら、その動画を再生リストから外して次へ進める
    * （視聴済みに残すと、全曲リピートで何度も読み込み直してしまうため）
    */
-  private async skipIfNobodyLoaded(by: Actor, exclude?: WebSocket) {
+  private async skipIfNobodyLoaded(by: Actor, exclude?: RoomSocket) {
     const snap = this.snapshot();
     const memberIds = this.sockets.members(exclude).map((m) => m.id);
     if (!everyoneFailed(this.store.getLoadFailed(), snap.state.current?.id, memberIds)) return;

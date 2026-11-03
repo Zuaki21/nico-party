@@ -1,0 +1,9 @@
+.git
+.tmp
+client
+docs
+**/node_modules
+**/dist
+**/.dev.vars
+**/.env
+**/dev.log

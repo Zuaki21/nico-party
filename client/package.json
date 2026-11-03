@@ -1,17 +1,19 @@
 {
   "name": "nico-party-client",
   "private": true,
-  "version": "1.8.4",
+  "version": "1.8.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "check:sync": "node scripts/sync-check/check.cjs"
+    "check:sync": "node scripts/sync-check/check.cjs",
+    "deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
-    "vite": "^8.3.5"
+    "vite": "^8.3.5",
+    "wrangler": "^4.156.2"
   },
   "dependencies": {
     "@discord/embedded-app-sdk": "^2.5.0"
