@@ -1,4 +1,5 @@
 import { externalUrl } from '../core/env';
+import { COMMENT_ICON, VIEWS_ICON } from './icons';
 import { formatCount, t } from '../core/i18n';
 
 /** id から要素を取る。無ければすぐ分かるよう例外にする（id の付け間違いが、あとで別の場所で壊れる形で出ないように） */
@@ -54,7 +55,7 @@ export function thumbEl(thumbnail: string | undefined, length: number | undefine
 }
 
 /** タイトルと、その下に「·」区切りで並べる情報（無い項目は飛ばす） */
-export function bodyEl(titleText: string, videoId: string, meta: (string | null | undefined)[]) {
+export function bodyEl(titleText: string, videoId: string, meta: (string | Node | null | undefined)[]) {
   const body = document.createElement('div');
   body.className = 'q-body';
   const title = document.createElement('div');
@@ -63,7 +64,16 @@ export function bodyEl(titleText: string, videoId: string, meta: (string | null 
   title.title = `${titleText}\n${videoId}`;
   const m = document.createElement('div');
   m.className = 'q-meta';
-  m.textContent = meta.filter(Boolean).join('  ·  ');
+  // 項目の間に「·」を挟む（間隔は CSS の .sep）
+  meta.filter((x): x is string | Node => !!x).forEach((x, i) => {
+    if (i > 0) {
+      const sep = document.createElement('span');
+      sep.className = 'sep';
+      sep.textContent = '·';
+      m.append(sep);
+    }
+    m.append(x);
+  });
   body.append(title, m);
   return body;
 }
@@ -96,9 +106,16 @@ export function adderEl(name: string, avatar: string | undefined) {
 
 /** 再生数・コメント数（bodyEl の meta に入れる） */
 export function countsMeta(views: number | undefined, comments: number | undefined) {
+  const stat = (icon: string, n: number) => {
+    const el = document.createElement('span');
+    el.className = 'stat';
+    el.innerHTML = icon;
+    el.append(formatCount(n));
+    return el;
+  };
   return [
-    views !== undefined ? `▶ ${formatCount(views)}` : null,
-    comments !== undefined ? `💬 ${formatCount(comments)}` : null,
+    views !== undefined ? stat(VIEWS_ICON, views) : null,
+    comments !== undefined ? stat(COMMENT_ICON, comments) : null,
   ];
 }
 

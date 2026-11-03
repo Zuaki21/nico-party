@@ -1,6 +1,7 @@
 /** 日本語の文言。キーは、この辞書が基準（英語は同じキーをすべて持つ必要がある） */
 export const ja = {
   empty: '動画のURLを入れるか、キーワードで検索して再生リストに追加してください',
+  nowPlayingTitle: '▶ {title}',
   nowPlaying: '▶ {title}（{name}）',
   prev: '前の動画に戻る',
   prevVideo: '前の動画',

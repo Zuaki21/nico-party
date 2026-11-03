@@ -3,6 +3,7 @@ import type { Key } from './ja';
 /** 英語の文言。日本語と同じキーをすべて持つ（足りないと型エラーになる） */
 export const en: Record<Key, string> = {
   empty: 'Paste a video URL or search by keyword to add it to the playlist',
+  nowPlayingTitle: '▶ {title}',
   nowPlaying: '▶ {title} ({name})',
   prev: 'Previous video',
   prevVideo: 'Previous',

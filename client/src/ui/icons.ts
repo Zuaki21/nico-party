@@ -17,3 +17,7 @@ export const TRASH_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden
 
 /** 再生リストの「ここから再生」ボタン */
 export const PLAY_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></svg>`;
+
+/** 再生数・コメント数の横の小さなアイコン（絵文字だと立体的に見えるので、単色の線で描く） */
+export const VIEWS_ICON = `<svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5Z"/></svg>`;
+export const COMMENT_ICON = `<svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v10a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 3.5V17h0A1.5 1.5 0 0 1 4 15.5Z"/></svg>`;

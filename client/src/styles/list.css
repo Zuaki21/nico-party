@@ -228,3 +228,21 @@
   color: var(--button-secondary-text);
   font-size: 0.7143rem;
 }
+
+/* 動画情報の行: 項目の間隔・再生数とコメント数のアイコン */
+.q-meta .sep {
+  margin: 0 0.6429rem;
+}
+
+.q-meta .stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2857rem;
+  vertical-align: middle;
+}
+
+.stat-icon {
+  width: 0.9286rem;
+  height: 0.9286rem;
+  flex: none;
+}
