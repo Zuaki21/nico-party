@@ -13,6 +13,7 @@ FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=8787 \
+    HOST=0.0.0.0 \
     ROOMS_FILE=/data/rooms.json \
     CLIENT_LOG_FILE=/data/client-logs.jsonl
 COPY --from=build /app/server/dist/main.js ./main.js

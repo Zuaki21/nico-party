@@ -14,9 +14,11 @@ GitHub の Issue から、テンプレートに沿って書いてください。
 3. 送る前に、確認用のコマンドが通ることを確かめてください
 
    ```sh
-   cd client && npm run typecheck && npm run check:sync
-   cd server && npm run check
+   (cd client && npm run typecheck && npm run check:sync)
+   (cd server && npm run check)
    ```
+
+   Pull Request では、同じものが GitHub で自動で流れます
 
    同期の挙動を意図して変えたときは、`npm run check:sync -- --update` で記録を作り直し、その差分も Pull Request に含めてください
 4. Discord の中でしか確かめられない変更は、確かめられた範囲を Pull Request に書いてください。最後はメンテナーが Discord の中で確かめます

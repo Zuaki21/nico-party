@@ -24,8 +24,8 @@
 | 文書 | 内容 |
 |---|---|
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 不具合の報告・要望・Pull Request の送り方 |
-| [docs/development.md](docs/development.md) | 手元で動かす方法（ブラウザだけで確かめる / Discord の中で確かめる）と、確認用のコマンド |
-| [docs/deployment.md](docs/deployment.md) | 本番への反映、サーバーの環境変数、不具合の報告の探し方、セキュリティ上の前提 |
+| [docs/development.md](docs/development.md) | 手元で動かす方法（ブラウザだけで確かめる / Discord の中で確かめる）、コードの読み始め、確認用のコマンド |
+| [docs/deployment.md](docs/deployment.md) | （メンテナー向け）本番への反映、サーバーの環境変数、不具合の報告の探し方、セキュリティ上の前提 |
 
 ## 構成
 

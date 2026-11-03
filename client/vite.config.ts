@@ -27,7 +27,7 @@ export default defineConfig({
   plugins: [remoteLog()],
   build: {
     rollupOptions: {
-      // index.html: Activity 本体 / landing.html: Discord の外から開いたときの案内（server が / を振り分ける）
+      // index.html: Activity 本体 / landing.html: Discord の外から開いたときの案内（index.html の中のスクリプトが、Discord の外から開かれたら /landing に移す）
       input: { index: 'index.html', landing: 'landing.html' },
     },
   },

@@ -5,3 +5,5 @@ dist
 .wrangler
 dev.log
 .tmp
+# サーバーが手元で書き出す部屋の保存と、不具合の報告（server/data/）
+data/

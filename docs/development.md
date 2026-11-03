@@ -65,7 +65,7 @@ cloudflared tunnel --protocol http2 --url http://127.0.0.1:5173
 
 - `https://xxxx.trycloudflare.com` のような URL が出ます。**起動するたびに変わる**ので、そのたびに下の URL Mapping の `/` と `/srv` を登録し直します
 - `--protocol http2` は、QUIC がタイムアウトする環境があるため付けています
-- 開発中の Vite は `/srv/...` をサーバー（8787）に中継するので、`/` と `/srv` は同じトンネルの URL でかまいません
+- 画面からサーバーへの通信は `/.proxy/srv/api/...` のように送られ、Discord が `/srv` を外してトンネルの先の `/api/...` に届けます。Vite は `/api`・`/ws`・`/nico` をサーバー（8787）に中継するので、`/` と `/srv` は同じトンネルの URL でかまいません
 
 ### URL Mapping（Activities → URL Mappings）
 
@@ -96,14 +96,33 @@ cloudflared tunnel --protocol http2 --url http://127.0.0.1:5173
 - 画面の中のログは、`client/dev.log` に書き出されます（Discord の中では開発者ツールを開きにくいため）
 - `ALLOW_ANON_WS=true` のままでも、Discord の中からの接続はトンネルを通るので、通行証なしの接続や開発用のログインは使えません（ローカルの接続だけが対象）
 
+## コードの読み始め
+
+| 場所 | 役割 |
+|---|---|
+| `shared/protocol.ts` | 画面とサーバーがやり取りするメッセージの型。まずここを読むと全体が見える |
+| `client/src/app.ts` | 画面の入口。起動（Discord のログイン）・部屋との接続・プレイヤー・同期を結びつける |
+| `client/src/net/` | サーバーとの通信（WebSocket の接続と再接続・時計合わせ・API）と、Discord（ログイン・ステータス表示） |
+| `client/src/player/` | ニコニコの埋め込みプレイヤーの操作と、同期エンジン（`sync/`） |
+| `client/src/ui/` | 画面の各部分（再生リスト・検索・設定・通知など）。`ui.ts` が骨組み |
+| `client/src/core/` | 文言（`i18n/`）・ログ・保存など、全体で使う小物 |
+| `server/src/node/main.ts` → `routes.ts` | サーバーの入口と、HTTP の振り分け |
+| `server/src/room/room.ts` | 部屋。届いたメッセージごとの処理。再生の状態遷移そのものは `playback.ts` |
+| `server/src/nico/` | ニコニコの埋め込みプレイヤーの中継と、動画情報・検索の取得 |
+| `server/src/pass.ts` | 通行証（Discord でログインした人であることを示す、署名つきの文字列） |
+
 ## 確認用のコマンド
 
 Discord の中でしか起きない動きを、手元で確かめるためのものです。Discord もネットワークも要りません。
 
+リポジトリの一番上で実行します。
+
 ```sh
-cd client && npm run typecheck && npm run check:sync
-cd server && npm run check
+(cd client && npm run typecheck && npm run check:sync)
+(cd server && npm run check)
 ```
+
+GitHub でも、push と Pull Request のたびに同じものが自動で流れます（`.github/workflows/check.yml`）。
 
 - `check:sync`（`client/src/player/sync`）: 偽のプレイヤー・偽の時計で、途中参加・開始待ち・ユーザー操作・動画の切り替え・
   読み込み失敗・時計のずれ・プレイヤーの癖（再生通知が来ない・シークが効かない）など 47 の場面を流し、プレイヤーとサーバーへの呼び出しを

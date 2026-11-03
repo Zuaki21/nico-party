@@ -1,8 +1,11 @@
 {
   "name": "nico-party-client",
   "private": true,
-  "version": "1.8.26",
+  "version": "1.8.27",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

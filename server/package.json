@@ -2,6 +2,9 @@
   "name": "nico-party-server",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "tsx watch src/node/main.ts",
     "typecheck": "tsc --noEmit",

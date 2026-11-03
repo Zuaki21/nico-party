@@ -10,6 +10,11 @@ import { route } from './routes';
 
 const env = loadEnv();
 const PORT = Number(process.env.PORT ?? 8787);
+/**
+ * 待ち受けるアドレス。手元では自分自身からの接続だけにする（開発用のログインを、同じネットワークの他人に使われないように）。
+ * 本番の Docker では、cloudflared のコンテナから届くよう HOST=0.0.0.0 にする（server/Dockerfile）
+ */
+const HOST = process.env.HOST ?? '127.0.0.1';
 const ROOMS_FILE = process.env.ROOMS_FILE ?? './data/rooms.json';
 /** サーバーが再起動するときに、接続を閉じるコード（Service Restart。クライアントは繋ぎ直す） */
 const CLOSE_RESTART = 1012;
@@ -90,7 +95,7 @@ server.on('upgrade', async (req, socket, head) => {
   }
 });
 
-server.listen(PORT, () => console.log(`nico-party server listening on :${PORT}`));
+server.listen(PORT, HOST, () => console.log(`nico-party server listening on ${HOST}:${PORT}`));
 
 /** 停止の合図を受けたら、全部屋をファイルに書き出して、接続を閉じて終わる */
 let stopping = false;
