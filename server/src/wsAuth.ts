@@ -9,7 +9,7 @@ export const ROOM_ID = '[A-Za-z0-9_-]{1,128}';
  * 接続元の IP が自分自身のとき。本番では Cloudflare Tunnel が実際の接続元の IP で CF-Connecting-IP を上書きするので、外から偽装できない
  * （Tunnel を通らない直接の接続には、node/main.ts が接続元のアドレスを入れる）
  */
-function isLocalRequest(request: Request): boolean {
+export function isLocalRequest(request: Request): boolean {
   const ip = request.headers.get('cf-connecting-ip');
   return ip === '127.0.0.1' || ip === '::1';
 }

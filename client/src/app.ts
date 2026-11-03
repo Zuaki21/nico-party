@@ -1,7 +1,7 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import type { ClientMsg, Member, PlaybackState, ServerMsg } from '../../shared/protocol';
 import { collectLog, describeError, devlog, watchErrors } from './core/devlog';
-import { APP_VERSION, inDiscord } from './core/env';
+import { APP_VERSION, backend, inDiscord } from './core/env';
 import { onLangChange, serverErrorText, t } from './core/i18n';
 import { searchNico, sendLog } from './net/api';
 import { authenticate, NotInActivityError, openExternal, watchLayout } from './net/discord';
@@ -145,8 +145,12 @@ function connect(roomId: string, name: string, pass?: string) {
 
 async function main() {
   if (!inDiscord) {
-    // 通常のブラウザ: 全タブ共通の部屋で動作確認できるようにする
-    connect('local-dev', `ブラウザ${Math.floor(Math.random() * 100)}`);
+    // 通常のブラウザ（開発用）: 全タブ共通の部屋で動作確認できるようにする。
+    // ローカルのサーバーが開発用のログインを許していれば、通行証をもらって検索や不具合の報告も使えるようにする
+    const name = `ブラウザ${Math.floor(Math.random() * 100)}`;
+    const dev = await devLogin(name);
+    session.nicoPass = dev?.nicoPass;
+    connect('local-dev', name, dev?.pass);
     return;
   }
   const discord = new DiscordSDK(import.meta.env.VITE_DISCORD_CLIENT_ID);
@@ -177,6 +181,22 @@ async function main() {
   devlog(`ready as ${name} (instance ${discord.instanceId})`);
   connect(discord.instanceId, name, pass);
   scheduleRefresh(discord);
+}
+
+/** 開発用のログイン（server/src/devToken.ts）。使えなければ null（通行証なしで部屋に入る） */
+async function devLogin(name: string): Promise<{ pass: string; nicoPass: string } | null> {
+  try {
+    const res = await fetch(backend('/api/dev-token'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name, room: 'local-dev' }),
+    });
+    if (!res.ok) return null;
+    devlog('dev login ok');
+    return (await res.json()) as { pass: string; nicoPass: string };
+  } catch {
+    return null;
+  }
 }
 
 /**

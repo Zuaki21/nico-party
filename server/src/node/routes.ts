@@ -5,6 +5,7 @@ import { searchVideos } from '../nico/nicoApi';
 import { passSecret, verifyPass } from '../pass';
 import { withinRateLimit } from '../rateLimit';
 import { exchangeToken } from '../token';
+import { issueDevToken } from '../devToken';
 
 /** 1 人が 1 分間にできる検索の回数 */
 const SEARCH_LIMIT_PER_MIN = 30;
@@ -40,6 +41,8 @@ async function dispatch(request: Request, env: Env): Promise<Response> {
   }
 
   if (path === '/api/log' && request.method === 'POST') return receiveClientLog(request, env);
+
+  if (path === '/api/dev-token' && request.method === 'POST') return issueDevToken(request, env);
 
   if (path === '/api/token' && request.method === 'POST') {
     return exchangeToken(request, env);

@@ -1,4 +1,4 @@
-# 下の値は、どれも必ず入れる（空のままだと /ws・/api・/nico がすべて 500 になる）
+# Discord の中で確かめるときに入れる（ブラウザだけで確かめるなら空のままでよい。docs/development.md）
 DISCORD_CLIENT_ID=
 DISCORD_CLIENT_SECRET=
 # 通行証の署名の鍵。ローカルならこのままでよい（本番では長いランダムな文字列を、Coolify の環境変数に入れる）

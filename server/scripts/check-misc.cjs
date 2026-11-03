@@ -10,6 +10,7 @@ const load = loadTs([
   'server/src/room/limiter.ts',
   'server/src/wsAuth.ts',
   'server/src/token.ts',
+  'server/src/devToken.ts',
   'server/src/room/enqueue.ts',
   'server/src/room/roomStore.ts',
   'server/src/rateLimit.ts',
@@ -23,6 +24,7 @@ const { MessageLimiter } = load('server/src/room/limiter.ts');
 const { authorizeRoom } = load('server/src/wsAuth.ts');
 const { checkParticipation } = load('server/src/instanceCheck.ts');
 const { exchangeToken } = load('server/src/token.ts');
+const { issueDevToken } = load('server/src/devToken.ts');
 const { EnqueueQueue } = load('server/src/room/enqueue.ts');
 const { RoomStore } = load('server/src/room/roomStore.ts');
 const pass = load('server/src/pass.ts');
@@ -400,6 +402,23 @@ test('認可: 部屋の通行証があれば通り、確かめた名前とユー
   assert.ok(out instanceof Request);
   assert.equal(decodeURIComponent(out.headers.get('x-nico-party-verified-name')), '太郎');
   assert.equal(out.headers.get('x-nico-party-verified-uid'), 'u1');
+});
+
+test('開発用のログイン: ALLOW_ANON_WS=true でローカルの接続のときだけ、通行証を発行する。それ以外は 404', async () => {
+  const req = (ip) => new Request('http://x/api/dev-token', {
+    method: 'POST',
+    headers: { 'cf-connecting-ip': ip, 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'ブラウザ1', room: 'local-dev' }),
+  });
+  const ok = await issueDevToken(req('127.0.0.1'), { PASS_SECRET: 'secret', ALLOW_ANON_WS: 'true' });
+  assert.equal(ok.status, 200);
+  const { pass: wsPass, nicoPass } = await ok.json();
+  const claims = await pass.verifyPass('secret', 'ws', wsPass);
+  assert.equal(claims.n, 'ブラウザ1');
+  assert.equal(claims.r, 'local-dev');
+  assert.ok(await pass.verifyPass('secret', 'nico', nicoPass));
+  assert.equal((await issueDevToken(req('203.0.113.5'), { PASS_SECRET: 'secret', ALLOW_ANON_WS: 'true' })).status, 404, '外からの接続');
+  assert.equal((await issueDevToken(req('127.0.0.1'), { PASS_SECRET: 'secret' })).status, 404, 'ALLOW_ANON_WS なし');
 });
 
 test('認可: 通行証なし・別の部屋・別の scope・名前なし・壊れたものは 401', async () => {
