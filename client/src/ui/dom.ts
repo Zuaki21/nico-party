@@ -87,7 +87,8 @@ export function adderEl(name: string, avatar: string | undefined, iconOnly = fal
     el.textContent = t('addedBy', { name });
     return el;
   }
-  el.title = label;
+  // すぐ出る吹き出し（setupAdderTip）で名前を見せる。ブラウザの title は出るまで遅いので使わない
+  el.dataset.name = name;
   el.setAttribute('role', 'img');
   el.setAttribute('aria-label', label);
   if (!avatar) {
@@ -142,4 +143,29 @@ export function announce(message: string) {
   if (!el) return;
   el.textContent = '';
   requestAnimationFrame(() => (el.textContent = message));
+}
+
+/**
+ * 追加した人のアイコン（.adder）にポインターを乗せたら、名前をすぐ出す。
+ * サムネイルは overflow: hidden なので、枠の外に出る吹き出しは、画面に固定した 1 つの要素を使う
+ */
+export function setupAdderTip() {
+  const tip = document.createElement('div');
+  tip.className = 'adder-tip';
+  tip.hidden = true;
+  document.body.append(tip);
+  const hide = () => (tip.hidden = true);
+  document.addEventListener('pointerover', (e) => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>('.adder[data-name]');
+    if (!el) return hide();
+    tip.textContent = el.dataset.name ?? '';
+    tip.hidden = false;
+    const r = el.getBoundingClientRect();
+    // アイコンの上に出す（上に余白が無ければ下）。画面の外にはみ出さないよう左右を丸める
+    const w = tip.offsetWidth;
+    tip.style.left = `${Math.max(4, Math.min(innerWidth - w - 4, r.left + r.width / 2 - w / 2))}px`;
+    tip.style.top = r.top - tip.offsetHeight - 6 >= 4 ? `${r.top - tip.offsetHeight - 6}px` : `${r.bottom + 6}px`;
+  });
+  document.addEventListener('scroll', hide, true);
+  window.addEventListener('blur', hide);
 }

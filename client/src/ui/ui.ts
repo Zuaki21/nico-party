@@ -2,7 +2,7 @@ import type { Member, NoticeEvent, PlaybackState, QueueItem, RepeatMode } from '
 import type { SearchResult, SearchSort } from '../../../shared/search';
 import { parseVideoId } from '../../../shared/video';
 import { APP_VERSION } from '../core/env';
-import { $, adderEl, onSeg } from './dom';
+import { $, adderEl, onSeg, setupAdderTip } from './dom';
 import { applyI18n, onLangChange, t } from '../core/i18n';
 import { LIST_ICON, NEXT_ICON, PREV_ICON, REPEAT_ICON, SETTINGS_ICON, SHUFFLE_ICON } from './icons';
 import { renderPlaylist, setPlayback, setupPlaylist } from './playlist';
@@ -126,6 +126,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
   applyI18n(root);
   // 再生リスト欄の最小幅などが UI サイズで変わるので、保存されている設定を最初に当てておく
   const settings = setupSettings(h);
+  setupAdderTip();
 
   const showTab = setupTabs();
   const search = setupSearch(h, () => showTab('search'));
