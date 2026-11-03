@@ -83,8 +83,8 @@
 
 /* 追加した人のタグ（アイコン＋名前） */
 .adder-tag {
-  flex: 0 1 auto;
-  min-width: 0;
+  /* 縮ませない（アイコンより細いタグになるのを防ぐ。狭いときは下の @container で名前を省く） */
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 0.4286rem;
