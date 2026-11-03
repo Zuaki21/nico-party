@@ -193,7 +193,7 @@ export function adderTagEl(name: string, avatar: string | undefined) {
 }
 
 /** アイコンの代わりの、名前の頭文字の丸 */
-function initialEl(name: string) {
+export function initialEl(name: string) {
   const el = document.createElement('span');
   el.className = 'initial';
   el.setAttribute('aria-hidden', 'true');

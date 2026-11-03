@@ -169,7 +169,7 @@
   align-items: center;
   gap: 0.5rem;
   max-width: 100%;
-  padding: 0.4286rem 0.7143rem 0.4286rem 0.4286rem;
+  padding: 0.4286rem 0.8571rem 0.4286rem 0.4286rem;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.78);
   color: #fff;
@@ -177,15 +177,21 @@
   animation: notice-in 0.2s ease-out;
 }
 
-.notice:not(:has(img)) {
-  padding-left: 0.8571rem;
-}
-
-.notice img {
+.notice img,
+.notice .initial {
   width: 1.5714rem;
   height: 1.5714rem;
   flex: none;
   border-radius: 50%;
+  object-fit: cover;
+}
+
+.notice .initial {
+  display: grid;
+  place-items: center;
+  background: var(--button-secondary);
+  color: var(--button-secondary-text);
+  font-size: 0.8571rem;
 }
 
 .notice span {
