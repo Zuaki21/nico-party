@@ -2,7 +2,7 @@
 
 ## kikoune
 
-`server/src/nico/nico.ts` のニコニコ埋め込みプレイヤー中継（URL の書き換えルール）は
+`server/src/nico/`（`nico.ts`・`nicoRewrite.ts`）のニコニコ埋め込みプレイヤー中継（URL の書き換えルール）は
 [kikoune](https://github.com/sevenc-nanashi/kikoune) の `packages/backend/src/routes/nicoEdit.ts` を移植したものです。
 
 ```

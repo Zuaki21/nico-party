@@ -2,7 +2,7 @@ import { inDiscord, SERVER_PREFIX } from '../core/env';
 
 /**
  * ニコニコの埋め込みプレイヤーの URL。
- * Discord 内では、埋め込み HTML を自前サーバーで書き換えて配信する (server/src/nico/nico.ts)。通行証が要る。
+ * Discord 内では、埋め込み HTML を自前サーバーで書き換えて配信する (server/src/nico/)。通行証が要る。
  * Discord の外（ローカル確認用）では、ニコニコの埋め込みをそのまま使う
  */
 export function nicoEmbedUrl(videoId: string, playerId: string, nicoPass: string | undefined): string {

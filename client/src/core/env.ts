@@ -14,7 +14,7 @@ export const backend = (path: string) => `${SERVER_PREFIX}${path}`;
 
 /**
  * ニコニコの画像などの URL を Discord 内から読めるようにする。
- * URL Mapping の `/external/<host を -- で連結>` を使う（server/src/nico/nico.ts と同じ形式）。
+ * URL Mapping の `/external/<host を -- で連結>` を使う（server/src/nico/nicoRewrite.ts と同じ形式）。
  */
 export function externalUrl(url: string): string {
   if (!inDiscord) return url;
