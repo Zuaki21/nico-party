@@ -67,6 +67,12 @@ function wrapSocket(raw: import('ws').WebSocket): RoomSocket {
   };
 }
 
+/**
+ * 保存済みの中身から作り直した部屋に、誰も入らなかったときに消すまでの時間
+ * （部屋の全員が退出してから消すまでの猶予と同じ。room.ts の EMPTY_ROOM_TTL_MS）
+ */
+const RESTORED_ROOM_TTL_MS = 60_000;
+
 /** 部屋の準備ができるまでに届いたメッセージを、溜めておく数の上限（正規のクライアントは join の 1 通だけ） */
 const MAX_EARLY_MESSAGES = 8;
 
@@ -105,7 +111,14 @@ export class RoomHost {
     const sockets = new Set<RoomSocket>();
     // アラームは、作った保存先ごとに結びつける（部屋が破棄されたあとに古い保存先のアラームが鳴っても、
     // 同じ ID で作り直された新しい部屋には効かないように）
-    const storage: MemoryStorage = new MemoryStorage(() => void this.onAlarm(roomId, storage), this.takeSaved(roomId));
+    const saved = this.takeSaved(roomId);
+    const storage: MemoryStorage = new MemoryStorage(
+      () => this.onAlarm(roomId, storage).catch((err) => console.error('room alarm failed', err)),
+      saved,
+    );
+    // 保存済みの中身から作った部屋は、誰も入らなければ消えるよう、先にアラームを張る
+    // （入ってくれば、部屋のアラームの処理が、入室した人がいる部屋を残す）
+    if (saved) await storage.setAlarm(Date.now() + RESTORED_ROOM_TTL_MS);
     const ctx: RoomContext = {
       id: roomId,
       storage,
@@ -116,7 +129,8 @@ export class RoomHost {
   }
 
   private async onAlarm(roomId: string, storage: MemoryStorage) {
-    const e = await this.rooms.get(roomId);
+    // 作れなかった部屋（reject）は、もう置き場から外れているので何もしない
+    const e = await this.rooms.get(roomId)?.catch(() => null);
     if (!e || e.storage !== storage) return;
     try {
       await e.room.alarm();
@@ -132,7 +146,7 @@ export class RoomHost {
    */
   private async dropIfUnused(roomId: string, e: Entry) {
     const p = this.rooms.get(roomId);
-    if (!p || (await p) !== e || this.rooms.get(roomId) !== p) return;
+    if (!p || (await p.catch(() => null)) !== e || this.rooms.get(roomId) !== p) return;
     if ((this.joining.get(roomId) ?? 0) > 0) return;
     if (!e.room.hasConnections() && e.storage.data.size === 0) this.rooms.delete(roomId);
   }
@@ -193,7 +207,7 @@ export class RoomHost {
     }
     if (!accepted) {
       // この接続のために作った部屋なら、片づける
-      void this.dropIfUnused(roomId, e);
+      this.dropIfUnused(roomId, e).catch((err) => console.error('room cleanup failed', err));
       // 切れていたなら、閉じるものは無い。そうでなければ部屋がいっぱい
       return left;
     }

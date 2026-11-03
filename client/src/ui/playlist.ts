@@ -85,7 +85,7 @@ function renderMode() {
   shuffle.setAttribute('aria-pressed', String(lists.shuffle));
   // リピートは 3 つの状態（オフ・全体・1曲）なので、aria-pressed ではなく名前に状態を含める
   const repeat = $('repeat');
-  // 1曲リピートはボタンの右上に「1」のバッジを付ける（style.css）
+  // 1曲リピートはボタンの右上に「1」のバッジを付ける（styles/controls.css）
   repeat.dataset.repeat = lists.repeat;
   repeat.title = t(REPEAT_LABEL[lists.repeat]);
   repeat.setAttribute('aria-label', repeat.title);

@@ -40,7 +40,6 @@ export interface PlaybackState {
   startedAt?: number;
   /** 最後に操作したメンバー */
   by: string | null;
-  byName: string | null;
   /** 部屋全員で共通の再生モード（古いデータには無いので未定義は off / false 扱い） */
   repeat?: RepeatMode;
   shuffle?: boolean;

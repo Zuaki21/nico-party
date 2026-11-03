@@ -228,7 +228,7 @@ function fakeStorage(initial = {}) {
     async deleteAll() { data.clear(); },
   };
 }
-const stateOf = (over = {}) => ({ current: null, playing: false, position: 0, updatedAt: 0, version: 0, by: null, byName: null, ...over });
+const stateOf = (over = {}) => ({ current: null, playing: false, position: 0, updatedAt: 0, version: 0, by: null, ...over });
 
 test('保存先: 何もなければ初期状態で始まる', async () => {
   const store = await RoomStore.load(fakeStorage());

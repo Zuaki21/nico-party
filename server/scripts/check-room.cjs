@@ -56,11 +56,11 @@ async function makeRoom(preset = {}) {
   return { room, storage, sockets };
 }
 
-/** 接続を 1 本受ける（uid があればログイン済みの接続）。受け入れられたら接続、断られたら { status: 503 } */
+/** 接続を 1 本受ける（uid があればログイン済みの接続）。受け入れられたら接続、断られたら null（main.ts が 1013 で閉じる） */
 async function connect(room, uid, avatar) {
   const ws = fakeWs();
   const ok = await room.connect(ws, uid ? { uid, name: '名前' + uid, avatar } : { uid: null, name: null });
-  return ok ? ws : { status: 503 };
+  return ok ? ws : null;
 }
 const send = (room, ws, msg) => room.webSocketMessage(ws, JSON.stringify(msg));
 const join = async (room, ws, clientId = 'client-abcdefgh-1') => { await send(room, ws, { t: 'join', name: 'x', clientId }); };
@@ -94,11 +94,11 @@ test('接続: 追い出すときは、入室待ちの接続を、入室済みの
   assert.equal(sixth.readyState, 1);
 });
 
-test('接続: 部屋の接続数が上限(150)なら 503', async () => {
+test('接続: 部屋の接続数が上限(150)なら、受け入れない', async () => {
   const { room } = await makeRoom();
   for (let i = 0; i < 150; i++) await connect(room, 'u' + i);
   const res = await connect(room, 'extra');
-  assert.equal(res.status, 503);
+  assert.equal(res, null);
 });
 
 test('接続: 入室しない接続は、15 秒を過ぎたら次の接続のときに切られる', async () => {
@@ -341,7 +341,7 @@ test('入口: 通行証がなければ 401、知らない経路は 404、/health
 
 test('通知: シーク・動画の切り替え・削除は、操作した人のアイコンつきで全員に届く。再生・一時停止や自動送りは届かない', async () => {
   const item = (id) => ({ id, videoId: 'sm' + id, title: 'T' + id, addedBy: 'x', length: 600 });
-  const state = { current: item('a'), playing: true, position: 10, updatedAt: now, version: 1, startedAt: now - 60_000, by: null, byName: null };
+  const state = { current: item('a'), playing: true, position: 10, updatedAt: now, version: 1, startedAt: now - 60_000, by: null };
   const { room } = await makeRoom({ state, queue: [item('b')], history: [] });
   const A = await connect(room, 'u1', 'https://cdn.discordapp.com/avatars/1/h.png?size=64');
   const B = await connect(room, 'u2');

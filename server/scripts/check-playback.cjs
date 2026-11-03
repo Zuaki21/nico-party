@@ -11,7 +11,7 @@ let n = 0;
 const deps = (over = {}) => ({ now: NOW, newId: () => `n${++n}`, random: () => 0, ...over });
 const by = { id: 'u1', name: '太郎' };
 const item = (id, videoId = 'sm' + id) => ({ id, videoId, title: id, addedBy: 'x' });
-const state = (over = {}) => ({ current: null, playing: false, position: 0, updatedAt: 0, version: 0, by: null, byName: null, ...over });
+const state = (over = {}) => ({ current: null, playing: false, position: 0, updatedAt: 0, version: 0, by: null, ...over });
 const snap = (over = {}) => ({ state: state(), queue: [], history: [], ...over });
 const ids = (list) => list.map((q) => q.id).join(',');
 
@@ -323,7 +323,6 @@ test('操作: 再生中の位置は 0 未満にならない。操作した人が
   const s = pb.control(state({ current: item('a') }), { itemId: 'a', playing: true, position: -5 }, by, deps());
   assert.equal(s.position, 0);
   assert.equal(s.by, 'u1');
-  assert.equal(s.byName, '太郎');
 });
 
 console.log(`OK: ${passed} 件`);

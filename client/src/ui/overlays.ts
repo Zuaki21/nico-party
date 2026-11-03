@@ -36,7 +36,7 @@ export function setCompact(compact: boolean) {
 }
 
 let errorTimer: number | undefined;
-/** エラーを表示しておく時間。下端のバー（style.css の .error::after）もこの時間で縮む */
+/** エラーを表示しておく時間。下端のバー（styles/overlays.css の .error.timing::after）もこの時間で縮む */
 const ERROR_MS = 3000;
 /** 長い文言は読むのに時間がかかるので、文字数に応じて長く出す（上限つき） */
 const errorDuration = (message: string) => Math.min(10_000, Math.max(ERROR_MS, 1500 + message.length * 120));

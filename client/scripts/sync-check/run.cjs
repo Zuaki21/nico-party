@@ -151,7 +151,7 @@ function makeEnv(scenarioName, run) {
   );
   const item = (id, videoId) => ({ id, videoId, title: 't', addedBy: 'a' });
   // updatedAt は、サーバーの時刻で書く
-  const state = (over) => ({ current: item('i1', 'sm1'), playing: true, position: 0, updatedAt: clock.now + offset.v, version: 1, by: null, byName: null, ...over });
+  const state = (over) => ({ current: item('i1', 'sm1'), playing: true, position: 0, updatedAt: clock.now + offset.v, version: 1, by: null, ...over });
   let initialMuted = false;
   const startPlayerMuted = (muted) => { player.muted = muted; initialMuted = muted; };
   try {

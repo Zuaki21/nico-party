@@ -63,12 +63,22 @@ test('リンク: 中継の URL は元に戻し、それ以外は戻さない。�
   assert.equal(realUrl(`${own}/.proxy/external/a%00b/x`, base, own), null, 'ホストにできない文字があっても例外にしない');
 });
 
-const { scrubSecrets } = load('client/src/core/scrub.ts');
+const { scrubSecrets, urlSource } = load('client/src/core/scrub.ts');
 test('通行証を伏せる: 通行証の形と ?pass= の値は伏せ、それ以外は残す', () => {
   const pass = 'eyJ1IjoiMTIzNDU2Nzg5MCJ9abc.QWxhZGRpbjpvcGVuIHNlc2FtZQ';
   assert.equal(scrubSecrets(`GET /.proxy/srv/nico/${pass}/nico-embed/sm9`), 'GET /.proxy/srv/nico/[pass]/nico-embed/sm9');
   assert.equal(scrubSecrets('wss://x/ws/room?pass=abc.def&x=1'), 'wss://x/ws/room?pass=[pass]&x=1');
   assert.equal(scrubSecrets('state v3 sm9 playing pos=1.0'), 'state v3 sm9 playing pos=1.0');
+});
+
+test('URL の出どころ: ホストと、Discord のプロキシの経路だけを残す', () => {
+  const base = 'https://app.discordsays.com/index.html';
+  assert.equal(urlSource('https://cdn.discordapp.com/avatars/123/abc.png?size=64', base), 'cdn.discordapp.com');
+  assert.equal(urlSource('/.proxy/external/img--cdn--nimg--jp/s/thumb/1.jpg', base), 'app.discordsays.com/.proxy/external/img--cdn--nimg--jp');
+  assert.equal(urlSource('/.proxy/srv/nico/abc.def/nico-embed/sm9?referer=x', base), 'app.discordsays.com/.proxy/srv');
+  assert.equal(urlSource('blob:https://app.discordsays.com/1234', base), 'blob:');
+  assert.equal(urlSource('', base), '-');
+  assert.equal(urlSource(undefined, base), '-');
 });
 
 const store = load('client/src/ui/playlistStore.ts');

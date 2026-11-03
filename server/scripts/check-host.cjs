@@ -73,6 +73,23 @@ test('接続: 部屋の準備を待っている間に届いた join も取りこ
   assert.deepEqual(await host.stats(), { rooms: 1, connections: 1 });
 });
 
+test('部屋: 保存済みの中身から作り直した部屋に誰も入らなければ、少しあとで消える', async () => {
+  const realSetTimeout = global.setTimeout;
+  // 作り直したときに張るアラーム（60 秒後）を、すぐ鳴らす
+  global.setTimeout = (fn, ms, ...rest) => realSetTimeout(fn, ms >= 30_000 ? 0 : ms, ...rest);
+  try {
+    const host = new RoomHost((id) => (id === 'saved' ? { state: { current: null, playing: false, position: 0, updatedAt: 0, version: 3, by: null } } : undefined));
+    const raw = fakeRaw();
+    const p = host.join('saved', raw, who('u1'));
+    raw.close(1000, 'bye');
+    await p;
+    await tick(100);
+    assert.deepEqual(await host.stats(), { rooms: 0, connections: 0 });
+  } finally {
+    global.setTimeout = realSetTimeout;
+  }
+});
+
 test('部屋: 作れなかった部屋は残さず、次の接続で作り直す。停止のときの保存も止めない', async () => {
   let fail = true;
   const host = new RoomHost(() => {

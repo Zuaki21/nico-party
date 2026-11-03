@@ -8,6 +8,5 @@ export function initialState(): PlaybackState {
     updatedAt: Date.now(),
     version: 0,
     by: null,
-    byName: null,
   };
 }

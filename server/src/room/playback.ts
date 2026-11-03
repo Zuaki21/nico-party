@@ -88,7 +88,7 @@ export function hasRoom(snap: Snapshot): boolean {
 
 /** 状態に、操作した人と時刻を記録する。delayMs は再生位置の基準時刻を先にずらす量 */
 function stamp(s: PlaybackState, by: Actor, now: number, delayMs = 0): PlaybackState {
-  return { ...s, updatedAt: now + delayMs, by: by.id, byName: by.name };
+  return { ...s, updatedAt: now + delayMs, by: by.id };
 }
 
 /** item の再生を先頭から始める（null なら停止）。開始時刻は START_DELAY_MS 先にする */

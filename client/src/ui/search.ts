@@ -108,7 +108,7 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
     add.className = 'add';
     // 追加済みの ✓ を押すと、間違えて追加したものを再生リストから外して元に戻せる
     const mark = (done: boolean) => {
-      // 追加済みは ✓、そこにマウスを乗せるとゴミ箱（style.css）。どちらも置いておき、見た目は CSS で切り替える
+      // 追加済みは ✓、そこにマウスを乗せるとゴミ箱（styles/search.css）。どちらも置いておき、見た目は CSS で切り替える
       add.innerHTML = done ? `<span class="when-idle">✓</span><span class="when-hover">${TRASH_ICON}</span>` : '＋';
       add.title = t(done ? 'removeAdded' : 'addToList');
       // 結果が並ぶので、どの動画への操作かが分かる名前にする（見た目の「＋」「✓」は名前にしない）

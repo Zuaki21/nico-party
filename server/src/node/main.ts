@@ -21,6 +21,8 @@ const CLOSE_RESTART = 1012;
 const WS_MAX_PAYLOAD = 8192;
 
 const host = new RoomHost(savedRooms(ROOMS_FILE));
+/** 停止の合図を受けたか */
+let stopping = false;
 const wss = new WebSocketServer({ noServer: true, maxPayload: WS_MAX_PAYLOAD });
 
 /** Node のリクエストを、Web 標準の Request にする */
@@ -61,6 +63,8 @@ server.on('upgrade', async (req, socket, head) => {
   const reject = (status: number, text: string) => {
     socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
   };
+  // 停止の途中に来た接続は受けない（部屋を書き出したあとの操作は失われるので、繋ぎ直してもらう）
+  if (stopping) return reject(503, 'Service Unavailable');
   try {
     const url = new URL(req.url ?? '/', 'http://x');
     const roomId = url.pathname.match(WS_PATH_PATTERN)?.[1];
@@ -85,7 +89,6 @@ server.on('upgrade', async (req, socket, head) => {
 server.listen(PORT, HOST, () => console.log(`nico-party server listening on ${HOST}:${PORT}`));
 
 /** 停止の合図を受けたら、全部屋をファイルに書き出して、接続を閉じて終わる */
-let stopping = false;
 async function shutdown(signal: string) {
   if (stopping) return;
   stopping = true;

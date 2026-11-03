@@ -1,6 +1,6 @@
 // 確認スクリプトの共通部分（client/scripts と server/scripts から使う）:
 // TypeScript のファイルを CommonJS に変換して一時フォルダに置き、require できるようにする。型は確かめない（npm run typecheck が確かめる）。
-// 相対 import は、`from '...'` / `import '...'` の形（静的なもの）だけ自動でたどる。
+// 相対 import は、`from '...'` / `import '...'` の形（静的なもの）だけ自動でたどる（フォルダの import は index.ts）。
 // リポジトリと同じフォルダ構成（client/src/..., server/src/..., shared/...）のまま置くので、ファイル同士の import もそのまま通る。
 const fs = require('fs');
 const os = require('os');
@@ -28,8 +28,10 @@ function loadTs(ts, rels) {
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, js);
     for (const m of src.matchAll(/(?:from|import)\s+['"](\.[^'"]+)['"]/g)) {
-      const dep = path.posix.join(path.posix.dirname(rel), m[1]) + '.ts';
-      if (fs.existsSync(path.join(root, dep))) convert(dep);
+      // './x' は x.ts か、フォルダなら x/index.ts（node の CommonJS も、同じ順で探す）
+      const base = path.posix.join(path.posix.dirname(rel), m[1]);
+      const dep = [`${base}.ts`, `${base}/index.ts`].find((f) => fs.existsSync(path.join(root, f)));
+      if (dep) convert(dep);
     }
   };
   rels.forEach(convert);

@@ -1,5 +1,5 @@
 import { APP_VERSION } from './env';
-import { scrubSecrets } from './scrub';
+import { scrubSecrets, urlSource } from './scrub';
 
 /**
  * 不具合の原因を集めるためのログ。直近の出来事を画面の中に貯めておき（本番でも）、
@@ -80,13 +80,13 @@ export function watchErrors(iframe: HTMLIFrameElement) {
         // 動画・音声は、なぜ再生できなかったか（MediaError の code と message）も残す
         const media = el as Partial<HTMLMediaElement>;
         const why = media.error ? ` error=${media.error.code} ${media.error.message}` : '';
-        devlog(`LOADFAIL(${where}) <${el.tagName}> ${el.src ?? el.href}${why}`);
+        devlog(`LOADFAIL(${where}) <${el.tagName}> ${urlSource(el.src ?? el.href)}${why}`);
       },
       true,
     );
     w.addEventListener('unhandledrejection', (e) => devlog(`REJ(${where}) ${e.reason}`));
     w.document.addEventListener('securitypolicyviolation', (e) =>
-      devlog(`CSP(${where}) ${e.violatedDirective} ${e.blockedURI}`),
+      devlog(`CSP(${where}) ${e.violatedDirective} ${urlSource(e.blockedURI)}`),
     );
   };
   hook(window, 'page');

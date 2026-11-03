@@ -19,14 +19,17 @@ function read(file: string): Saved {
   }
 }
 
-/** ファイルを丸ごと書く（書きかけのファイルが残らないよう、一時ファイルに書いてから置き換える）。空なら消す */
+/**
+ * ファイルを丸ごと書く（書きかけのファイルが残らないよう、一時ファイルに書いてから置き換える）。空なら消す。
+ * 入れ替えのときは古いプロセスと新しいプロセスが同時に書くことがあるので、一時ファイルはプロセスごとに分ける
+ */
 function write(file: string, rooms: Saved): void {
   if (Object.keys(rooms).length === 0) {
     rmSync(file, { force: true });
     return;
   }
   mkdirSync(dirname(file), { recursive: true });
-  const tmp = `${file}.tmp`;
+  const tmp = `${file}.${process.pid}.tmp`;
   writeFileSync(tmp, JSON.stringify(rooms));
   renameSync(tmp, file);
 }
