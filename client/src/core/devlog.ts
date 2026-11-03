@@ -25,6 +25,24 @@ export function devlog(raw: string) {
   }).catch(() => {});
 }
 
+/**
+ * この環境で再生できる形式（ニコニコの動画は H.264 + AAC。Linux 版の Discord などで足りないことがある）。
+ * MSE（hls.js が使う）と、video 要素で直接再生できるか
+ */
+const CODECS = ['video/mp4; codecs="avc1.4d401f"', 'video/mp4; codecs="avc1.640028"', 'audio/mp4; codecs="mp4a.40.2"'];
+function codecSupport(): string[] {
+  const video = document.createElement('video');
+  return CODECS.map((type) => {
+    let mse = 'n/a';
+    try {
+      mse = typeof MediaSource !== 'undefined' ? String(MediaSource.isTypeSupported(type)) : 'no MediaSource';
+    } catch {
+      // 調べられない環境
+    }
+    return `codec ${type} mse=${mse} canPlay=${video.canPlayType(type) || 'no'}`;
+  });
+}
+
 /** 送るログ全体（環境の情報＋貯めた行） */
 export function collectLog(): string {
   const env = [
@@ -33,6 +51,7 @@ export function collectLog(): string {
     `lang ${navigator.language}`,
     `screen ${innerWidth}x${innerHeight}@${devicePixelRatio}`,
     `online ${navigator.onLine}`,
+    ...codecSupport(),
     `at ${new Date().toISOString()}`,
   ];
   return [...env, '---', ...lines].join('\n');
@@ -57,7 +76,11 @@ export function watchErrors(iframe: HTMLIFrameElement) {
       'error',
       (e) => {
         const el = e.target as HTMLElement & { src?: string; href?: string };
-        if (el && el !== (w as unknown)) devlog(`LOADFAIL(${where}) <${el.tagName}> ${el.src ?? el.href}`);
+        if (!el || el === (w as unknown)) return;
+        // 動画・音声は、なぜ再生できなかったか（MediaError の code と message）も残す
+        const media = el as Partial<HTMLMediaElement>;
+        const why = media.error ? ` error=${media.error.code} ${media.error.message}` : '';
+        devlog(`LOADFAIL(${where}) <${el.tagName}> ${el.src ?? el.href}${why}`);
       },
       true,
     );
