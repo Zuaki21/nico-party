@@ -2,6 +2,7 @@
 
 ボイスチャンネルのメンバーでニコニコ動画を同時視聴する Discord Activity。
 
+- インストール: [Discord に追加](https://discord.com/oauth2/authorize?client_id=1563868455646531737)（サーバーか、自分のアカウントに追加できます）
 - 使い方・案内: https://nico-party.zuaki.dev
 - 不具合の報告・要望: [Issues](https://github.com/Zuaki21/nico-party/issues)
 
