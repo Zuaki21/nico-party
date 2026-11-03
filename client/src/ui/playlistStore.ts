@@ -74,8 +74,9 @@ export function navTarget(kind: 'prev' | 'next'): NavTarget {
   }
   if (lists.shuffle && queue.length > 1) return { random: true };
   if (queue.length > 0) return { item: queue[0] };
-  // 全曲リピートで最後まで来ていたら、視聴済みの最初に戻る
+  // 全曲リピートで最後まで来ていたら、視聴済みと再生中を戻して、その最初から（シャッフルならその中からランダム。サーバーの advance と同じ）
   if (lists.repeat === 'all') {
+    if (lists.shuffle && history.length + (current ? 1 : 0) > 1) return { random: true };
     const first = history[0] ?? current;
     return first ? { item: first } : null;
   }

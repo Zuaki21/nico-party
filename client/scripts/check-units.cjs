@@ -1,5 +1,5 @@
 // 画面の、DOM に頼らない小さな処理の単体テスト
-//   時計のずれの推定・リンクを本当の URL に戻す処理・通行証を伏せる処理・再生リストの状態・数と時間の書式
+//   時計のずれの推定・リンクを本当の URL に戻す処理・通行証を伏せる処理・URL の出どころだけを残す処理・再生リストの状態・数と時間の書式
 //   npm run check:units
 const assert = require('node:assert/strict');
 const { loadTs } = require('./loadTs.cjs');
@@ -84,7 +84,7 @@ test('URL の出どころ: ホストと、Discord のプロキシの経路だけ
 const store = load('client/src/ui/playlistStore.ts');
 const item = (id, videoId = 'sm' + id) => ({ id, videoId, title: id, addedBy: 'x' });
 const ids = (list) => list.map((q) => q.id).join(',');
-const state = (current, over = {}) => ({ current, playing: true, position: 0, updatedAt: 0, version: 1, by: null, byName: null, ...over });
+const state = (current, over = {}) => ({ current, playing: true, position: 0, updatedAt: 0, version: 1, by: null, ...over });
 
 test('再生リスト: 前へ・次への移動先（シャッフル・全曲リピートを含む）', () => {
   store.setLists([item('q1'), item('q2')], [item('h1')]);
@@ -96,6 +96,8 @@ test('再生リスト: 前へ・次への移動先（シャッフル・全曲リ
   store.setLists([], [item('h1')]);
   store.setPlaybackState(state(item('c'), { repeat: 'all' }));
   assert.equal(store.navTarget('next').item.id, 'h1', '全曲リピートで最後なら、最初に戻る');
+  store.setPlaybackState(state(item('c'), { repeat: 'all', shuffle: true }));
+  assert.deepEqual(store.navTarget('next'), { random: true }, '全曲リピートとシャッフルなら、戻した中からランダム');
   store.setPlaybackState(state(item('c')));
   assert.equal(store.navTarget('next'), null);
   store.setLists([], []);

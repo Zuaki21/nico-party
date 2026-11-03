@@ -299,7 +299,9 @@ export class Room {
 
   /** 追加できなかったことを、本人に知らせて記録する */
   private fail(ws: RoomSocket, by: Actor, code: ErrorCode, params: Record<string, string> = {}) {
-    log('enqueue failed', { room: this.ctx.id, member: by.id, code, ...params });
+    // ログには動画のタイトルを入れない（privacy.html に、そう書いてある）
+    const { title: _title, ...loggable } = params;
+    log('enqueue failed', { room: this.ctx.id, member: by.id, code, ...loggable });
     sendError(ws, code, code === 'upstream_error' ? undefined : params);
   }
 

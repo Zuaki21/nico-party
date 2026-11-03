@@ -72,6 +72,8 @@ server.on('upgrade', async (req, socket, head) => {
     const local = isLocalPeer(req.socket.remoteAddress, req.headers);
     const identity = await authorizeRoom(url.searchParams.get('pass'), env, roomId, local);
     if (!identity) return reject(401, 'Unauthorized');
+    // 認可を待っている間に、停止の合図が来ていることもある
+    if (stopping) return reject(503, 'Service Unavailable');
     wss.handleUpgrade(req, socket, head, (raw) => {
       host.join(roomId, raw, identity).then((ok) => {
         if (!ok) raw.close(1013, 'Room is full');

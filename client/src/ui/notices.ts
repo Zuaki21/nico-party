@@ -10,13 +10,13 @@ const MAX_NOTICES = 3;
 function text(by: Member, ev: NoticeEvent): string {
   switch (ev.k) {
     case 'seek':
-      return t('noticeSeek', { name: by.name, time: formatTime(ev.position) });
+      return t('noticeSeek', { time: formatTime(ev.position) });
     case 'switch':
-      return t('noticeSwitch', { name: by.name, title: ev.title });
+      return t('noticeSwitch', { title: ev.title });
     case 'add':
-      return t('noticeAdd', { name: by.name, title: ev.title });
+      return t('noticeAdd', { title: ev.title });
     case 'remove':
-      return t('noticeRemove', { name: by.name, title: ev.title });
+      return t('noticeRemove', { title: ev.title });
   }
 }
 
