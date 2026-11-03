@@ -7,7 +7,7 @@ import { $, announce } from './dom';
 const NOTICE_MS = 4000;
 const MAX_NOTICES = 3;
 
-function text(by: Member, ev: NoticeEvent): string {
+function text(ev: NoticeEvent): string {
   switch (ev.k) {
     case 'seek':
       return t('noticeSeek', { time: formatTime(ev.position) });
@@ -23,7 +23,7 @@ function text(by: Member, ev: NoticeEvent): string {
 /** 他の人の操作を、動画の左上に重ねて少しの間だけ出す（操作した人のアイコンつき）。読み上げにも流す */
 export function showNotice(by: Member, ev: NoticeEvent) {
   const box = $('notices');
-  const message = text(by, ev);
+  const message = text(ev);
   const item = document.createElement('div');
   item.className = 'notice';
   // 操作した人は、名前ではなくアイコンで示す（アイコンが無い・読み込めないときは名前の頭文字）

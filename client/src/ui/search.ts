@@ -186,7 +186,9 @@ export function setupSearch(h: Pick<UiHandlers, 'search' | 'enqueue' | 'remove'>
   onSeg('search-sort', 'sort', (next) => {
     if ((next === 'popular' || next === 'new' || next === 'likes') && next !== sort) {
       sort = next;
-      fetchPage(0);
+      // まだ検索していなければ、並び順を覚えておくだけ（空の検索を送らない）
+      if (query) fetchPage(0);
+      else markSeg('search-sort', 'sort', sort);
     }
   });
 

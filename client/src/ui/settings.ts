@@ -11,7 +11,7 @@ const THEME_KEY = 'nico-party:theme';
 const PRESENCE_KEY = 'nico-party:presence';
 const NOTICE_KEY = 'nico-party:notices';
 
-/** UI サイズ（画面全体の拡大率）。style.css は rem で書いてあり、--ui-scale で一括で変わる */
+/** UI サイズ（画面全体の拡大率）。styles/ は rem で書いてあり、--ui-scale で一括で変わる */
 const SCALE_KEY = 'nico-party:scale';
 const SCALES = [0.85, 1, 1.15, 1.3];
 let uiScale = 1;
