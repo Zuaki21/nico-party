@@ -75,8 +75,42 @@
   white-space: nowrap;
 }
 
-.now-title .adder {
+/* 追加した人のタグ（アイコン＋名前） */
+.adder-tag {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4286rem;
+  padding: 0.1429rem 0.7143rem 0.1429rem 0.1429rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  font-size: 0.9286rem;
+}
+
+.adder-tag img,
+.adder-tag .initial {
+  width: 1.5rem;
+  height: 1.5rem;
   flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.adder-tag .initial {
+  display: grid;
+  place-items: center;
+  background: var(--button-secondary);
+  color: var(--button-secondary-text);
+  font-size: 0.8571rem;
+}
+
+.adder-name {
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .side {

@@ -2,7 +2,7 @@ import type { Member, NoticeEvent, PlaybackState, QueueItem, RepeatMode } from '
 import type { SearchResult, SearchSort } from '../../../shared/search';
 import { parseVideoId } from '../../../shared/video';
 import { APP_VERSION } from '../core/env';
-import { $, adderEl, onSeg, setupAdderTip } from './dom';
+import { $, adderTagEl, onSeg, setupAdderTip } from './dom';
 import { applyI18n, onLangChange, t } from '../core/i18n';
 import { LIST_ICON, NEXT_ICON, PREV_ICON, REPEAT_ICON, SETTINGS_ICON, SHUFFLE_ICON } from './icons';
 import { renderPlaylist, setPlayback, setupPlaylist } from './playlist';
@@ -169,7 +169,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
     const label = document.createElement('span');
     label.className = 'now-label';
     label.textContent = current ? t('nowPlayingTitle', { title: current.title }) : '';
-    $('now-title').replaceChildren(label, ...(current ? [adderEl(current.addedBy, current.addedByAvatar)] : []));
+    $('now-title').replaceChildren(label, ...(current ? [adderTagEl(current.addedBy, current.addedByAvatar)] : []));
     // 長くて省略されても、全文を見られるようにする
     $('now-title').title = nowTitle;
   };

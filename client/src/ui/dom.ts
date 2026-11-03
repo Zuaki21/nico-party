@@ -169,3 +169,34 @@ export function setupAdderTip() {
   document.addEventListener('scroll', hide, true);
   window.addEventListener('blur', hide);
 }
+
+/** 追加した人を、アイコンと名前を入れたタグで出す（再生中の動画の横。ポインターを乗せなくても名前が見える） */
+export function adderTagEl(name: string, avatar: string | undefined) {
+  const tag = document.createElement('span');
+  tag.className = 'adder-tag';
+  tag.title = t('addedByIcon', { name });
+  if (avatar) {
+    const img = document.createElement('img');
+    img.src = avatar;
+    img.alt = '';
+    img.referrerPolicy = 'no-referrer';
+    img.addEventListener('error', () => img.replaceWith(initialEl(name)));
+    tag.append(img);
+  } else {
+    tag.append(initialEl(name));
+  }
+  const text = document.createElement('span');
+  text.className = 'adder-name';
+  text.textContent = name;
+  tag.append(text);
+  return tag;
+}
+
+/** アイコンの代わりの、名前の頭文字の丸 */
+function initialEl(name: string) {
+  const el = document.createElement('span');
+  el.className = 'initial';
+  el.setAttribute('aria-hidden', 'true');
+  el.textContent = Array.from(name)[0] ?? '?';
+  return el;
+}
