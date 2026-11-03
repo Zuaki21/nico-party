@@ -78,6 +78,13 @@
   .splitter {
     display: none;
   }
+  /* 再生リスト欄は動画の下に常に出すので、表示・非表示のボタンは省く（以前に隠した設定が残っていても、出す） */
+  #toggle-side {
+    display: none;
+  }
+  #app.side-hidden .side {
+    display: flex;
+  }
   /* 設定画面は設定ボタンの下に開き、再生リストの上に重ねる（動画を隠さない） */
   .settings {
     top: calc(100% + 0.4286rem);

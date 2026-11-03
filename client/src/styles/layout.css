@@ -61,6 +61,8 @@
 }
 
 .now-title {
+  /* 幅が狭いとき、追加した人のタグは名前を省いてアイコンだけにする（下の @container） */
+  container-type: inline-size;
   /* 前へ・次へのボタンとの間をあける */
   padding-left: 0.5714rem;
   /* タイトルの文字とタグ（アイコンの大きさ）の高さをそろえる */
@@ -175,3 +177,14 @@
   display: none;
 }
 
+
+/* タイトルの欄が狭いときは、追加した人のタグをアイコンだけにする */
+@container (max-width: 22rem) {
+  .adder-name {
+    display: none;
+  }
+
+  .adder-tag {
+    padding: 0.1786rem;
+  }
+}
