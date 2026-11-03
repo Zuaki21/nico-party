@@ -26,7 +26,12 @@ export interface PassClaims {
   n?: string;
   /** 入れる部屋（Activity の instanceId）。ws の通行証のみ。別の部屋への使い回しを防ぐ */
   r?: string;
+  /** アイコンの URL（ws の通行証のみ） */
+  a?: string;
 }
+
+/** 通行証に入れてよいアイコンの URL（Discord の CDN のものだけ） */
+export const AVATAR_PATTERN = /^https:\/\/cdn\.discordapp\.com\/[\w/.-]{1,160}(\?size=\d{1,4})?$/;
 
 /** 通行証の有効期間。Activity を開きっぱなしの間は同じものを使い続けるので、長めにしておく */
 const PASS_TTL_MS = 24 * 60 * 60 * 1000;
@@ -83,6 +88,7 @@ export async function verifyPass(
       u: body.u,
       ...(typeof body.n === 'string' ? { n: body.n } : {}),
       ...(typeof body.r === 'string' ? { r: body.r } : {}),
+      ...(typeof body.a === 'string' && AVATAR_PATTERN.test(body.a) ? { a: body.a } : {}),
     };
   } catch {
     return null;

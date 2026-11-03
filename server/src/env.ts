@@ -24,3 +24,5 @@ export interface Env {
 export const VERIFIED_NAME_HEADER = 'x-nico-party-verified-name';
 /** 同じく、確かめられた Discord のユーザー ID を渡すヘッダー */
 export const VERIFIED_UID_HEADER = 'x-nico-party-verified-uid';
+/** 同じく、確かめられたアイコンの URL を渡すヘッダー */
+export const VERIFIED_AVATAR_HEADER = 'x-nico-party-verified-avatar';

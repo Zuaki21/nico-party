@@ -211,3 +211,20 @@
 .queue li.current .actions {
   background: linear-gradient(to right, transparent, color-mix(in srgb, var(--panel), var(--accent) 22%) 1.7143rem);
 }
+
+/* 追加した人のアイコン（読み込めなければ名前の頭文字） */
+.adder img,
+.adder.fallback {
+  width: 1.2857rem;
+  height: 1.2857rem;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.adder.fallback {
+  display: inline-grid;
+  place-items: center;
+  background: var(--button-secondary);
+  color: var(--button-secondary-text);
+  font-size: 0.7143rem;
+}

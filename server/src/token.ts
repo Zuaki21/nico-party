@@ -1,6 +1,6 @@
 import { BodyTooLargeError, readLimited } from './body';
 import type { Env } from './env';
-import { exchangeCode, fetchMe } from './discord';
+import { avatarUrl, exchangeCode, fetchMe } from './discord';
 import { sha256Hex } from './hash';
 import { checkParticipation } from './instanceCheck';
 import { ConfigError, issuePass, passSecret } from './pass';
@@ -57,6 +57,7 @@ export async function exchangeToken(request: Request, env: Env): Promise<Respons
   const name = me?.global_name ?? me?.username ?? 'guest';
   // トークンの交換に成功した時点で、ログインはできている。ユーザー情報が取れなくても、通行証は発行する
   // （無いと、部屋に入れず、動画も再生できなくなるため）。ID が取れなければ、トークンから作った識別子で代える
+  const avatar = me ? avatarUrl(me) : null;
   const uid = me?.id ?? (await sha256Hex(accessToken)).slice(0, 18);
   // 申告された部屋（Activity インスタンス）の参加者でなければ、その部屋の通行証は渡さない。
   // ボットトークンが未登録のとき、ユーザー ID が取れなかったとき、Discord に確かめられなかったときは確かめずに通す
@@ -70,7 +71,7 @@ export async function exchangeToken(request: Request, env: Env): Promise<Respons
     if (participation === 'not_member') return Response.json({ error: 'not in this activity' }, { status: 403 });
   }
   const [pass, nicoPass] = await Promise.all([
-    issuePass(secret, 'ws', { u: uid, n: name, r: room }),
+    issuePass(secret, 'ws', { u: uid, n: name, r: room, ...(avatar ? { a: avatar } : {}) }),
     issuePass(secret, 'nico', { u: uid }),
   ]);
   return Response.json({ access_token: accessToken, pass, nicoPass });

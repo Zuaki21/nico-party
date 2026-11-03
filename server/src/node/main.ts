@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage } from 'node:http';
 import { Readable } from 'node:stream';
 import { WebSocketServer } from 'ws';
 import { ROOM_ID, authorizeRoom } from '../wsAuth';
-import { VERIFIED_NAME_HEADER, VERIFIED_UID_HEADER } from '../env';
+import { VERIFIED_AVATAR_HEADER, VERIFIED_NAME_HEADER, VERIFIED_UID_HEADER } from '../env';
 import { loadEnv } from './env';
 import { savedRooms, saveRooms } from './persist';
 import { RoomHost } from './roomHost';
@@ -71,7 +71,11 @@ server.on('upgrade', async (req, socket, head) => {
     const authorized = await authorizeRoom(toRequest(req, false), env, match[1]!);
     if (authorized instanceof Response) return reject(authorized.status, 'Unauthorized');
     const name = authorized.headers.get(VERIFIED_NAME_HEADER);
-    const identity = { uid: authorized.headers.get(VERIFIED_UID_HEADER), name: name === null ? null : decodeURIComponent(name) };
+    const identity = {
+      uid: authorized.headers.get(VERIFIED_UID_HEADER),
+      name: name === null ? null : decodeURIComponent(name),
+      avatar: authorized.headers.get(VERIFIED_AVATAR_HEADER),
+    };
     wss.handleUpgrade(req, socket, head, (raw) => {
       host.join(match[1]!, raw, identity).then((ok) => {
         if (!ok) raw.close(1013, 'Room is full');

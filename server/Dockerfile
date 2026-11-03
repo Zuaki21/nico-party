@@ -13,7 +13,8 @@ FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=8787 \
-    ROOMS_FILE=/data/rooms.json
+    ROOMS_FILE=/data/rooms.json \
+    CLIENT_LOG_FILE=/data/client-logs.jsonl
 COPY --from=build /app/server/dist/main.js ./main.js
 # 停止するときに部屋を書き出す場所（ボリュームを割り当てる）
 RUN mkdir /data && chown node:node /data

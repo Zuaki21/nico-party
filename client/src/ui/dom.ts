@@ -1,5 +1,5 @@
 import { externalUrl } from '../core/env';
-import { formatCount } from '../core/i18n';
+import { formatCount, t } from '../core/i18n';
 
 /** id から要素を取る。無ければすぐ分かるよう例外にする（id の付け間違いが、あとで別の場所で壊れる形で出ないように） */
 export const $ = <T extends HTMLElement>(id: string): T => {
@@ -68,6 +68,32 @@ export function bodyEl(titleText: string, videoId: string, meta: (string | null 
   return body;
 }
 
+/** 追加した人のアイコン（読み込めなかったら名前の頭文字）。アイコンが無い古い項目は、名前の文字で出す */
+export function adderEl(name: string, avatar: string | undefined) {
+  const el = document.createElement('span');
+  el.className = 'adder';
+  const label = t('addedByIcon', { name });
+  if (!avatar) {
+    el.textContent = t('addedBy', { name });
+    return el;
+  }
+  el.title = label;
+  el.setAttribute('role', 'img');
+  el.setAttribute('aria-label', label);
+  const img = document.createElement('img');
+  img.src = avatar;
+  img.alt = '';
+  img.loading = 'lazy';
+  img.referrerPolicy = 'no-referrer';
+  img.addEventListener('error', () => {
+    img.remove();
+    el.classList.add('fallback');
+    el.textContent = Array.from(name)[0] ?? '?';
+  });
+  el.append(img);
+  return el;
+}
+
 /** 再生数・コメント数（bodyEl の meta に入れる） */
 export function countsMeta(views: number | undefined, comments: number | undefined) {
   return [
@@ -76,7 +102,7 @@ export function countsMeta(views: number | undefined, comments: number | undefin
   ];
 }
 
-function formatTime(sec: number) {
+export function formatTime(sec: number) {
   const total = Math.max(0, Math.floor(sec));
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);

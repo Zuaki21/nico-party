@@ -1,3 +1,4 @@
+import { receiveClientLog } from '../clientLog';
 import type { Env } from '../env';
 import { handleNico } from '../nico/nico';
 import { searchVideos } from '../nico/nicoApi';
@@ -37,6 +38,8 @@ async function dispatch(request: Request, env: Env): Promise<Response> {
     }
     return searchVideos(request);
   }
+
+  if (path === '/api/log' && request.method === 'POST') return receiveClientLog(request, env);
 
   if (path === '/api/token' && request.method === 'POST') {
     return exchangeToken(request, env);

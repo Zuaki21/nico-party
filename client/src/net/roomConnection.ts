@@ -1,6 +1,7 @@
 import { CLOSE_EVICTED, HEARTBEAT, type ClientMsg, type ServerMsg } from '../../../shared/protocol';
 import { ClockSync } from './clock';
 import { backend } from '../core/env';
+import { devlog } from '../core/devlog';
 
 /**
  * 接続の生存確認の間隔。何も流れない WebSocket は途中で切られることがあるので送っておく。
@@ -40,6 +41,8 @@ export class RoomConnection {
   private ws: WebSocket | null = null;
   /** welcome を受け取り、部屋に入れている */
   private joined = false;
+  /** 部屋での自分のメンバー ID（welcome で分かる） */
+  memberId: string | null = null;
   private pending: { msg: ClientMsg; at: number }[] = [];
   private retry = 0;
   private lastReceivedAt = 0;
@@ -110,7 +113,9 @@ export class RoomConnection {
       if (sock.readyState !== WebSocket.OPEN) this.drop(sock);
     }, CONNECT_TIMEOUT_MS);
 
+    devlog(`ws connecting (retry ${this.retry})`);
     sock.onopen = () => {
+      devlog('ws open');
       clearTimeout(this.connectTimer);
       this.retry = 0;
       this.lastReceivedAt = Date.now();
@@ -138,6 +143,8 @@ export class RoomConnection {
       }
       if (msg.t === 'pong') this.clock.sample(msg.clientTime, msg.serverTime);
       if (msg.t === 'welcome') {
+        devlog(`welcome id=${msg.id} members=${msg.members.length} queue=${msg.queue.length} history=${msg.history.length}`);
+        this.memberId = msg.id;
         this.clock.provisional(msg.serverTime);
         this.joined = true;
       }
@@ -149,7 +156,7 @@ export class RoomConnection {
       }
     };
 
-    sock.onclose = (e) => (e.code === CLOSE_EVICTED ? this.evicted(sock) : this.drop(sock));
+    sock.onclose = (e) => (devlog(`ws close ${e.code} ${e.reason}`), e.code === CLOSE_EVICTED ? this.evicted(sock) : this.drop(sock));
   }
 
   /** 次に繋ぎ直すときに使う通行証に差し替える（有効期限が切れる前に取り直したもの） */
@@ -172,6 +179,7 @@ export class RoomConnection {
   /** 接続が切れた（または死んでいる）ので片付けて、少し待ってから繋ぎ直す */
   private drop(sock: WebSocket) {
     if (this.ws !== sock) return;
+    devlog(`ws dropped (state ${sock.readyState})`);
     sock.onclose = null;
     sock.onmessage = null;
     try {

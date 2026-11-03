@@ -104,6 +104,7 @@ export class RoomHost {
     const sockets = new Set<NodeSocket>();
     const storage = new MemoryStorage(() => void this.onAlarm(roomId), this.takeSaved(roomId));
     const ctx: RoomContext = {
+      id: roomId,
       storage,
       acceptWebSocket: (ws) => sockets.add(ws as NodeSocket),
       getWebSockets: () => [...sockets],

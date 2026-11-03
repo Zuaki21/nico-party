@@ -26,6 +26,16 @@ export interface DiscordUser {
   id?: string;
   global_name?: string | null;
   username?: string;
+  avatar?: string | null;
+}
+
+/** ユーザーのアイコンの URL（Discord の CDN）。アイコン未設定なら既定のアイコン */
+export function avatarUrl(user: DiscordUser): string | null {
+  if (!user.id || !/^\d{1,20}$/.test(user.id)) return null;
+  if (user.avatar && /^(a_)?[0-9a-f]{1,64}$/.test(user.avatar)) {
+    return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=64`;
+  }
+  return `https://cdn.discordapp.com/embed/avatars/${Number((BigInt(user.id) >> 22n) % 6n)}.png`;
 }
 
 /** アクセストークンの持ち主を取得する。取れなければ null */

@@ -1,6 +1,6 @@
 import { APP_VERSION } from '../core/env';
 import { $, markSeg, onSeg } from './dom';
-import { getLang, setLang } from '../core/i18n';
+import { getLang, setLang, t } from '../core/i18n';
 import { load, save } from '../core/storage';
 import type { UiHandlers } from './ui';
 
@@ -9,6 +9,7 @@ type Theme = 'light' | 'dark';
 type ThemeChoice = 'auto' | Theme;
 const THEME_KEY = 'nico-party:theme';
 const PRESENCE_KEY = 'nico-party:presence';
+const NOTICE_KEY = 'nico-party:notices';
 
 /** UI サイズ（画面全体の拡大率）。style.css は rem で書いてあり、--ui-scale で一括で変わる */
 const SCALE_KEY = 'nico-party:scale';
@@ -22,6 +23,11 @@ export function getUiScale() {
 /** Discord に視聴中の動画を表示するか（各自の設定。既定はオン） */
 export function isPresenceEnabled() {
   return load(PRESENCE_KEY) !== 'off';
+}
+
+/** 他の人の操作の通知を出すか（各自の設定。既定はオン） */
+export function isNoticeEnabled() {
+  return load(NOTICE_KEY) !== 'off';
 }
 
 function applyScale(scale: number) {
@@ -47,7 +53,7 @@ function applyTheme(choice: ThemeChoice) {
  * 設定画面（テーマ・UI サイズ・言語・Discord への表示・リンク）。設定は各自の画面だけに効き、次回も引き継ぐ。
  * 保存されているテーマと UI サイズもここで当てる
  */
-export function setupSettings(h: Pick<UiHandlers, 'openLink' | 'setPresence'>): { close: () => void } {
+export function setupSettings(h: Pick<UiHandlers, 'openLink' | 'setPresence' | 'sendLog'>): { close: () => void } {
   const dialog = $('settings');
   applyScale(Number(load(SCALE_KEY)) || 1);
   const saved = load(THEME_KEY);
@@ -59,6 +65,7 @@ export function setupSettings(h: Pick<UiHandlers, 'openLink' | 'setPresence'>): 
     markSeg('scale-seg', 'scale', String(uiScale));
     markSeg('lang-seg', 'lang', getLang());
     $<HTMLInputElement>('presence-toggle').checked = isPresenceEnabled();
+    $<HTMLInputElement>('notice-toggle').checked = isNoticeEnabled();
   };
 
   const button = $('open-settings');
@@ -113,6 +120,21 @@ export function setupSettings(h: Pick<UiHandlers, 'openLink' | 'setPresence'>): 
     save(PRESENCE_KEY, enabled ? '' : 'off');
     h.setPresence(enabled);
   });
+  $<HTMLInputElement>('notice-toggle').addEventListener('change', (e) => {
+    save(NOTICE_KEY, (e.target as HTMLInputElement).checked ? '' : 'off');
+  });
+  const reportButton = $<HTMLButtonElement>('report-send');
+  const reportResult = $('report-result');
+  reportButton.addEventListener('click', () => {
+    reportButton.disabled = true;
+    reportResult.textContent = t('reportSending');
+    h.sendLog()
+      .then(
+        (id) => (reportResult.textContent = t('reportDone', { id })),
+        () => (reportResult.textContent = t('reportFailed')),
+      )
+      .finally(() => (reportButton.disabled = false));
+  });
   dialog.querySelector('.settings-links')!.addEventListener('click', (e) => {
     const url = (e.target as HTMLElement).closest<HTMLElement>('[data-url]')?.dataset.url;
     if (url) h.openLink(url);
@@ -164,6 +186,21 @@ export function settingsHtml(): string {
         <span class="setting-desc" data-i18n="presenceDesc"></span>
       </span>
       <input type="checkbox" role="switch" class="switch" id="presence-toggle" aria-labelledby="presence-label" />
+    </div>
+    <div class="setting-row">
+      <span class="setting-text">
+        <span class="setting-label" id="notice-label" data-i18n="notices"></span>
+        <span class="setting-desc" data-i18n="noticesDesc"></span>
+      </span>
+      <input type="checkbox" role="switch" class="switch" id="notice-toggle" aria-labelledby="notice-label" />
+    </div>
+    <div class="setting-row">
+      <span class="setting-text">
+        <span class="setting-label" data-i18n="report"></span>
+        <span class="setting-desc" data-i18n="reportDesc"></span>
+        <span class="setting-desc" id="report-result" role="status"></span>
+      </span>
+      <button type="button" class="secondary" id="report-send" data-i18n="reportSend"></button>
     </div>
     <div class="settings-links">
       <span class="version">ver ${APP_VERSION}</span>

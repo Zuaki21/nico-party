@@ -31,6 +31,8 @@ export interface RoomStorage {
 
 /** 部屋が使う、動いている場所の機能 */
 export interface RoomContext {
+  /** 部屋の ID（ログ用） */
+  id?: string;
   storage: RoomStorage;
   /** 接続を、この部屋の接続として受け入れる */
   acceptWebSocket(ws: RoomSocket): void;

@@ -1,4 +1,4 @@
-import { CLOSE_EVICTED, type ClientMsg, type QueueItem } from '../../../shared/protocol';
+import { CLOSE_EVICTED, type ClientMsg, type ErrorCode, type NoticeEvent, type PlaybackState, type QueueItem } from '../../../shared/protocol';
 import { parseVideoId } from '../../../shared/video';
 import { fetchEmbedError, fetchVideoInfo, UpstreamError } from '../nico/nicoApi';
 import { sha256Hex } from '../hash';
@@ -25,6 +25,7 @@ import {
 } from './playback';
 import { RoomStore } from './roomStore';
 import { MessageLimiter } from './limiter';
+import { log } from '../log';
 import { send, sendError, Sockets, type Attachment } from './sockets';
 import { parseClientMsg } from './validate';
 
@@ -50,11 +51,21 @@ const JOIN_TIMEOUT_MS = 15_000;
 /** 受け付けるメッセージの大きさの上限（正規のメッセージは数百バイト） */
 const MAX_MESSAGE_LENGTH = 4096;
 
+/** 位置が、再生しているはずの位置から離れていれば、シーク（再生・一時停止の切り替えだけなら違う） */
+const SEEK_THRESHOLD_S = 2;
+function isSeek(before: PlaybackState, after: PlaybackState): boolean {
+  // 動画の切り替え直後は、updatedAt が少し先の時刻（その時刻に再生開始）になっている
+  const elapsed = before.playing ? Math.max(0, Date.now() - before.updatedAt) / 1000 : 0;
+  return Math.abs(after.position - (before.position + elapsed)) > SEEK_THRESHOLD_S;
+}
+
 /** 接続した人の、確かめられた身元（ログインできなかった人は null） */
 export interface Identity {
   uid: string | null;
   /** 確かめられた表示名（エンコードしていないもの） */
   name: string | null;
+  /** 確かめられたアイコンの URL */
+  avatar?: string | null;
 }
 
 /**
@@ -106,6 +117,7 @@ export class Room {
       joined: false,
       connectedAt: Date.now(),
       ...(verifiedName !== null && uid !== null ? { uid } : {}),
+      ...(verifiedName !== null && who.avatar ? { avatar: who.avatar } : {}),
     };
     ws.serializeAttachment(attachment);
     this.ctx.acceptWebSocket(ws);
@@ -157,7 +169,7 @@ export class Room {
     if (!this.limiter.take(limitKey)) return;
     // 部屋全体の制限に断られたときは、その人の分は数えない（ほかの人の連投で、自分の枠が減らないように）
     if (!this.roomLimiter.take('room')) return this.limiter.refund(limitKey);
-    const by: Actor = { id: a.id, name: a.name };
+    const by: Actor = { id: a.id, name: a.name, ...(a.avatar ? { avatar: a.avatar } : {}) };
 
     switch (msg.t) {
       case 'join': {
@@ -183,12 +195,18 @@ export class Room {
           serverTime: Date.now(),
         });
         this.sockets.broadcastMembers();
+        log('join', { room: this.ctx.id, member: a.id, name: a.name, members: this.sockets.members().length });
         return;
       }
 
       case 'control': {
-        const state = control(this.store.getState(), msg, by, realDeps());
-        if (state) await this.commit({ state });
+        const before = this.store.getState();
+        const state = control(before, msg, by, realDeps());
+        if (state) {
+          await this.commit({ state });
+          // 再生・一時停止ではなく、位置が大きく動いた操作だけをシークとして知らせる
+          if (isSeek(before, state)) this.notify(by, { k: 'seek', position: state.position });
+        }
         return;
       }
 
@@ -201,20 +219,26 @@ export class Room {
         return;
       }
 
-      case 'remove':
-        return this.apply((snap, d) => removeItem(snap, msg.id, by, d));
+      case 'remove': {
+        const snap = this.snapshot();
+        const removed = [...snap.history, ...(snap.state.current ? [snap.state.current] : []), ...snap.queue].find((q) => q.id === msg.id);
+        await this.apply((s, d) => removeItem(s, msg.id, by, d));
+        if (removed) this.notify(by, { k: 'remove', title: removed.title });
+        return;
+      }
 
       case 'move':
         return this.apply((snap) => moveItem(snap, msg.id, msg.index));
 
       case 'prev':
-        return this.apply((snap, d) => prevItem(snap, msg.itemId, by, d));
+        return this.switchBy(by, (snap, d) => prevItem(snap, msg.itemId, by, d));
 
       case 'jump':
-        return this.apply((snap, d) => jumpItem(snap, msg.id, by, d));
+        return this.switchBy(by, (snap, d) => jumpItem(snap, msg.id, by, d));
 
       case 'next':
-        return this.apply((snap, d) => nextItem(snap, msg, by, d));
+        // 動画が終わって自動で進むときは、誰の操作でもないので知らせない
+        return msg.auto ? this.apply((snap, d) => nextItem(snap, msg, by, d)) : this.switchBy(by, (snap, d) => nextItem(snap, msg, by, d));
 
       case 'loadFailed':
       case 'loadOk': {
@@ -269,20 +293,41 @@ export class Room {
     try {
       [info, embedError] = await Promise.all([fetchVideoInfo(videoId), fetchEmbedError(videoId)]);
     } catch (e) {
-      if (e instanceof UpstreamError) return sendError(ws, 'upstream_error');
+      if (e instanceof UpstreamError) return this.fail(ws, by, 'upstream_error', { detail: e.message });
       throw e;
     }
-    if (!info) return sendError(ws, 'not_found', { id: videoId });
-    if (embedError) return sendError(ws, 'unplayable', { title: info.title, reason: embedError });
-    if (!info.embeddable) return sendError(ws, 'not_embeddable', { title: info.title });
+    if (!info) return this.fail(ws, by, 'not_found', { id: videoId });
+    if (embedError) return this.fail(ws, by, 'unplayable', { title: info.title, reason: embedError });
+    if (!info.embeddable) return this.fail(ws, by, 'not_embeddable', { title: info.title });
     const { embeddable: _embeddable, ...meta } = info;
-    const item: QueueItem = { id: newItemId(), videoId, addedBy: by.name, ...meta };
+    const item: QueueItem = { id: newItemId(), videoId, addedBy: by.name, ...(by.avatar ? { addedByAvatar: by.avatar } : {}), ...meta };
     // ニコニコへの問い合わせの await 中に他の操作が入っている可能性があるので、取り直す
     const snap = this.snapshot();
     if (!hasRoom(snap)) return sendError(ws, 'queue_full');
     await this.commit(addItem(snap, item, by, realDeps()));
+    this.notify(by, { k: 'add', title: item.title });
     // 追加を待っている間に全員が退出して、部屋が破棄されていたら、書き込んだデータが残る。破棄を予約し直す
     if (this.sockets.joined().length === 0) await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
+  }
+
+  /** 追加できなかったことを、本人に知らせて記録する */
+  private fail(ws: RoomSocket, by: Actor, code: ErrorCode, params: Record<string, string> = {}) {
+    log('enqueue failed', { room: this.ctx.id, member: by.id, code, ...params });
+    sendError(ws, code, code === 'upstream_error' ? undefined : params);
+  }
+
+  /** 動画の切り替え（前へ・次へ・選んで再生）。動画が変わったときだけ、した人を添えて知らせる */
+  private async switchBy(by: Actor, transition: (snap: Snapshot, d: Deps) => Change | null) {
+    const before = this.store.getState().current?.id ?? null;
+    await this.apply(transition);
+    const now = this.store.getState().current;
+    if (now && now.id !== before) this.notify(by, { k: 'switch', title: now.title });
+  }
+
+  /** 操作した本人以外に、操作を知らせる（本人の画面には出さない。クライアントが by.id で見分ける） */
+  private notify(by: Actor, ev: NoticeEvent) {
+    log('notice', { room: this.ctx.id, member: by.id, ev: ev.k });
+    this.sockets.broadcast({ t: 'notice', by: { id: by.id, name: by.name, ...(by.avatar ? { avatar: by.avatar } : {}) }, ev });
   }
 
   private async onLeave(ws: RoomSocket) {
@@ -294,6 +339,7 @@ export class Room {
     const leaver = this.sockets.attachment(ws);
     // 入室していなかった接続（入室待ちのまま切れた・掃除された）は、部屋の人に関係しない
     if (!leaver.joined) return;
+    log('leave', { room: this.ctx.id, member: leaver.id, name: leaver.name });
     if (this.sockets.joined(ws).length === 0) {
       // 全員退出したら、少し待ってから部屋を破棄する（すぐ再接続してきたら残す）
       await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);

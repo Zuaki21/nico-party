@@ -1,12 +1,14 @@
-import type { Member, PlaybackState, QueueItem, RepeatMode } from '../../../shared/protocol';
+import type { Member, NoticeEvent, PlaybackState, QueueItem, RepeatMode } from '../../../shared/protocol';
 import type { SearchResult, SearchSort } from '../../../shared/search';
 import { parseVideoId } from '../../../shared/video';
+import { APP_VERSION } from '../core/env';
 import { $, onSeg } from './dom';
 import { applyI18n, onLangChange, t } from '../core/i18n';
 import { LIST_ICON, NEXT_ICON, PREV_ICON, REPEAT_ICON, SETTINGS_ICON, SHUFFLE_ICON } from './icons';
 import { renderPlaylist, setPlayback, setupPlaylist } from './playlist';
+import { showNotice } from './notices';
 import { setupSearch } from './search';
-import { settingsHtml, setupSettings } from './settings';
+import { isNoticeEnabled, settingsHtml, setupSettings } from './settings';
 import { setupSidePanel } from './sidePanel';
 
 /**
@@ -30,6 +32,8 @@ export interface UiHandlers {
   openLink: (url: string) => void;
   /** Discord のアクティビティに視聴中の動画を表示するかの切り替え */
   setPresence: (enabled: boolean) => void;
+  /** 不具合調査用のログをサーバーに送る。報告 ID を返す */
+  sendLog: () => Promise<string>;
 }
 
 /** スマホなどタッチ操作の端末か */
@@ -47,6 +51,8 @@ export interface Ui {
   renderConnecting: (waiting?: number) => void;
   /** 設定画面を閉じる */
   closeSettings: () => void;
+  /** 他の人の操作を知らせる（設定でオフなら出さない） */
+  showNotice: (by: Member, ev: NoticeEvent) => void;
 }
 
 /** 画面の骨組みを作る */
@@ -60,6 +66,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
       <div class="player" id="player">
         <div class="empty" id="empty" data-i18n="empty"></div>
         <div class="player-cover" id="player-cover" hidden><div class="spinner" aria-hidden="true"></div></div>
+        <div class="notices" id="notices" aria-hidden="true"></div>
       </div>
       <div class="now">
         <div class="now-title" id="now-title"></div>
@@ -113,6 +120,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
       <div class="spinner" aria-hidden="true"></div>
       <!-- 普段は文字を出さない。接続に時間がかかっているときだけ、slowLoading() で案内を出す -->
       <div id="loading-text"></div>
+      <div class="loading-version">ver ${APP_VERSION}</div>
     </div>
   `;
   applyI18n(root);
@@ -190,6 +198,7 @@ export function mountUi(root: HTMLElement, h: UiHandlers): Ui {
       $('members').title = '';
     },
     closeSettings: settings.close,
+    showNotice: (by, ev) => isNoticeEnabled() && showNotice(by, ev),
   };
 }
 

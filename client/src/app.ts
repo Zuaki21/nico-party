@@ -1,9 +1,9 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import type { ClientMsg, Member, PlaybackState, ServerMsg } from '../../shared/protocol';
-import { describeError, devlog, watchErrors } from './core/devlog';
-import { inDiscord } from './core/env';
+import { collectLog, describeError, devlog, watchErrors } from './core/devlog';
+import { APP_VERSION, inDiscord } from './core/env';
 import { onLangChange, serverErrorText, t } from './core/i18n';
-import { searchNico } from './net/api';
+import { searchNico, sendLog } from './net/api';
 import { authenticate, NotInActivityError, openExternal, watchLayout } from './net/discord';
 import { createPresence } from './net/presence';
 import { RoomConnection } from './net/roomConnection';
@@ -52,6 +52,7 @@ const ui = mountUi(document.querySelector<HTMLElement>('#app')!, {
   openLink: (url) => openExternal(session.sdk, url),
   setPresence: (enabled) => session.presence?.setEnabled(enabled),
   search: (q, sort, offset) => searchNico(session.nicoPass, q, sort, offset),
+  sendLog: () => sendLog(session.nicoPass, { text: collectLog(), version: APP_VERSION, room: session.sdk?.instanceId, reason: 'manual' }),
 });
 
 const player = new NicoPlayer(ui.player, (videoId, playerId) => nicoEmbedUrl(videoId, playerId, session.nicoPass));
@@ -106,13 +107,20 @@ function onMessage(msg: ServerMsg) {
       engine.resendLoadReport();
       return;
     case 'state':
+      devlog(`state v${msg.state.version} ${msg.state.current?.videoId ?? '-'} ${msg.state.playing ? 'playing' : 'paused'} pos=${msg.state.position.toFixed(1)} by=${msg.state.byName ?? '-'}`);
       applyState(msg.state);
       return;
     case 'queue':
+      devlog(`queue ${msg.queue.length} / history ${msg.history.length}`);
       renderQueue(msg.queue, msg.history);
       return;
     case 'members':
       applyMembers(msg.members);
+      return;
+    case 'notice':
+      devlog(`notice ${msg.ev.k} by=${msg.by.name}`);
+      // 自分の操作は、自分の画面で見えているので知らせない
+      if (msg.by.id !== session.conn?.memberId) ui.showNotice(msg.by, msg.ev);
       return;
     case 'error':
       devlog(`server error: ${msg.code}`);

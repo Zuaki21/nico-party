@@ -7,6 +7,8 @@ export interface QueueItem {
   videoId: string;
   title: string;
   addedBy: string;
+  /** 追加した人のアイコン（Discord の CDN の URL。サーバーが付ける。無い場合は名前だけ表示する） */
+  addedByAvatar?: string;
   // 以下はキューに追加した時点の動画情報（取得できなかった場合は無い）
   thumbnail?: string;
   author?: string;
@@ -19,6 +21,8 @@ export interface QueueItem {
 export interface Member {
   id: string;
   name: string;
+  /** アイコンの URL（Discord の CDN。ログインできなかった人には無い） */
+  avatar?: string;
 }
 
 /** off: リピートしない / all: 再生リストの最後まで行ったら最初に戻る / one: 同じ動画を繰り返す */
@@ -81,6 +85,13 @@ export type ErrorCode =
   /** ニコニコに問い合わせられなかった（動画の有無は分からない） */
   | 'upstream_error';
 
+/** 部屋の誰かの操作の通知。文言は各自の画面で組み立てる（client/src/core/i18n/ の notice_*） */
+export type NoticeEvent =
+  | { k: 'seek'; position: number }
+  | { k: 'switch'; title: string }
+  | { k: 'add'; title: string }
+  | { k: 'remove'; title: string };
+
 export type ServerMsg =
   | {
       t: 'welcome';
@@ -95,6 +106,8 @@ export type ServerMsg =
   /** queue: これから再生する動画 / history: 再生し終えた動画（古い順） */
   | { t: 'queue'; queue: QueueItem[]; history: QueueItem[] }
   | { t: 'members'; members: Member[] }
+  /** 操作した人 (by) への通知。操作した本人の画面では出さない */
+  | { t: 'notice'; by: Member; ev: NoticeEvent }
   /** 文言は各自の画面で、選んでいる言語で組み立てる（client/src/core/i18n/ の err_*） */
   | { t: 'error'; code: ErrorCode; params?: Record<string, string> }
   | { t: 'pong'; clientTime: number; serverTime: number };

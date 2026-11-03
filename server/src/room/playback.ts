@@ -25,6 +25,8 @@ export interface Snapshot {
 export interface Actor {
   id: string;
   name: string;
+  /** アイコンの URL */
+  avatar?: string;
 }
 
 /**

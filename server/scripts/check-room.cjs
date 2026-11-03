@@ -45,8 +45,9 @@ function fakeStorage() {
   return s;
 }
 
-async function makeRoom() {
+async function makeRoom(preset = {}) {
   const storage = fakeStorage();
+  for (const [k, v] of Object.entries(preset)) storage.data.set(k, v);
   const sockets = [];
   const ctx = {
     storage,
@@ -63,9 +64,9 @@ async function makeRoom() {
 }
 
 /** 接続を 1 本受ける（uid があればログイン済みの接続）。受け入れられたら接続、断られたら { status: 503 } */
-async function connect(room, uid) {
+async function connect(room, uid, avatar) {
   const ws = fakeWs();
-  const ok = await room.connect(ws, uid ? { uid, name: '名前' + uid } : { uid: null, name: null });
+  const ok = await room.connect(ws, uid ? { uid, name: '名前' + uid, avatar } : { uid: null, name: null });
   return ok ? ws : { status: 503 };
 }
 const send = (room, ws, msg) => room.webSocketMessage(ws, JSON.stringify(msg));
@@ -343,6 +344,34 @@ test('入口: 通行証がなければ 401、知らない経路は 404、/health
   assert.equal((await route(new Request('http://x/nope'), env)).status, 404);
   assert.equal((await route(new Request('http://x/'), env)).status, 404);
   assert.equal((await route(new Request('http://x/healthz'), env)).status, 200);
+});
+
+test('通知: シーク・動画の切り替え・削除は、操作した人のアイコンつきで全員に届く。再生・一時停止や自動送りは届かない', async () => {
+  const item = (id) => ({ id, videoId: 'sm' + id, title: 'T' + id, addedBy: 'x', length: 600 });
+  const state = { current: item('a'), playing: true, position: 10, updatedAt: now, version: 1, startedAt: now - 60_000, by: null, byName: null };
+  const { room } = await makeRoom({ state, queue: [item('b')], history: [] });
+  const A = await connect(room, 'u1', 'https://cdn.discordapp.com/avatars/1/h.png?size=64');
+  const B = await connect(room, 'u2');
+  await join(room, A, 'client-aaaaaaaa-1');
+  await join(room, B, 'client-bbbbbbbb-1');
+  const notices = (ws) => ws.sent.filter((m) => m.t === 'notice');
+  advance(5000); // 10 秒の位置から 5 秒進んでいるはずなので、15 秒は通常の再生
+  await send(room, A, { t: 'control', itemId: 'a', playing: true, position: 15 });
+  await send(room, A, { t: 'control', itemId: 'a', playing: false, position: 15 });
+  assert.equal(notices(B).length, 0, '再生・一時停止はシークではない');
+  await send(room, A, { t: 'control', itemId: 'a', playing: false, position: 300 });
+  assert.deepEqual(notices(B).map((m) => m.ev), [{ k: 'seek', position: 300 }]);
+  assert.equal(notices(B)[0].by.name, '名前u1');
+  assert.equal(notices(B)[0].by.avatar, 'https://cdn.discordapp.com/avatars/1/h.png?size=64');
+  advance(5000);
+  await send(room, A, { t: 'next', itemId: 'a', auto: true });
+  assert.equal(notices(B).length, 1, '自動送りは知らせない');
+  await send(room, B, { t: 'jump', id: 'a' });
+  const sw = notices(A).at(-1);
+  assert.equal(sw.ev.k, 'switch');
+  assert.equal(sw.by.name, '名前u2');
+  await send(room, B, { t: 'remove', id: 'b' });
+  assert.deepEqual(notices(A).at(-1).ev, { k: 'remove', title: 'Tb' });
 });
 
 (async () => {

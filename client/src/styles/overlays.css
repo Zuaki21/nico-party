@@ -139,3 +139,70 @@
   place-items: center;
   background: #000;
 }
+
+/* ローディング画面の左下のバージョン */
+.loading-version {
+  position: absolute;
+  left: 0.8571rem;
+  bottom: 0.7143rem;
+  color: var(--muted);
+  font-size: 0.8571rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 他の人の操作の通知。動画の左上に重ねる（操作の邪魔にならないよう、クリックは通す） */
+.notices {
+  position: absolute;
+  top: 0.7143rem;
+  left: 0.7143rem;
+  right: 0.7143rem;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4286rem;
+  pointer-events: none;
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 100%;
+  padding: 0.4286rem 0.7143rem 0.4286rem 0.4286rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  font-size: 0.9286rem;
+  animation: notice-in 0.2s ease-out;
+}
+
+.notice:not(:has(img)) {
+  padding-left: 0.8571rem;
+}
+
+.notice img {
+  width: 1.5714rem;
+  height: 1.5714rem;
+  flex: none;
+  border-radius: 50%;
+}
+
+.notice span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.4286rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice {
+    animation: none;
+  }
+}

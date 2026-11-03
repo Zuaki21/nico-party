@@ -1,4 +1,4 @@
-import { VERIFIED_NAME_HEADER, VERIFIED_UID_HEADER, type Env } from './env';
+import { VERIFIED_AVATAR_HEADER, VERIFIED_NAME_HEADER, VERIFIED_UID_HEADER, type Env } from './env';
 import { passSecret, verifyPass } from './pass';
 
 /** 部屋 = Activity の instanceId */
@@ -28,11 +28,13 @@ export async function authorizeRoom(
   const headers = new Headers(request.headers);
   headers.delete(VERIFIED_NAME_HEADER);
   headers.delete(VERIFIED_UID_HEADER);
+  headers.delete(VERIFIED_AVATAR_HEADER);
   const pass = new URL(request.url).searchParams.get('pass');
   const claims = await verifyPass(passSecret(env), 'ws', pass);
   if (claims && claims.r === roomId && claims.n !== undefined) {
     headers.set(VERIFIED_NAME_HEADER, encodeURIComponent(claims.n));
     headers.set(VERIFIED_UID_HEADER, claims.u);
+    if (claims.a) headers.set(VERIFIED_AVATAR_HEADER, claims.a);
   } else if (!(env.ALLOW_ANON_WS === 'true' && isLocalRequest(request))) {
     return new Response('Unauthorized', { status: 401 });
   }
