@@ -1,0 +1,16 @@
+name: 機能の要望
+description: こうなったら便利、という提案
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: 欲しい機能
+      description: どんな場面で、何ができると嬉しいか
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: 今困っていること（任意）
+      description: 今のやり方で不便な点があれば

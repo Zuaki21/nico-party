@@ -2,12 +2,20 @@
 
 ボイスチャンネルのメンバーでニコニコ動画を同時視聴する Discord Activity。
 
+- 使い方・案内: https://nico-party.zuaki.dev
+- 不具合の報告・要望: [Issues](https://github.com/Zuaki21/nico-party/issues)（開発への参加は [CONTRIBUTING.md](CONTRIBUTING.md)）
+
+非公式のアプリです。ニコニコ動画・Discord の運営とは関係ありません。
+
 - 再生・一時停止・シークを全員に同期
 - URL を入れて再生リストに追加。視聴済み・再生中も残り、ドラッグで並べ替えできる
 - リピート（再生リスト全体 / 1曲）とシャッフル。部屋の全員で共通
 - キーワード検索（ニコニコのスナップショット検索 API。1 日 1 回更新なので投稿直後の動画は出ない）
+- 再生リストと再生中の動画に、追加した人の Discord のアイコンを表示
+- 他の人の操作（シーク・動画の切り替え・追加・削除）を、動画の上に通知
 - PiP 表示中は動画だけを表示
-- 設定画面（テーマ、UI サイズ、日本語 / 英語、Discord に視聴中の動画を表示するか）。設定は各自の画面だけに効く
+- 設定画面（テーマ、UI サイズ、日本語 / 英語、ステータスに視聴中の動画を表示するか、操作の通知）。設定は各自の画面だけに効く
+- 不具合の報告（設定画面から。直近の動作の記録を送り、報告 ID が出る）
 
 ## 構成
 
@@ -16,6 +24,7 @@ client/   Vite + TypeScript。Activity の画面と同期処理。Cloudflare Wor
 server/   Node（OCI の VM で Docker + Coolify。Cloudflare Tunnel 経由で公開）
             /api/token      Discord OAuth のコードをトークンに交換
             /api/search     キーワード検索（スナップショット検索 API を 10 分キャッシュ）
+            /api/log        不具合の報告（画面の動作の記録）を受け取り、報告 ID を返す
             /ws/:instanceId 部屋（= Activity のインスタンス）ごとの WebSocket。部屋の状態はメモリに持ち、停止するときだけファイルに書き出す
             /nico/*         ニコニコ埋め込みプレイヤーの中継（URL を Discord プロキシ経由に書き換える）
             /healthz        生存確認
@@ -62,7 +71,7 @@ cloudflared tunnel --protocol http2 --url http://127.0.0.1:5173
 
 - cloudflared は QUIC がタイムアウトする環境があるので `--protocol http2` を付けている
 - トンネルの URL を URL Mapping の `/` と `/srv` に登録して、Discord から Activity を起動する（開発中の Vite は `/srv/...` を 8787 に中継する）
-- 開発中は Activity 内のログが `client/dev.log` に書き出される
+- 開発中は Activity 内のログが `client/dev.log` に書き出される（本番でも画面の中に直近の記録を貯めていて、不具合の報告で送られる）
 - 通常のブラウザで `http://127.0.0.1:5173` を開くと、全タブ共通の部屋で同期だけを確認できる
 
 ## 確認用のコマンド
@@ -89,15 +98,14 @@ cd server && npm run check                   # 型・再生の状態遷移・中
 
 ## デプロイ
 
-反映のたびに `client/package.json` の `version` を進める。設定画面の左下に「ver x.x.x」と出るので、反映できたかはそれで確認できる。
+反映のたびに `client/package.json` の `version` を進める。設定画面と読み込み画面の左下に「ver x.x.x」と出るので、反映できたかはそれで確認できる。
 
-- **フロント（Cloudflare）**: `cd client && npm run deploy`（ビルドして `wrangler deploy`）
-- **サーバー（OCI）**: main に push してから、Coolify のアプリ（`nico-party-server`）をデプロイする。Coolify の画面の Deploy ボタンか、API（`POST /api/v1/deploy?uuid=<アプリの UUID>`）で起動する。
-  `deploy/oci/docker-compose.yml` をビルドして、入れ替える。GitHub からの通知（Webhook）は届かない（Coolify は SSH トンネルでしか見えない）ので、push だけでは反映されない。
-  部屋は、停止するときに `/data/rooms.json` に書き出され、起動後に部屋へ最初に接続が来たときに読み込まれる。
-  Coolify への接続は SSH トンネル（`ssh -i <鍵> -N -L 8000:localhost:8000 ubuntu@<IP>`）経由で、画面は `http://localhost:8000`
+- **フロント**: `cd client && npm run deploy`（ビルドして `wrangler deploy`。Cloudflare Workers の静的ファイル配信）
+- **サーバー**: `deploy/oci/docker-compose.yml`（サーバー本体 + cloudflared）を Docker で動かす。今の本番は OCI の VM 上の Coolify で、main に push してから Coolify でデプロイする
+  （Webhook は使っていないので、push だけでは反映されない）。
+  部屋は、停止するときに `/data/rooms.json` に書き出され、起動後に部屋へ最初に接続が来たときに読み込まれる
 
-サーバーの秘密は、Coolify の環境変数に入れる（値をリポジトリに入れない）。
+サーバーの秘密は環境変数で渡す（値をリポジトリに入れない）。
 
 | 名前 | 内容 |
 |---|---|
@@ -105,10 +113,16 @@ cd server && npm run check                   # 型・再生の状態遷移・中
 | `DISCORD_CLIENT_SECRET` | OAuth2 のクライアントシークレット |
 | `PASS_SECRET` | 通行証の署名の鍵。長いランダムな文字列。変えると発行済みの通行証が全部無効になる |
 | `DISCORD_BOT_TOKEN` | 任意。部屋の参加者の確認に使う（Developer Portal の Bot のページで発行） |
-| `TUNNEL_TOKEN` | Cloudflare Tunnel のトークン（公開ホスト名 `nico-party-api.zuaki.dev` → `http://app:8787`） |
+| `TUNNEL_TOKEN` | Cloudflare Tunnel のトークン（公開ホスト名 → `http://app:8787`） |
 
 未登録のままだと、ログイン・検索・部屋がすべて 500 になる。
-OCI へのデプロイの手順や、サーバーに入るときのルールは、`OCI_InstanceGet` プロジェクトの `docs/DEPLOY_GUIDE.md` に従う。
+
+### 不具合の報告とログ
+
+- 画面の「不具合を報告」で送られた記録は、サーバーの `/data/client-logs.jsonl` に 1 行 1 件で追記される（8MB を超えたら `.1` に回す）。
+  報告 ID で探す: `docker exec <サーバーのコンテナ> grep <報告ID> /data/client-logs.jsonl`
+- 記録には、通行証・動画のタイトル・検索語は入れない（通行証は送る前に伏せる）。Discord のユーザー ID と表示名は入る
+- サーバーの動き（入室・退出・追加の失敗・通知）は、1 行 1 件の JSON で標準出力に出る
 
 ## セキュリティ上の前提
 
@@ -121,7 +135,12 @@ OCI へのデプロイの手順や、サーバーに入るときのルールは�
 - チャンネルの設定で外部での再生が禁止されている動画（埋め込みページが `externally_unwatchable` を返すもの）は再生できない
 - 埋め込みプレイヤーの postMessage API は非公式なので、ニコニコ側の仕様変更で動かなくなる可能性がある
 
+## ライセンス
+
+[MIT License](LICENSE)。
+
 ## クレジット
 
 ニコニコ埋め込みプレイヤーの中継は [kikoune](https://github.com/sevenc-nanashi/kikoune)（MIT License）の方式を移植したもの。
+再生数・コメント数のアイコンは [Lucide](https://lucide.dev)（ISC License）。
 ライセンス本文は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照。
