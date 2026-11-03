@@ -7,7 +7,9 @@
 services:
   app:
     build:
-      context: ../..
+      # リポジトリの一番上を指す。Coolify は、リポジトリの一番上を project-directory にして実行する
+      # （手元で試すときも、リポジトリの一番上から `docker compose -f deploy/oci/docker-compose.yml --project-directory . up` で実行する）
+      context: .
       dockerfile: server/Dockerfile
     restart: unless-stopped
     init: true
