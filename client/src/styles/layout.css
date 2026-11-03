@@ -84,9 +84,10 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4286rem;
-  padding: 0 0.7143rem 0 0;
+  padding: 0.1786rem 0.7857rem 0.1786rem 0.1786rem;
   border-radius: 999px;
-  background: var(--panel);
+  background: var(--button-secondary);
+  color: var(--button-secondary-text);
 }
 
 .adder-tag img,
