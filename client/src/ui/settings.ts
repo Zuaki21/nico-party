@@ -128,7 +128,8 @@ export function setupSettings(h: Pick<UiHandlers, 'openLink' | 'setPresence' | '
   const reportSend = $<HTMLButtonElement>('report-send');
   const reportNote = $<HTMLTextAreaElement>('report-note');
   const reportResult = $('report-result');
-  const reportId = $('report-id');
+  const reportForm = $('report-form');
+  const reportDone = $('report-done');
   const closeReport = () => {
     report.hidden = true;
     $('open-report').focus({ preventScroll: true });
@@ -136,12 +137,14 @@ export function setupSettings(h: Pick<UiHandlers, 'openLink' | 'setPresence' | '
   $('open-report').addEventListener('click', () => {
     setOpen(false);
     reportResult.textContent = '';
-    reportId.hidden = true;
+    reportForm.hidden = false;
+    reportDone.hidden = true;
     reportSend.disabled = false;
     report.hidden = false;
     reportNote.focus({ preventScroll: true });
   });
   $('report-close').addEventListener('click', closeReport);
+  $('report-finish').addEventListener('click', closeReport);
   report.addEventListener('pointerdown', (e) => e.target === report && closeReport());
   report.addEventListener('keydown', (e) => e.key === 'Escape' && closeReport());
   reportSend.addEventListener('click', () => {
@@ -149,10 +152,11 @@ export function setupSettings(h: Pick<UiHandlers, 'openLink' | 'setPresence' | '
     reportResult.textContent = t('reportSending');
     h.sendLog(reportNote.value.trim()).then(
       (id) => {
-        reportResult.textContent = t('reportDone');
         $('report-id-value').textContent = id;
-        reportId.hidden = false;
         reportNote.value = '';
+        reportForm.hidden = true;
+        reportDone.hidden = false;
+        $('report-finish').focus({ preventScroll: true });
       },
       () => {
         reportResult.textContent = t('reportFailed');
@@ -234,6 +238,7 @@ export function settingsHtml(): string {
         <h2 id="report-title" data-i18n="report"></h2>
         <button type="button" class="icon" id="report-close" data-i18n-title="close" data-i18n-label="close"><span aria-hidden="true">×</span></button>
       </div>
+      <div class="modal-form" id="report-form">
       <p class="setting-desc modal-desc" data-i18n="reportDesc"></p>
       <label class="setting-label" for="report-note" data-i18n="reportNote"></label>
       <textarea id="report-note" rows="5" maxlength="1000" data-i18n-placeholder="reportNotePlaceholder"></textarea>
@@ -241,9 +246,15 @@ export function settingsHtml(): string {
         <span class="setting-desc" id="report-result" role="status"></span>
         <button type="button" id="report-send" data-i18n="reportSend"></button>
       </div>
-      <div class="report-id" id="report-id" hidden>
+      </div>
+      <!-- 送信できたら、入力欄と送信ボタンに代えて、お礼と報告 ID だけを出す -->
+      <div class="modal-form" id="report-done" hidden>
+        <p class="report-thanks" role="status" data-i18n="reportDone"></p>
         <span class="setting-desc" data-i18n="reportIdLabel"></span>
-        <code id="report-id-value"></code>
+        <code class="report-id" id="report-id-value"></code>
+        <div class="modal-actions end">
+          <button type="button" id="report-finish" data-i18n="close"></button>
+        </div>
       </div>
     </div>
   </div>

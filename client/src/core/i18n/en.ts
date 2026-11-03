@@ -103,7 +103,7 @@ export const en: Record<Key, string> = {
   reportSend: 'Send',
   reportIdLabel: 'If you contact the developer, including this report ID helps them investigate (not required)',
   reportSending: 'Sending…',
-  reportDone: 'Sent. Thank you for your help',
+  reportDone: 'Sent. Thank you.',
   reportFailed: 'Could not send',
   addedByIcon: 'Added by {name}',
   settingsNote: 'These settings only apply to you',

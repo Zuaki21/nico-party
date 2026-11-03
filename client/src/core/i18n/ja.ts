@@ -101,7 +101,7 @@ export const ja = {
   reportSend: '送信',
   reportIdLabel: '開発者に連絡するときは、この報告IDを添えると調べやすくなります（必須ではありません）',
   reportSending: '送信中…',
-  reportDone: '送信しました。ご協力ありがとうございます',
+  reportDone: '送信しました。ありがとうございます。',
   reportFailed: '送信できませんでした',
   addedByIcon: '追加した人: {name}',
   settingsNote: 'これらの設定はあなたの画面だけに適用されます',

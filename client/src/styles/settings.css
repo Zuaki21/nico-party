@@ -179,14 +179,27 @@ input.switch:checked::after {
   gap: 0.7143rem;
 }
 
-.report-id {
+.modal-form {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4286rem 0.7143rem;
+  flex-direction: column;
+  gap: 0.5714rem;
 }
 
-.report-id code {
+.modal-form[hidden] {
+  display: none;
+}
+
+.modal-actions.end {
+  justify-content: flex-end;
+}
+
+.report-thanks {
+  margin: 0;
+  font-weight: 600;
+}
+
+.report-id {
+  align-self: flex-start;
   padding: 0.2857rem 0.7143rem;
   border-radius: 0.4286rem;
   background: var(--panel);
