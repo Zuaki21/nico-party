@@ -92,7 +92,10 @@ cd server && npm run check                   # 型・再生の状態遷移・中
 反映のたびに `client/package.json` の `version` を進める。設定画面の左下に「ver x.x.x」と出るので、反映できたかはそれで確認できる。
 
 - **フロント（Cloudflare）**: `cd client && npm run deploy`（ビルドして `wrangler deploy`）
-- **サーバー（OCI）**: main に push すると、Coolify が `deploy/oci/docker-compose.yml` をビルドして入れ替える。部屋は、停止するときに `/data/rooms.json` に書き出され、起動後に部屋へ最初に接続が来たときに読み込まれる
+- **サーバー（OCI）**: main に push してから、Coolify のアプリ（`nico-party-server`）をデプロイする。Coolify の画面の Deploy ボタンか、API（`POST /api/v1/deploy?uuid=<アプリの UUID>`）で起動する。
+  `deploy/oci/docker-compose.yml` をビルドして、入れ替える。GitHub からの通知（Webhook）は届かない（Coolify は SSH トンネルでしか見えない）ので、push だけでは反映されない。
+  部屋は、停止するときに `/data/rooms.json` に書き出され、起動後に部屋へ最初に接続が来たときに読み込まれる。
+  Coolify への接続は SSH トンネル（`ssh -i <鍵> -N -L 8000:localhost:8000 ubuntu@<IP>`）経由で、画面は `http://localhost:8000`
 
 サーバーの秘密は、Coolify の環境変数に入れる（値をリポジトリに入れない）。
 
