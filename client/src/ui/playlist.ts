@@ -172,10 +172,10 @@ function itemEl(q: QueueItem, kind: ItemKind) {
   const body = bodyEl(q.title, q.videoId, [
     q.author,
     ...countsMeta(q.views, q.comments),
-    // 追加した人は、アイコンで出す（アイコンが無い項目は名前の文字）
-    adderEl(q.addedBy, q.addedByAvatar),
   ]);
 
+  // 追加した人のアイコンは、サムネイルの左下に重ねる
+  thumb.append(adderEl(q.addedBy, q.addedByAvatar, true));
   li.append(handle, thumb, body);
   // 「ここから再生」と「削除」。マウスを乗せたときだけ、動画情報の右端に重ねて出す
   // （再生中の動画は、すでに再生しているので「ここから再生」は出さない。削除すると次の動画へ進む）

@@ -79,17 +79,23 @@ export function bodyEl(titleText: string, videoId: string, meta: (string | Node 
 }
 
 /** 追加した人のアイコン（読み込めなかったら名前の頭文字）。アイコンが無い古い項目は、名前の文字で出す */
-export function adderEl(name: string, avatar: string | undefined) {
+export function adderEl(name: string, avatar: string | undefined, iconOnly = false) {
   const el = document.createElement('span');
   el.className = 'adder';
   const label = t('addedByIcon', { name });
-  if (!avatar) {
+  if (!avatar && !iconOnly) {
     el.textContent = t('addedBy', { name });
     return el;
   }
   el.title = label;
   el.setAttribute('role', 'img');
   el.setAttribute('aria-label', label);
+  if (!avatar) {
+    // アイコンが無い項目は、サムネイルの上でも誰か分かるよう、名前の頭文字の丸にする
+    el.classList.add('fallback');
+    el.textContent = Array.from(name)[0] ?? '?';
+    return el;
+  }
   const img = document.createElement('img');
   img.src = avatar;
   img.alt = '';
