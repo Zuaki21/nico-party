@@ -12,7 +12,7 @@ export async function searchNico(pass: string | undefined, q: string, sort: Sear
 }
 
 /** 不具合調査用のログをサーバーに送る。受け付けられた報告 ID を返す */
-export async function sendLog(pass: string | undefined, body: { text: string; version: string; room?: string; reason: string }): Promise<string> {
+export async function sendLog(pass: string | undefined, body: { note: string; text: string; version: string; room?: string; reason: string }): Promise<string> {
   if (!pass) throw new Error('not logged in');
   const res = await fetch(backend('/api/log'), {
     method: 'POST',

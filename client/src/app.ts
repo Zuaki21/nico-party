@@ -52,7 +52,7 @@ const ui = mountUi(document.querySelector<HTMLElement>('#app')!, {
   openLink: (url) => openExternal(session.sdk, url),
   setPresence: (enabled) => session.presence?.setEnabled(enabled),
   search: (q, sort, offset) => searchNico(session.nicoPass, q, sort, offset),
-  sendLog: () => sendLog(session.nicoPass, { text: collectLog(), version: APP_VERSION, room: session.sdk?.instanceId, reason: 'manual' }),
+  sendLog: (note) => sendLog(session.nicoPass, { note, text: collectLog(), version: APP_VERSION, room: session.sdk?.instanceId, reason: 'manual' }),
 });
 
 const player = new NicoPlayer(ui.player, (videoId, playerId) => nicoEmbedUrl(videoId, playerId, session.nicoPass));

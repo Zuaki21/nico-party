@@ -123,17 +123,42 @@ export function setupSettings(h: Pick<UiHandlers, 'openLink' | 'setPresence' | '
   $<HTMLInputElement>('notice-toggle').addEventListener('change', (e) => {
     save(NOTICE_KEY, (e.target as HTMLInputElement).checked ? '' : 'off');
   });
-  const reportButton = $<HTMLButtonElement>('report-send');
+  // 不具合の報告は、別のウィンドウ（モーダル）で内容を書いて送る。送ると報告 ID が出る（選択してコピーできる）
+  const report = $('report');
+  const reportSend = $<HTMLButtonElement>('report-send');
+  const reportNote = $<HTMLTextAreaElement>('report-note');
   const reportResult = $('report-result');
-  reportButton.addEventListener('click', () => {
-    reportButton.disabled = true;
+  const reportId = $('report-id');
+  const closeReport = () => {
+    report.hidden = true;
+    $('open-report').focus({ preventScroll: true });
+  };
+  $('open-report').addEventListener('click', () => {
+    setOpen(false);
+    reportResult.textContent = '';
+    reportId.hidden = true;
+    reportSend.disabled = false;
+    report.hidden = false;
+    reportNote.focus({ preventScroll: true });
+  });
+  $('report-close').addEventListener('click', closeReport);
+  report.addEventListener('pointerdown', (e) => e.target === report && closeReport());
+  report.addEventListener('keydown', (e) => e.key === 'Escape' && closeReport());
+  reportSend.addEventListener('click', () => {
+    reportSend.disabled = true;
     reportResult.textContent = t('reportSending');
-    h.sendLog()
-      .then(
-        (id) => (reportResult.textContent = t('reportDone', { id })),
-        () => (reportResult.textContent = t('reportFailed')),
-      )
-      .finally(() => (reportButton.disabled = false));
+    h.sendLog(reportNote.value.trim()).then(
+      (id) => {
+        reportResult.textContent = t('reportDone');
+        $('report-id-value').textContent = id;
+        reportId.hidden = false;
+        reportNote.value = '';
+      },
+      () => {
+        reportResult.textContent = t('reportFailed');
+        reportSend.disabled = false;
+      },
+    );
   });
   dialog.querySelector('.settings-links')!.addEventListener('click', (e) => {
     const url = (e.target as HTMLElement).closest<HTMLElement>('[data-url]')?.dataset.url;
@@ -195,16 +220,31 @@ export function settingsHtml(): string {
       <input type="checkbox" role="switch" class="switch" id="notice-toggle" aria-labelledby="notice-label" />
     </div>
     <div class="setting-row">
-      <span class="setting-text">
-        <span class="setting-label" data-i18n="report"></span>
-        <span class="setting-desc" data-i18n="reportDesc"></span>
-        <span class="setting-desc" id="report-result" role="status"></span>
-      </span>
-      <button type="button" class="secondary" id="report-send" data-i18n="reportSend"></button>
+      <span class="setting-label" data-i18n="report"></span>
+      <button type="button" class="secondary" id="open-report" data-i18n="reportButton"></button>
     </div>
     <div class="settings-links">
       <span class="version">ver ${APP_VERSION}</span>
       <button type="button" class="link" data-url="${SITE_URL}/" data-i18n="about"></button>
+    </div>
+  </div>
+  <div class="modal" id="report" hidden>
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="report-title">
+      <div class="settings-head">
+        <h2 id="report-title" data-i18n="report"></h2>
+        <button type="button" class="icon" id="report-close" data-i18n-title="close" data-i18n-label="close"><span aria-hidden="true">×</span></button>
+      </div>
+      <p class="setting-desc modal-desc" data-i18n="reportDesc"></p>
+      <label class="setting-label" for="report-note" data-i18n="reportNote"></label>
+      <textarea id="report-note" rows="5" maxlength="1000" data-i18n-placeholder="reportNotePlaceholder"></textarea>
+      <div class="modal-actions">
+        <span class="setting-desc" id="report-result" role="status"></span>
+        <button type="button" id="report-send" data-i18n="reportSend"></button>
+      </div>
+      <div class="report-id" id="report-id" hidden>
+        <span class="setting-desc" data-i18n="reportIdLabel"></span>
+        <code id="report-id-value"></code>
+      </div>
     </div>
   </div>
   `;

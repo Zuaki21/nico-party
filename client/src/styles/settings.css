@@ -121,3 +121,70 @@ input.switch:checked::after {
   font-size: 0.8571rem;
   font-variant-numeric: tabular-nums;
 }
+
+/* 不具合の報告のウィンドウ */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 1.1429rem;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7143rem;
+  width: min(32rem, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 1rem 1.1429rem;
+  border-radius: 0.7143rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  box-shadow: 0 0.5714rem 1.7143rem rgba(0, 0, 0, 0.4);
+}
+
+.modal-desc {
+  margin: 0;
+  white-space: pre-line;
+}
+
+.modal-box textarea {
+  resize: vertical;
+  min-height: 6rem;
+  padding: 0.5714rem 0.7143rem;
+  border-radius: 0.4286rem;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+
+.modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7143rem;
+}
+
+.report-id {
+  display: flex;
+  align-items: center;
+  gap: 0.7143rem;
+}
+
+.report-id code {
+  padding: 0.2857rem 0.7143rem;
+  border-radius: 0.4286rem;
+  background: var(--panel);
+  font-size: 1.1429rem;
+  letter-spacing: 0.1em;
+  user-select: all;
+}

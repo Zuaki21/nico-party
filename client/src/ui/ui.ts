@@ -33,7 +33,7 @@ export interface UiHandlers {
   /** Discord のアクティビティに視聴中の動画を表示するかの切り替え */
   setPresence: (enabled: boolean) => void;
   /** 不具合調査用のログをサーバーに送る。報告 ID を返す */
-  sendLog: () => Promise<string>;
+  sendLog: (note: string) => Promise<string>;
 }
 
 /** スマホなどタッチ操作の端末か */

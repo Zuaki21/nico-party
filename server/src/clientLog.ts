@@ -40,7 +40,7 @@ export async function receiveClientLog(request: Request, env: Env): Promise<Resp
   if (!withinRateLimit(`clientlog:${claims.u}`, LOG_LIMIT_PER_MIN, 60_000)) {
     return new Response('Too many requests', { status: 429 });
   }
-  let body: { text?: unknown; version?: unknown; room?: unknown; reason?: unknown };
+  let body: { text?: unknown; version?: unknown; room?: unknown; reason?: unknown; note?: unknown };
   try {
     body = JSON.parse(await readLimited(request, LOG_BODY_MAX));
   } catch (e) {
@@ -58,6 +58,7 @@ export async function receiveClientLog(request: Request, env: Env): Promise<Resp
     version: short(body.version, 32),
     room: short(body.room, 128),
     reason: short(body.reason, 32),
+    note: short(body.note, 1000),
     text: body.text.slice(0, LOG_BODY_MAX),
   };
   save(JSON.stringify(entry));
