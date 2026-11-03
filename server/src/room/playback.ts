@@ -5,14 +5,14 @@ import type { Member, PlaybackState, QueueItem, RepeatMode } from '../../../shar
  * 再生リスト全体（視聴済み + 再生中 + これから再生）の上限。
  * 超える分は動画を追加するときに古い視聴済みから消す（全曲リピートや並べ替えでは消さない）
  */
-export const LIST_LIMIT = 150;
+const LIST_LIMIT = 150;
 /**
  * 動画を切り替えたとき、再生開始をこれだけ先の時刻にする。
  * 各自のプレイヤーの読み込みに数秒かかるので、すぐ開始にすると冒頭が飛ばされてしまう
  */
 export const START_DELAY_MS = 3000;
 /** 動画の開始からこの時間は、自動送り（動画の終了）を受け付けない */
-export const AUTO_NEXT_GUARD_MS = 3000;
+const AUTO_NEXT_GUARD_MS = 3000;
 
 /** 部屋の再生状態・これから再生する動画・視聴済みの動画 */
 export interface Snapshot {

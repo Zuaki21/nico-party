@@ -43,7 +43,7 @@ function hook(iframe: HTMLIFrameElement, h: PlayerDocHandlers) {
     if (e.type !== 'click') return;
     const tag = href.match(/\/tag\/([^/?#]+)/)?.[1];
     if (tag) {
-      devlog(`tag click: ${tag}`);
+      devlog('tag click');
       let word: string;
       try {
         word = decodeURIComponent(tag);
@@ -54,7 +54,7 @@ function hook(iframe: HTMLIFrameElement, h: PlayerDocHandlers) {
       return;
     }
     const url = realUrl(href, baseUri, location.origin);
-    devlog(`link click: ${href} -> ${url ?? '(ignored)'}`);
+    devlog(`link click -> ${url ? new URL(url).hostname : '(ignored)'}`);
     if (url) h.onLink(url);
   };
   allowSelectingDescription(doc);

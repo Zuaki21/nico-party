@@ -96,7 +96,7 @@ const ROUTES: Route[] = [
       url: `https://stella.nicovideo.jp/v1/watch/${m[1]}`,
       init: {
         method: 'POST',
-        headers: { ...pick(c.req, ['cookie', 'x-frontend-id']), ...NICO_HEADERS, 'content-type': 'application/json' },
+        headers: { ...pick(c.req, ['x-frontend-id']), ...NICO_HEADERS, 'content-type': 'application/json' },
         body: await readLimited(c.req, BODY_MAX),
       },
       type: 'application/json',

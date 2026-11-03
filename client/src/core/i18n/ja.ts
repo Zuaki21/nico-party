@@ -94,7 +94,7 @@ export const ja = {
   noticesDesc: 'シーク・動画の切り替え・追加・削除を、画面の隅に表示します',
   report: '不具合を報告',
   reportButton: '報告',
-  reportDesc: '動作の記録を開発者に送ります\n（動画のタイトルや個人情報は送りません）',
+  reportDesc: '動作の記録と Discord のユーザー ID を開発者に送ります\n（動画のタイトルや表示名は送りません）',
   reportNote: '不具合の内容（任意）',
   reportNotePlaceholder: 'どのような操作をして、どのような状況になったか、\nわかる範囲で記入してください。\n例: 動画を追加したら、再生が始まらず読み込み中のままになった',
   reportSend: '送信',

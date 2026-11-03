@@ -41,6 +41,7 @@ server/       Node + ws。本番は Docker で動かし、Cloudflare Tunnel で�
                 /healthz        生存確認
 shared/       クライアントとサーバーで共有するメッセージ定義
 deploy/oci/   サーバーを動かす docker-compose（サーバー本体 + cloudflared）
+scripts/      確認用のスクリプトの共通部分（TypeScript を変換して読み込む）
 ```
 
 ### 動く仕組み

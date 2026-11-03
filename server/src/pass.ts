@@ -31,7 +31,7 @@ export interface PassClaims {
 }
 
 /** 通行証に入れてよいアイコンの URL（Discord の CDN のものだけ） */
-export const AVATAR_PATTERN = /^https:\/\/cdn\.discordapp\.com\/[\w/.-]{1,160}(\?size=\d{1,4})?$/;
+const AVATAR_PATTERN = /^https:\/\/cdn\.discordapp\.com\/[\w/.-]{1,160}(\?size=\d{1,4})?$/;
 
 /** 通行証の有効期間。Activity を開きっぱなしの間は同じものを使い続けるので、長めにしておく */
 const PASS_TTL_MS = 24 * 60 * 60 * 1000;

@@ -55,6 +55,9 @@ const server = createServer(async (req, res) => {
 });
 
 server.on('upgrade', async (req, socket, head) => {
+  // upgrade のソケットには、Node がエラーの受け手を付けていない。認可を待つ間などに相手が切ると、
+  // 受け手のないエラーでプロセスごと落ちるので、ここで受けて閉じる
+  socket.on('error', () => socket.destroy());
   const reject = (status: number, text: string) => {
     socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
   };

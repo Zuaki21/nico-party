@@ -85,7 +85,7 @@ export type ErrorCode =
   /** ニコニコに問い合わせられなかった（動画の有無は分からない） */
   | 'upstream_error';
 
-/** 部屋の誰かの操作の通知。文言は各自の画面で組み立てる（client/src/core/i18n/ の notice_*） */
+/** 部屋の誰かの操作の通知。文言は各自の画面で組み立てる（client/src/core/i18n/ の noticeSeek など） */
 export type NoticeEvent =
   | { k: 'seek'; position: number }
   | { k: 'switch'; title: string }

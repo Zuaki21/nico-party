@@ -4,11 +4,14 @@
  */
 
 import { SEARCH_MAX_OFFSET, SEARCH_PAGE_SIZE, type SearchResult, type SearchSort } from '../../../shared/search';
+import { readLimited } from '../body';
 
 /** User-Agent が無いとニコニコの CDN に 403 で弾かれるので、サーバーから問い合わせるときに付ける */
 export const DEFAULT_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
 
+/** 動画情報（getthumbinfo の XML。ふつうは数 KB）を読む上限 */
+const INFO_READ_LIMIT = 256 * 1024;
 /** 埋め込みページを読む上限。エラーコードはこれより手前にある */
 const EMBED_READ_LIMIT = 80_000;
 
@@ -52,8 +55,9 @@ export async function fetchVideoInfo(videoId: string): Promise<VideoInfo | null>
     xml = await fetch(`https://ext.nicovideo.jp/api/getthumbinfo/${videoId}`, {
       headers: { 'user-agent': DEFAULT_UA },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    }).then((r) => r.text());
+    }).then((r) => readLimited(r, INFO_READ_LIMIT));
   } catch {
+    // 通信の失敗・タイムアウト・想定外に大きな応答
     throw new UpstreamError('getthumbinfo failed');
   }
   if (xml.includes('status="fail"')) return null;

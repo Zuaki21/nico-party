@@ -63,6 +63,27 @@ test('接続: 部屋の準備を待っている間に届いた join も取りこ
   await p;
   await tick();
   assert.deepEqual(await host.stats(), { rooms: 1, connections: 1 });
+
+  // 新しい部屋への最初の接続が、部屋の準備中に切れたら、その部屋は残さない
+  const first = fakeRaw();
+  const q = host.join('r-new', first, who('u3'));
+  first.close(1000, 'bye');
+  assert.equal(await q, true);
+  await tick();
+  assert.deepEqual(await host.stats(), { rooms: 1, connections: 1 });
+});
+
+test('部屋: 作れなかった部屋は残さず、次の接続で作り直す。停止のときの保存も止めない', async () => {
+  let fail = true;
+  const host = new RoomHost(() => {
+    if (fail) throw new Error('disk');
+    return undefined;
+  });
+  await assert.rejects(() => host.join('r1', fakeRaw(), who('u1')), /disk/);
+  assert.deepEqual(await host.exportAll(), {});
+  fail = false;
+  assert.equal(await host.join('r1', fakeRaw(), who('u1')), true);
+  assert.deepEqual(await host.stats(), { rooms: 1, connections: 1 });
 });
 
 test('部屋: 部屋の状態は、ほかの接続にも配信される（同じ ID の部屋は共有、違う部屋は別）', async () => {
@@ -130,20 +151,29 @@ test('停止: 保存済みに無い部屋は空で始まる。壊れたファイ
   }
 });
 
-test('停止: 書き出すものが無ければ、前のファイルを残さない', async () => {
+test('停止: まだ取り出されていない前の部屋は残し、1 日たったものは捨てる。書くものが無くなればファイルを消す', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rooms-'));
   const file = path.join(dir, 'rooms.json');
+  const realNow = Date.now;
   try {
-    fs.writeFileSync(file, '{"r1":{"state":{}}}');
+    let now = 1_000_000_000;
+    Date.now = () => now;
+    // 時刻の無い古い形式の部屋も、今書いたものとして残す
+    fs.writeFileSync(file, '{"old":{"state":{"version":1}}}');
+    saveRooms(file, { mine: { state: { version: 2 } } });
+    assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(file, 'utf8'))).sort(), ['mine', 'old']);
+    // 取り出すときは、書き出した時刻を外す
+    assert.deepEqual(savedRooms(file)('mine'), { state: { version: 2 } });
+    now += 24 * 60 * 60 * 1000;
     saveRooms(file, {});
     assert.equal(fs.existsSync(file), false);
   } finally {
+    Date.now = realNow;
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
 test('退出: 全員が抜けて待ち時間が過ぎたら、部屋は破棄される（アラーム）', async () => {
-  const realNow = Date.now;
   const host = new RoomHost();
   const raw = fakeRaw();
   await host.join('r1', raw, who('u1'));
@@ -157,7 +187,6 @@ test('退出: 全員が抜けて待ち時間が過ぎたら、部屋は破棄さ
     await tick(100);
   } finally {
     global.setTimeout = realSetTimeout;
-    Date.now = realNow;
   }
   assert.deepEqual(await host.stats(), { rooms: 0, connections: 0 });
 });

@@ -109,7 +109,7 @@ function onMessage(msg: ServerMsg) {
       engine.resendLoadReport();
       return;
     case 'state':
-      devlog(`state v${msg.state.version} ${msg.state.current?.videoId ?? '-'} ${msg.state.playing ? 'playing' : 'paused'} pos=${msg.state.position.toFixed(1)} by=${msg.state.byName ?? '-'}`);
+      devlog(`state v${msg.state.version} ${msg.state.current?.videoId ?? '-'} ${msg.state.playing ? 'playing' : 'paused'} pos=${msg.state.position.toFixed(1)} by=${msg.state.by ?? '-'}`);
       applyState(msg.state);
       return;
     case 'queue':
@@ -120,7 +120,7 @@ function onMessage(msg: ServerMsg) {
       applyMembers(msg.members);
       return;
     case 'notice':
-      devlog(`notice ${msg.ev.k} by=${msg.by.name}`);
+      devlog(`notice ${msg.ev.k} by=${msg.by.id}`);
       // 自分の操作は、自分の画面で見えているので知らせない
       if (msg.by.id !== session.conn?.memberId) ui.showNotice(msg.by, msg.ev);
       return;
@@ -180,7 +180,7 @@ async function main() {
     failLoading(t('loginRequired'));
     return;
   }
-  devlog(`ready as ${name} (instance ${discord.instanceId})`);
+  devlog(`ready (instance ${discord.instanceId})`);
   connect(discord.instanceId, name, pass);
   scheduleRefresh(discord);
 }

@@ -6,15 +6,14 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { tempDir, transpileTo } = require('../transpile.cjs');
+const { loadTs } = require('../loadTs.cjs');
 
-const src = path.resolve(__dirname, '../../src/player/sync');
-const out = tempDir('sync-check-');
-for (const f of fs.readdirSync(src).filter((f) => f.endsWith('.ts'))) {
-  transpileTo(path.join(src, f), path.join(out, f.replace(/\.ts$/, '.js')));
-}
+// 同期エンジンのフォルダの全ファイルを変換して、別のプロセス（run.cjs）で読み込む
+const SYNC_DIR = 'client/src/player/sync';
+const load = loadTs(fs.readdirSync(path.resolve(__dirname, '../../src/player/sync')).filter((f) => f.endsWith('.ts')).map((f) => `${SYNC_DIR}/${f}`));
+const engine = path.join(load.dir, SYNC_DIR, 'engine.js');
 const actual = JSON.parse(
-  execFileSync(process.execPath, [path.join(__dirname, 'run.cjs'), path.join(out, 'engine.js')], { encoding: 'utf8', maxBuffer: 1 << 26 }),
+  execFileSync(process.execPath, [path.join(__dirname, 'run.cjs'), engine], { encoding: 'utf8', maxBuffer: 1 << 26 }),
 );
 
 // 記録との比較とは別に、どの場面も、終わったあとに元の状態へ戻っていること（ミュートが元に戻る・覆いが外れる・
@@ -29,6 +28,11 @@ for (const [name, lines] of Object.entries(actual)) {
 }
 const expectedPath = path.join(__dirname, 'expected.json');
 if (process.argv.includes('--update')) {
+  // 崩れた挙動を、そのまま記録にしない
+  if (broken > 0) {
+    console.log('終了後の状態が崩れている場面があるので、記録は作り直しません');
+    process.exit(1);
+  }
   fs.writeFileSync(expectedPath, JSON.stringify(actual, null, 1) + '\n');
   console.log('記録を作り直しました:', Object.keys(actual).length, '場面');
   process.exit(0);

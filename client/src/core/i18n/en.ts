@@ -96,7 +96,7 @@ export const en: Record<Key, string> = {
   noticesDesc: 'Shows seeks, video switches, additions and removals in the corner',
   report: 'Report a problem',
   reportButton: 'Report',
-  reportDesc: 'Sends a record of what happened to the developer\n(no video titles or personal info are sent)',
+  reportDesc: 'Sends a record of what happened and your Discord user ID to the developer\n(no video titles or display names)',
   reportNote: 'What went wrong (optional)',
   reportNotePlaceholder: 'Please describe what you did and what happened, as far as you can.\ne.g. After adding a video, it stayed on “Loading” and never started playing.',
   reportSend: 'Send',

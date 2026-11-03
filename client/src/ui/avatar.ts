@@ -3,12 +3,12 @@ import { t } from '../core/i18n';
 /* 人（追加した人・操作した人）を、Discord のアイコンで示す部品 */
 
 /** 名前の頭文字（アイコンの代わりに出す） */
-export function initialOf(name: string) {
+function initialOf(name: string) {
   return Array.from(name)[0] ?? '?';
 }
 
 /** アイコンの代わりの、名前の頭文字の丸 */
-export function initialEl(name: string) {
+function initialEl(name: string) {
   const el = document.createElement('span');
   el.className = 'initial';
   el.setAttribute('aria-hidden', 'true');

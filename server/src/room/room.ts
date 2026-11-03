@@ -2,6 +2,7 @@ import { CLOSE_EVICTED, type ClientMsg, type ErrorCode, type NoticeEvent, type P
 import { flatten } from '../../../shared/playlist';
 import { parseVideoId } from '../../../shared/video';
 import { fetchEmbedError, fetchVideoInfo, UpstreamError } from '../nico/nicoApi';
+import type { Identity } from '../auth';
 import { sha256Hex } from '../hash';
 import { EnqueueQueue } from './enqueue';
 import type { RoomContext, RoomSocket } from './host';
@@ -58,15 +59,6 @@ function isSeek(before: PlaybackState, after: PlaybackState): boolean {
   // 動画の切り替え直後は、updatedAt が少し先の時刻（その時刻に再生開始）になっている
   const elapsed = before.playing ? Math.max(0, Date.now() - before.updatedAt) / 1000 : 0;
   return Math.abs(after.position - (before.position + elapsed)) > SEEK_THRESHOLD_S;
-}
-
-/** 接続した人の、確かめられた身元（ログインできなかった人は null） */
-export interface Identity {
-  uid: string | null;
-  /** 確かめられた表示名（エンコードしていないもの） */
-  name: string | null;
-  /** 確かめられたアイコンの URL */
-  avatar?: string | null;
 }
 
 /**

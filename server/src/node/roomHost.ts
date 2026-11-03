@@ -1,9 +1,10 @@
 import { HEARTBEAT } from '../../../shared/protocol';
 import type { RoomContext, RoomSocket, RoomStorage } from '../room/host';
-import { Room, type Identity } from '../room/room';
+import type { Identity } from '../auth';
+import { Room } from '../room/room';
 
 /** 部屋の保存先（メモリ）とアラーム（タイマー） */
-export class MemoryStorage implements RoomStorage {
+class MemoryStorage implements RoomStorage {
   readonly data = new Map<string, unknown>();
   private alarmAt: number | null = null;
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -56,13 +57,8 @@ export class MemoryStorage implements RoomStorage {
 }
 
 /** ws の WebSocket を、部屋が使う形にしたもの */
-export interface NodeSocket extends RoomSocket {
-  readonly raw: import('ws').WebSocket;
-}
-
-export function wrapSocket(raw: import('ws').WebSocket): NodeSocket {
+function wrapSocket(raw: import('ws').WebSocket): RoomSocket {
   return {
-    raw,
     get readyState() {
       return raw.readyState;
     },
@@ -77,7 +73,7 @@ const MAX_EARLY_MESSAGES = 8;
 interface Entry {
   room: Room;
   storage: MemoryStorage;
-  sockets: Set<NodeSocket>;
+  sockets: Set<RoomSocket>;
 }
 
 /** 部屋の保存済みの内容を取り出す（node/persist.ts）。取り出したら、保存済みからは消す */
@@ -86,27 +82,34 @@ export type TakeSaved = (roomId: string) => Record<string, unknown> | undefined;
 /** 動いている部屋の一覧。部屋の ID ごとに、部屋・保存先・接続を持つ */
 export class RoomHost {
   private rooms = new Map<string, Promise<Entry>>();
+  /** 部屋ごとの、部屋の準備を待っている接続の数 */
+  private joining = new Map<string, number>();
 
   constructor(private takeSaved: TakeSaved = () => undefined) {}
 
   private entry(roomId: string): Promise<Entry> {
     let p = this.rooms.get(roomId);
     if (!p) {
-      p = this.create(roomId);
-      this.rooms.set(roomId, p);
+      const created = this.create(roomId);
+      this.rooms.set(roomId, created);
+      // 作れなかった部屋は残さない（次の接続で作り直せるように）
+      created.catch(() => {
+        if (this.rooms.get(roomId) === created) this.rooms.delete(roomId);
+      });
+      p = created;
     }
     return p;
   }
 
   private async create(roomId: string): Promise<Entry> {
-    const sockets = new Set<NodeSocket>();
+    const sockets = new Set<RoomSocket>();
     // アラームは、作った保存先ごとに結びつける（部屋が破棄されたあとに古い保存先のアラームが鳴っても、
     // 同じ ID で作り直された新しい部屋には効かないように）
     const storage: MemoryStorage = new MemoryStorage(() => void this.onAlarm(roomId, storage), this.takeSaved(roomId));
     const ctx: RoomContext = {
       id: roomId,
       storage,
-      acceptWebSocket: (ws) => sockets.add(ws as NodeSocket),
+      acceptWebSocket: (ws) => sockets.add(ws),
       getWebSockets: () => [...sockets],
     };
     return { room: await Room.create(ctx), storage, sockets };
@@ -120,8 +123,24 @@ export class RoomHost {
     } catch (err) {
       console.error('room alarm failed', err);
     }
-    // 誰もいなくて、中身も消えた部屋は、置いておく意味がない
+    await this.dropIfUnused(roomId, e);
+  }
+
+  /**
+   * 誰もいなくて、中身も無い部屋は、置いておく意味がないので消す。
+   * 入ろうとしている接続がある部屋は消さない（消した部屋に入ってしまい、同じ ID の部屋が 2 つできないように）
+   */
+  private async dropIfUnused(roomId: string, e: Entry) {
+    const p = this.rooms.get(roomId);
+    if (!p || (await p) !== e || this.rooms.get(roomId) !== p) return;
+    if ((this.joining.get(roomId) ?? 0) > 0) return;
     if (!e.room.hasConnections() && e.storage.data.size === 0) this.rooms.delete(roomId);
+  }
+
+  private countJoining(roomId: string, delta: number) {
+    const n = (this.joining.get(roomId) ?? 0) + delta;
+    if (n > 0) this.joining.set(roomId, n);
+    else this.joining.delete(roomId);
   }
 
   /**
@@ -162,10 +181,22 @@ export class RoomHost {
     raw.on('close', leave);
     raw.on('error', leave);
 
-    const e = await this.entry(roomId);
-    // 部屋の準備を待っている間に切れていたら、入れない
-    if (left) return true;
-    if (!(await e.room.connect(ws, who))) return false;
+    this.countJoining(roomId, 1);
+    let e: Entry;
+    let accepted: boolean;
+    try {
+      e = await this.entry(roomId);
+      // 部屋の準備を待っている間に切れていたら、入れない
+      accepted = !left && (await e.room.connect(ws, who));
+    } finally {
+      this.countJoining(roomId, -1);
+    }
+    if (!accepted) {
+      // この接続のために作った部屋なら、片づける
+      void this.dropIfUnused(roomId, e);
+      // 切れていたなら、閉じるものは無い。そうでなければ部屋がいっぱい
+      return left;
+    }
     entered = e;
     // 部屋に入る処理の間に切れていたら、すぐ出す
     if (left) leaveRoom(e);
@@ -173,11 +204,17 @@ export class RoomHost {
     return true;
   }
 
+  /** 作り終えた部屋の一覧（作れなかった部屋は飛ばす。1 つの部屋の失敗で、停止のときの保存を止めないように） */
+  private async ready(): Promise<[string, Entry][]> {
+    const all = [...this.rooms];
+    const settled = await Promise.allSettled(all.map(([, p]) => p));
+    return settled.flatMap((r, i) => (r.status === 'fulfilled' ? [[all[i]![0], r.value] as [string, Entry]] : []));
+  }
+
   /** 全部屋の保存内容（停止するとき、ファイルに書き出すもの） */
   async exportAll(): Promise<Record<string, Record<string, unknown>>> {
     const out: Record<string, Record<string, unknown>> = {};
-    for (const [id, p] of this.rooms) {
-      const e = await p;
+    for (const [id, e] of await this.ready()) {
       if (e.storage.data.size > 0) out[id] = Object.fromEntries(e.storage.data);
     }
     return out;
@@ -185,8 +222,7 @@ export class RoomHost {
 
   /** つながっている接続を、すべて閉じる（クライアントは繋ぎ直す） */
   async closeAll(code: number, reason: string) {
-    for (const p of this.rooms.values()) {
-      const e = await p;
+    for (const [, e] of await this.ready()) {
       for (const ws of e.sockets) ws.close(code, reason);
     }
   }
@@ -194,7 +230,7 @@ export class RoomHost {
   /** 部屋の数と接続の数（確認用） */
   async stats() {
     let connections = 0;
-    for (const p of this.rooms.values()) connections += (await p).sockets.size;
+    for (const [, e] of await this.ready()) connections += e.sockets.size;
     return { rooms: this.rooms.size, connections };
   }
 }

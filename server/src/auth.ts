@@ -1,7 +1,15 @@
 import type { Env } from './env';
 import { passSecret, verifyPass, type PassClaims } from './pass';
 import { withinRateLimit } from './rateLimit';
-import type { Identity } from './room/room';
+
+/** 接続した人の、確かめられた身元（ログインできなかった人は null） */
+export interface Identity {
+  uid: string | null;
+  /** 確かめられた表示名 */
+  name: string | null;
+  /** 確かめられたアイコンの URL */
+  avatar?: string | null;
+}
 
 /** 部屋 = Activity の instanceId */
 const ROOM_ID = '[A-Za-z0-9_-]{1,128}';
