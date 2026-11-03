@@ -418,3 +418,11 @@ a {
     justify-content: center;
   }
 }
+
+/* 手順の補足説明 */
+.step-sub {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.9em;
+}
