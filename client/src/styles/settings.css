@@ -207,3 +207,13 @@ input.switch:checked::after {
   letter-spacing: 0.1em;
   user-select: all;
 }
+
+/* 報告ウィンドウの文字は、設定画面の補足より大きくして読みやすくする（文中の改行は文言の 
+ で指定） */
+.modal-box .setting-desc,
+.modal-box textarea {
+  font-size: 1rem;
+  line-height: 1.5;
+  white-space: pre-line;
+  text-wrap: pretty;
+}
