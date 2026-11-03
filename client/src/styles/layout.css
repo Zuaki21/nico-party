@@ -61,6 +61,8 @@
 }
 
 .now-title {
+  /* タイトルの文字とタグ（アイコンの大きさ）の高さをそろえる */
+  line-height: 1.2857rem;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -82,17 +84,15 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4286rem;
-  padding: 0.1429rem 0.7143rem 0.1429rem 0.1429rem;
+  padding: 0 0.7143rem 0 0;
   border-radius: 999px;
-  border: 1px solid var(--border);
   background: var(--panel);
-  font-size: 0.9286rem;
 }
 
 .adder-tag img,
 .adder-tag .initial {
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.2857rem;
+  height: 1.2857rem;
   flex: none;
   border-radius: 50%;
   object-fit: cover;
@@ -103,7 +103,7 @@
   place-items: center;
   background: var(--button-secondary);
   color: var(--button-secondary-text);
-  font-size: 0.8571rem;
+  font-size: 0.7857rem;
 }
 
 .adder-name {
